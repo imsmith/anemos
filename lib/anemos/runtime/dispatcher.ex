@@ -14,33 +14,38 @@ defmodule Anemos.Runtime.Dispatcher do
 
   def start_link(opts) do
     rules = Keyword.fetch!(opts, :rules)
+    registry = Keyword.fetch!(opts, :registry)
     name = Keyword.get(opts, :name)
-    GenServer.start_link(__MODULE__, rules, name: name)
+    GenServer.start_link(__MODULE__, {rules, registry}, name: name)
   end
 
-  @spec dispatch(pid() | atom(), String.t(), map(), keyword()) :: list()
-  def dispatch(dispatcher, event_name, context \\ %{}, opts \\ []) do
-    GenServer.call(dispatcher, {:dispatch, event_name, context, opts})
+  @spec dispatch(pid() | atom(), String.t(), map()) :: list()
+  def dispatch(dispatcher, event_name, context \\ %{}) do
+    GenServer.call(dispatcher, {:dispatch, event_name, context})
   end
 
   # --- Server callbacks ---
 
   @impl true
-  def init(rules) do
+  def init({rules, registry}) do
     index = build_index(rules)
-    {:ok, %{rules: rules, index: index}}
+    {:ok, %{rules: rules, index: index, registry: registry}}
   end
 
   @impl true
-  def handle_call({:dispatch, event_name, context, opts}, _from, state) do
-    registry = Keyword.fetch!(opts, :registry)
+  def handle_call({:dispatch, event_name, context}, _from, state) do
     matching = Map.get(state.index, event_name, [])
 
     results =
       matching
       |> Enum.flat_map(fn rule ->
-        {:ok, ops} = rule.handler.(event_name, context)
-        Enum.map(ops, &execute_op(&1, context, registry))
+        case safe_handle(rule, event_name, context) do
+          {:ok, ops} ->
+            Enum.map(ops, &execute_op(&1, context, state.registry))
+
+          {:error, reason} ->
+            [{:error, {:handler_crash, rule.name, reason}}]
+        end
       end)
 
     {:reply, results, state}
@@ -48,10 +53,18 @@ defmodule Anemos.Runtime.Dispatcher do
 
   # --- Private ---
 
+  defp safe_handle(rule, event_name, context) do
+    rule.handler.(event_name, context)
+  rescue
+    e -> {:error, Exception.message(e)}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
   defp build_index(rules) do
     Enum.reduce(rules, %{}, fn rule, acc ->
       Enum.reduce(rule.subscriptions, acc, fn event, inner_acc ->
-        Map.update(inner_acc, event, [rule], &(&1 ++ [rule]))
+        Map.update(inner_acc, event, [rule], &[rule | &1])
       end)
     end)
   end

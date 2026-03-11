@@ -16,12 +16,12 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, [compiled]} = Compiler.compile(ast)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled])
     {:ok, registry} = ModuleRegistry.start_link([])
-
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
 
-    results = Dispatcher.dispatch(dispatcher, "TEST_EVENT", %{}, registry: registry)
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "TEST_EVENT")
     assert [{:ok, _}] = results
   end
 
@@ -37,12 +37,12 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, [compiled]} = Compiler.compile(ast)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled])
     {:ok, registry} = ModuleRegistry.start_link([])
-
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
 
-    results = Dispatcher.dispatch(dispatcher, "UNRELATED_EVENT", %{}, registry: registry)
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "UNRELATED_EVENT")
     assert results == []
   end
 
@@ -64,12 +64,12 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled_rules} = Compiler.compile(ast)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: compiled_rules)
     {:ok, registry} = ModuleRegistry.start_link([])
-
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
 
-    results = Dispatcher.dispatch(dispatcher, "SHARED_EVENT", %{}, registry: registry)
+    {:ok, dispatcher} = Dispatcher.start_link(rules: compiled_rules, registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "SHARED_EVENT")
     assert length(results) == 2
     assert Enum.all?(results, fn {:ok, _} -> true; _ -> false end)
   end
@@ -86,10 +86,11 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, [compiled]} = Compiler.compile(ast)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled])
     {:ok, registry} = ModuleRegistry.start_link([])
 
-    results = Dispatcher.dispatch(dispatcher, "LOG_EVENT", %{}, registry: registry)
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "LOG_EVENT")
     assert [{:ok, %{type: :log, value: "hello world"}}] = results
   end
 
@@ -105,10 +106,11 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, [compiled]} = Compiler.compile(ast)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled])
     {:ok, registry} = ModuleRegistry.start_link([])
 
-    results = Dispatcher.dispatch(dispatcher, "UNKNOWN_EVENT", %{}, registry: registry)
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "UNKNOWN_EVENT")
     assert [{:error, _}] = results
   end
 
@@ -124,10 +126,28 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, [compiled]} = Compiler.compile(ast)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled])
     {:ok, registry} = ModuleRegistry.start_link([])
 
-    results = Dispatcher.dispatch(dispatcher, "EMPTY_EVENT", %{}, registry: registry)
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "EMPTY_EVENT")
     assert [{:error, _}] = results
+  end
+
+  test "handler crash does not kill dispatcher" do
+    crash_rule = %{
+      name: "crash-rule",
+      subscriptions: ["CRASH_EVENT"],
+      handler: fn _event, _ctx -> raise "boom" end
+    }
+
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [crash_rule], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "CRASH_EVENT")
+    assert [{:error, {:handler_crash, "crash-rule", _}}] = results
+
+    # Dispatcher still alive
+    assert Process.alive?(dispatcher)
   end
 end

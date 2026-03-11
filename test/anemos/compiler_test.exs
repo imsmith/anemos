@@ -275,6 +275,41 @@ defmodule Anemos.CompilerTest do
     assert [%{type: :command, module: "DEVICE", verb: "set", args: ["greeting", "world"]}] = ops
   end
 
+  # --- Error-path / edge-case tests ---
+
+  test "empty program (no declarations) returns {:ok, []}" do
+    ast = %Anemos.AST.Program{declarations: []}
+    assert {:ok, []} = Compiler.compile(ast)
+  end
+
+  test "rule with no when blocks produces no compiled rules" do
+    ast = %Anemos.AST.Program{
+      declarations: [
+        %Anemos.AST.Rule{name: "empty-rule", body: [
+          %Anemos.AST.Log{expression: %Anemos.AST.Literal{value: "orphan"}}
+        ]}
+      ]
+    }
+
+    assert {:ok, []} = Compiler.compile(ast)
+  end
+
+  test "unresolvable $nonexistent variable reference returns nil" do
+    input = """
+    rule varref-missing {
+      when TEST_EVENT {
+        log $nonexistent
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, [compiled]} = Compiler.compile(ast)
+
+    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    assert [%{type: :log, value: nil}] = ops
+  end
+
   test "multiple rules in program" do
     input = """
     rule a {

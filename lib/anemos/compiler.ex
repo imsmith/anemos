@@ -17,7 +17,9 @@ defmodule Anemos.Compiler do
   alias Anemos.AST
   alias Anemos.CompiledRule
 
-  @spec compile(AST.Program.t()) :: {:ok, [CompiledRule.t()]} | {:error, String.t()}
+  # TODO: Add {:error, String.t()} return when the compiler needs to reject invalid AST.
+  # For v0.1.0, the catch-all clauses silently drop unknown nodes.
+  @spec compile(AST.Program.t()) :: {:ok, [CompiledRule.t()]}
   def compile(%AST.Program{declarations: declarations}) do
     compiled =
       declarations
@@ -73,8 +75,9 @@ defmodule Anemos.Compiler do
   # --- Handler builder ---
 
   defp build_handler(body) do
-    fn _event_name, context ->
-      {ops, _bindings} = eval_body(body, context, %{})
+    fn _event_name, _context ->
+      # TODO: context will be used when runtime provides event payload / state lookups
+      {ops, _bindings} = eval_body(body, %{}, %{})
       {:ok, ops}
     end
   end
@@ -82,10 +85,13 @@ defmodule Anemos.Compiler do
   # --- Body evaluation ---
 
   defp eval_body(statements, context, bindings) do
-    Enum.reduce(statements, {[], bindings}, fn stmt, {ops_acc, bindings_acc} ->
-      {new_ops, new_bindings} = eval_statement(stmt, context, bindings_acc)
-      {ops_acc ++ new_ops, new_bindings}
-    end)
+    {ops_rev, final_bindings} =
+      Enum.reduce(statements, {[], bindings}, fn stmt, {ops_acc, bindings_acc} ->
+        {new_ops, new_bindings} = eval_statement(stmt, context, bindings_acc)
+        {Enum.reverse(new_ops) ++ ops_acc, new_bindings}
+      end)
+
+    {Enum.reverse(ops_rev), final_bindings}
   end
 
   # --- Statement evaluation ---
@@ -154,6 +160,8 @@ defmodule Anemos.Compiler do
 
   defp resolve_expr(%AST.Literal{value: value}, _context, _bindings), do: value
 
+  # TODO: VarRef sigil ($/@/?) distinction is currently ignored — all resolve
+  # the same way via bindings lookup. Differentiate when runtime semantics require it.
   defp resolve_expr(%AST.VarRef{name: name}, _context, bindings) do
     Map.get(bindings, name)
   end

@@ -311,7 +311,7 @@ defmodule Anemos.Lexer do
   end
 
   # Operator — special-case :: to :double_colon
-  defp build_tokens([{:operator_raw, [:"::"] } | rest], line, acc) do
+  defp build_tokens([{:operator_raw, [:"::"]} | rest], line, acc) do
     build_tokens(rest, line, [{:double_colon, [line: line], "::"} | acc])
   end
 

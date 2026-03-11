@@ -35,7 +35,9 @@ defmodule Anemos.CompilerTest do
     {:ok, [compiled]} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
-    assert [%{module: "DEVICE", verb: "set", args: ["light", "on"]}, %{type: :log, value: "done"}] = ops
+
+    assert [%{module: "DEVICE", verb: "set", args: ["light", "on"]}, %{type: :log, value: "done"}] =
+             ops
   end
 
   test "if/else handling in compiled handler" do
@@ -110,7 +112,10 @@ defmodule Anemos.CompilerTest do
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     # let with a command value stores the command op; log resolves $title to it
-    assert [%{type: :command, module: "PDF", verb: "title", args: []}, %{type: :log, value: %{type: :command, module: "PDF", verb: "title", args: []}}] = ops
+    assert [
+             %{type: :command, module: "PDF", verb: "title", args: []},
+             %{type: :log, value: %{type: :command, module: "PDF", verb: "title", args: []}}
+           ] = ops
   end
 
   test "emit operations are compiled" do
@@ -126,7 +131,9 @@ defmodule Anemos.CompilerTest do
     {:ok, [compiled]} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
-    assert [%{type: :emit, value: %{type: :command, module: "EVENT", verb: "fire", args: []}}] = ops
+
+    assert [%{type: :emit, value: %{type: :command, module: "EVENT", verb: "fire", args: []}}] =
+             ops
   end
 
   test "emit with type and label" do
@@ -285,9 +292,12 @@ defmodule Anemos.CompilerTest do
   test "rule with no when blocks produces no compiled rules" do
     ast = %Anemos.AST.Program{
       declarations: [
-        %Anemos.AST.Rule{name: "empty-rule", body: [
-          %Anemos.AST.Log{expression: %Anemos.AST.Literal{value: "orphan"}}
-        ]}
+        %Anemos.AST.Rule{
+          name: "empty-rule",
+          body: [
+            %Anemos.AST.Log{expression: %Anemos.AST.Literal{value: "orphan"}}
+          ]
+        }
       ]
     }
 

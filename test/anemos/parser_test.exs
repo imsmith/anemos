@@ -154,7 +154,8 @@ defmodule Anemos.ParserTest do
     [when_block] = cond_decl.body
     assert %AST.When{} = when_block
     # Event should be a structured compound expression
-    assert {:compound, :or, ["INFRA::ip4_addr_changed", "INFRA::ip6_addr_changed"]} = when_block.event
+    assert {:compound, :or, ["INFRA::ip4_addr_changed", "INFRA::ip6_addr_changed"]} =
+             when_block.event
   end
 
   # --- Capability declaration ---

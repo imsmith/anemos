@@ -8,9 +8,27 @@ defmodule Anemos.Parser do
 
   alias Anemos.AST
 
-  @comparison_ops [:eq, :ne, :gt, :lt, :ge, :le, :==, :!=, :>, :<, :>=, :<=,
-                   :in, :notin, :contains, :starts_with, :ends_with,
-                   :matches_glob, :matches_regex]
+  @comparison_ops [
+    :eq,
+    :ne,
+    :gt,
+    :lt,
+    :ge,
+    :le,
+    :==,
+    :!=,
+    :>,
+    :<,
+    :>=,
+    :<=,
+    :in,
+    :notin,
+    :contains,
+    :starts_with,
+    :ends_with,
+    :matches_glob,
+    :matches_regex
+  ]
   @logical_ops [:and, :or, :&&, :||]
 
   # --- Public API ---
@@ -177,7 +195,9 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok,
+       %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]},
+       rest}
     end
   end
 
@@ -188,7 +208,9 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok,
+       %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]},
+       rest}
     end
   end
 
@@ -202,7 +224,13 @@ defmodule Anemos.Parser do
           with {:ok, rest} <- expect(rest, :lbrace),
                {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
                {:ok, rest} <- expect(rest, :rbrace) do
-            {:ok, %AST.When{event: event_expr, duration: duration, body: Enum.reverse(body), line: meta[:line]}, rest}
+            {:ok,
+             %AST.When{
+               event: event_expr,
+               duration: duration,
+               body: Enum.reverse(body),
+               line: meta[:line]
+             }, rest}
           end
         end
 
@@ -223,7 +251,10 @@ defmodule Anemos.Parser do
     {:ok, event, tokens}
   end
 
-  defp parse_compound_event([{:module_id, _, mod}, {:double_colon, _, _}, {:identifier, _, name} | rest], acc) do
+  defp parse_compound_event(
+         [{:module_id, _, mod}, {:double_colon, _, _}, {:identifier, _, name} | rest],
+         acc
+       ) do
     parse_compound_event(rest, [{:event, "#{mod}::#{name}"} | acc])
   end
 
@@ -337,21 +368,31 @@ defmodule Anemos.Parser do
     line = token_line(hd(tokens))
 
     # Check for optional emit type (state/effect/stream)
-    {type, tokens} = case tokens do
-      [{:keyword, _, kw} | rest] when kw in @emit_types -> {kw, rest}
-      _ -> {nil, tokens}
-    end
+    {type, tokens} =
+      case tokens do
+        [{:keyword, _, kw} | rest] when kw in @emit_types -> {kw, rest}
+        _ -> {nil, tokens}
+      end
 
     # Parse the command expression — this internally handles `to` destination inside brackets
     case parse_emit_command(tokens) do
       {:ok, command, destination, rest} ->
         # Parse optional "to" destination (outside brackets, if not found inside)
-        with {:ok, destination, rest} <- if(destination == nil,
-               do: parse_optional_to(rest),
-               else: {:ok, destination, rest}),
+        with {:ok, destination, rest} <-
+               if(destination == nil,
+                 do: parse_optional_to(rest),
+                 else: {:ok, destination, rest}
+               ),
              # Parse optional "as" label
              {:ok, label, rest} <- parse_optional_as(rest) do
-          {:ok, %AST.Emit{type: type, value: command, destination: destination, label: label, line: line}, rest}
+          {:ok,
+           %AST.Emit{
+             type: type,
+             value: command,
+             destination: destination,
+             label: label,
+             line: line
+           }, rest}
         end
 
       {:error, _} = err ->
@@ -366,7 +407,8 @@ defmodule Anemos.Parser do
         with {:ok, verb, rest} <- parse_command_verb(rest),
              {:ok, args, destination, rest} <- parse_emit_command_args(rest, [], nil),
              {:ok, rest} <- expect(rest, :rbracket) do
-          {:ok, %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]}, destination, rest}
+          {:ok, %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]}, destination,
+           rest}
         end
 
       [{_, meta, _} | _] ->
@@ -400,7 +442,9 @@ defmodule Anemos.Parser do
         with {:ok, rest} <- expect(rest, :rparen) do
           parse_emit_command_args(rest, acc, dest)
         end
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -463,14 +507,22 @@ defmodule Anemos.Parser do
 
   defp parse_optional_as([{:keyword, _, :as} | rest]) do
     case rest do
-      [{:atom, _, name} | rest] -> {:ok, name, rest}
-      [{:interp_atom, _, name} | rest] -> {:ok, name, rest}
+      [{:atom, _, name} | rest] ->
+        {:ok, name, rest}
+
+      [{:interp_atom, _, name} | rest] ->
+        {:ok, name, rest}
+
       # identifier followed by interp_atom: "ddns.update." + ":{?fqdn}"
       [{:identifier, _, prefix}, {:interp_atom, _, suffix} | rest] ->
         {:ok, "#{prefix}:{#{suffix}}", rest}
-      [{:identifier, _, name} | rest] -> {:ok, name, rest}
+
+      [{:identifier, _, name} | rest] ->
+        {:ok, name, rest}
+
       [{_, meta, _} | _] ->
         {:error, "Expected label after 'as' on line #{meta[:line]}"}
+
       [] ->
         {:error, "Expected label after 'as' but got end of input"}
     end
@@ -626,7 +678,8 @@ defmodule Anemos.Parser do
     end
   end
 
-  defp maybe_parse_binary_op(left, [{:word_operator, _, op} | rest]) when op in @comparison_ops or op in @logical_ops do
+  defp maybe_parse_binary_op(left, [{:word_operator, _, op} | rest])
+       when op in @comparison_ops or op in @logical_ops do
     case parse_atom_expression(rest) do
       {:ok, right, rest} ->
         node = %AST.BinaryOp{op: op, left: left, right: right, line: node_line(left)}
@@ -637,7 +690,8 @@ defmodule Anemos.Parser do
     end
   end
 
-  defp maybe_parse_binary_op(left, [{:operator, _, op} | rest]) when op in @comparison_ops or op in @logical_ops do
+  defp maybe_parse_binary_op(left, [{:operator, _, op} | rest])
+       when op in @comparison_ops or op in @logical_ops do
     case parse_atom_expression(rest) do
       {:ok, right, rest} ->
         node = %AST.BinaryOp{op: op, left: left, right: right, line: node_line(left)}
@@ -654,7 +708,9 @@ defmodule Anemos.Parser do
       {:ok, right, rest} ->
         node = %AST.BinaryOp{op: :in, left: left, right: right, line: node_line(left)}
         maybe_parse_binary_op(node, rest)
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -663,7 +719,9 @@ defmodule Anemos.Parser do
       {:ok, right, rest} ->
         node = %AST.BinaryOp{op: :and, left: left, right: right, line: node_line(left)}
         maybe_parse_binary_op(node, rest)
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -672,7 +730,9 @@ defmodule Anemos.Parser do
       {:ok, right, rest} ->
         node = %AST.BinaryOp{op: :or, left: left, right: right, line: node_line(left)}
         maybe_parse_binary_op(node, rest)
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -716,7 +776,11 @@ defmodule Anemos.Parser do
   end
 
   # MODULE::name qualified reference in expressions
-  defp parse_atom_expression([{:module_id, meta, mod}, {:double_colon, _, _}, {:identifier, _, name} | rest]) do
+  defp parse_atom_expression([
+         {:module_id, meta, mod},
+         {:double_colon, _, _},
+         {:identifier, _, name} | rest
+       ]) do
     {:ok, %AST.Literal{type: :identifier, value: "#{mod}::#{name}", line: meta[:line]}, rest}
   end
 
@@ -737,13 +801,17 @@ defmodule Anemos.Parser do
     case parse_paren_contents(rest, []) do
       {:ok, elements, rest} ->
         with {:ok, rest} <- expect(rest, :rparen) do
-          expr = case elements do
-            [single] -> single
-            multiple -> %AST.ListLiteral{elements: multiple, line: meta[:line]}
-          end
+          expr =
+            case elements do
+              [single] -> single
+              multiple -> %AST.ListLiteral{elements: multiple, line: meta[:line]}
+            end
+
           {:ok, expr, rest}
         end
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -780,11 +848,12 @@ defmodule Anemos.Parser do
   defp parse_capability([{:identifier, meta, name} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace) do
       # Parse optional context (standalone, no braces)
-      {context, rest} = case rest do
-        [{:keyword, _, :context}, {:identifier, _, path} | rest] -> {path, rest}
-        [{:keyword, _, :context}, {:string, _, path} | rest] -> {path, rest}
-        _ -> {nil, rest}
-      end
+      {context, rest} =
+        case rest do
+          [{:keyword, _, :context}, {:identifier, _, path} | rest] -> {path, rest}
+          [{:keyword, _, :context}, {:string, _, path} | rest] -> {path, rest}
+          _ -> {nil, rest}
+        end
 
       # Parse "on demand { ... }"
       with {:ok, rest} <- expect(rest, :keyword, :on),
@@ -793,7 +862,13 @@ defmodule Anemos.Parser do
            {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
            {:ok, rest} <- expect(rest, :rbrace),
            {:ok, rest} <- expect(rest, :rbrace) do
-        {:ok, %AST.Capability{name: name, context: context, body: Enum.reverse(body), line: meta[:line]}, rest}
+        {:ok,
+         %AST.Capability{
+           name: name,
+           context: context,
+           body: Enum.reverse(body),
+           line: meta[:line]
+         }, rest}
       end
     end
   end
@@ -847,7 +922,8 @@ defmodule Anemos.Parser do
   defp expect([{type, _, value} | rest], type, value), do: {:ok, rest}
 
   defp expect([{got, meta, val} | _], expected_type, expected_val) do
-    {:error, "Expected #{expected_type}:#{expected_val} but got #{got}:#{val} on line #{meta[:line]}"}
+    {:error,
+     "Expected #{expected_type}:#{expected_val} but got #{got}:#{val} on line #{meta[:line]}"}
   end
 
   defp expect([], expected_type, expected_val) do

@@ -109,12 +109,16 @@ defmodule Anemos.Compiler do
 
   defp eval_statement(%AST.Let{name: name, value: value}, context, bindings) do
     resolved = resolve_expr(value, context, bindings)
-    {ops, new_bindings} = case resolved do
-      %{type: :command} = cmd_op ->
-        {[cmd_op], Map.put(bindings, name, cmd_op)}
-      other ->
-        {[], Map.put(bindings, name, other)}
-    end
+
+    {ops, new_bindings} =
+      case resolved do
+        %{type: :command} = cmd_op ->
+          {[cmd_op], Map.put(bindings, name, cmd_op)}
+
+        other ->
+          {[], Map.put(bindings, name, other)}
+      end
+
     {ops, new_bindings}
   end
 
@@ -123,7 +127,11 @@ defmodule Anemos.Compiler do
     {[%{type: :set, name: name, value: resolved}], bindings}
   end
 
-  defp eval_statement(%AST.If{condition: condition, body: body, else_body: else_body}, context, bindings) do
+  defp eval_statement(
+         %AST.If{condition: condition, body: body, else_body: else_body},
+         context,
+         bindings
+       ) do
     if eval_condition(condition, context, bindings) do
       eval_body(body, context, bindings)
     else
@@ -135,7 +143,11 @@ defmodule Anemos.Compiler do
     end
   end
 
-  defp eval_statement(%AST.Emit{type: emit_type, value: value, destination: dest, label: label}, context, bindings) do
+  defp eval_statement(
+         %AST.Emit{type: emit_type, value: value, destination: dest, label: label},
+         context,
+         bindings
+       ) do
     resolved_value = resolve_expr(value, context, bindings)
     op = %{type: :emit, value: resolved_value}
     op = if emit_type, do: Map.put(op, :emit_type, emit_type), else: op
@@ -177,6 +189,7 @@ defmodule Anemos.Compiler do
 
   defp resolve_expr(%AST.UnaryOp{op: op, operand: operand}, context, bindings) do
     val = resolve_expr(operand, context, bindings)
+
     case op do
       :not -> !val
       :! -> !val
@@ -214,6 +227,7 @@ defmodule Anemos.Compiler do
 
   defp eval_condition(%AST.UnaryOp{op: op, operand: operand}, context, bindings) do
     val = resolve_expr(operand, context, bindings)
+
     case op do
       :not -> !val
       :! -> !val

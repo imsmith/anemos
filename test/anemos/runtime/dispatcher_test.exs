@@ -71,7 +71,11 @@ defmodule Anemos.Runtime.DispatcherTest do
 
     results = Dispatcher.dispatch(dispatcher, "SHARED_EVENT")
     assert length(results) == 2
-    assert Enum.all?(results, fn {:ok, _} -> true; _ -> false end)
+
+    assert Enum.all?(results, fn
+             {:ok, _} -> true
+             _ -> false
+           end)
   end
 
   test "log operations are collected in results" do

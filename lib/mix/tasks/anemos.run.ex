@@ -33,9 +33,9 @@ defmodule Mix.Tasks.Anemos.Run do
   defp extract_event(args) do
     args
     |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.find_value("UNKNOWN", fn
+    |> Enum.find_value(fn
       ["--event", event] -> event
       _ -> nil
-    end)
+    end) || Mix.raise("--event flag is required")
   end
 end

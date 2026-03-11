@@ -31,28 +31,27 @@ defmodule Anemos do
     context = Keyword.get(opts, :context, %{})
 
     with {:ok, ast} <- Parser.parse(source),
-         {:ok, rules} <- Compiler.compile(ast) do
-      {:ok, registry} = ModuleRegistry.start_link([])
-
+         {:ok, rules} <- Compiler.compile(ast),
+         {:ok, registry} <- ModuleRegistry.start_link([]) do
       try do
         Enum.each(@default_modules, fn {name, mod} ->
           ModuleRegistry.register(registry, name, mod)
         end)
 
-        {:ok, dispatcher} = Dispatcher.start_link(rules: rules, registry: registry)
+        with {:ok, dispatcher} <- Dispatcher.start_link(rules: rules, registry: registry) do
+          try do
+            raw_results = Dispatcher.dispatch(dispatcher, event, context)
 
-        try do
-          raw_results = Dispatcher.dispatch(dispatcher, event, context)
+            results =
+              Enum.flat_map(raw_results, fn
+                {:ok, value} -> [value]
+                {:error, _} = err -> [err]
+              end)
 
-          results =
-            Enum.flat_map(raw_results, fn
-              {:ok, value} -> [value]
-              {:error, _} = err -> [err]
-            end)
-
-          {:ok, results}
-        after
-          GenServer.stop(dispatcher)
+            {:ok, results}
+          after
+            GenServer.stop(dispatcher)
+          end
         end
       after
         Agent.stop(registry)

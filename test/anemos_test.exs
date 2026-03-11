@@ -1,8 +1,9 @@
 defmodule AnemosTest do
   use ExUnit.Case
-  doctest Anemos
 
-  test "greets the world" do
-    assert Anemos.hello() == :world
+  test "run/2 requires :event option" do
+    assert_raise KeyError, fn ->
+      Anemos.run("rule x { when E { } }", [])
+    end
   end
 end

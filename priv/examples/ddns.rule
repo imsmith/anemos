@@ -1,0 +1,34 @@
+; Infrastructure: Dynamic DNS with capability-gated secrets
+
+capability katachora-ddns-key {
+  context infra.networking
+
+  on demand {
+    emit [SECRET::unlock(agent.did_meshid_z6MkAgent123.operator.security:did_key_67890)]
+      as :katachora.ddns.key
+  }
+}
+
+condition networkchanged {
+  when (INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed) {
+    emit [EVENT::ip.addr.changed to channel(system.config.network)]
+      as :{?hostname}.network.ip.addr.changed
+  }
+}
+
+rule update-ddns {
+  context infra.networking.dns
+
+  when CONDITION::networkchanged {
+    demand katachora-ddns-key
+
+    let fqdn = ?fqdn
+    let ipv4 = [INFRA::get_ip "eth0" type:ipv4]
+    let ipv6 = [INFRA::get_ip "eth0" type:ipv6]
+    let update = (:fqdn IN A ipv4) AND (:fqdn IN AAAA ipv6)
+
+    emit [INFRA::ddns_update(:katachora.ddns.key, katachora.com, update)
+          to channel(system.config.network.dns.ddns)]
+      as ddns.update.:{?fqdn}
+  }
+}

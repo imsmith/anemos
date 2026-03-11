@@ -1,0 +1,19 @@
+; Garage lighting automation
+; Turns lights on when motion is detected,
+; off after 10 minutes of no motion.
+
+rule garage-lights-on {
+  context "garage.motion.sensor" {
+    when SENSOR_MOTION_DETECTED {
+      [DEVICE::set "garage.lights" "on"]
+    }
+  }
+}
+
+rule garage-lights-off {
+  context "garage.motion.sensor" {
+    when SENSOR_NO_MOTION for 10min {
+      [DEVICE::set "garage.lights" "off"]
+    }
+  }
+}

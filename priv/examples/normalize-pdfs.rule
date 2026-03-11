@@ -1,0 +1,21 @@
+; PDF metadata normalizer
+; Ensures PDF metadata matches document content,
+; renames file to slugified title.
+
+rule normalize-pdfs {
+  context "/papers" {
+    when FILE_CREATED {
+      if [FILE::extension] eq "pdf" {
+        let title = [PDF::title]
+        let meta_title = [PDF::metadata title]
+
+        if $title ne $meta_title {
+          [PDF::metadata title $title]
+          [PDF::metadata author [PDF::author]]
+        }
+
+        [FILE::rename [STRING::slugify $title]]
+      }
+    }
+  }
+}

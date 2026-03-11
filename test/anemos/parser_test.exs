@@ -123,4 +123,187 @@ defmodule Anemos.ParserTest do
     assert %AST.Rule{name: "garage-lights-on"} = Enum.at(rules, 0)
     assert %AST.Rule{name: "garage-lights-off"} = Enum.at(rules, 1)
   end
+
+  # --- Condition declaration ---
+
+  test "parses condition with when block" do
+    input = """
+    condition networkchanged {
+      when NETWORK_CHANGED {
+        log "changed"
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [cond_decl]}} = Parser.parse(input)
+    assert %AST.Condition{name: "networkchanged"} = cond_decl
+    assert [%AST.When{event: "NETWORK_CHANGED", body: [%AST.Log{}]}] = cond_decl.body
+  end
+
+  test "parses condition with compound event (OR)" do
+    input = """
+    condition networkchanged {
+      when (INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed) {
+        log "ip changed"
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [cond_decl]}} = Parser.parse(input)
+    assert %AST.Condition{name: "networkchanged"} = cond_decl
+    [when_block] = cond_decl.body
+    assert %AST.When{} = when_block
+    # Event should capture the compound expression
+    assert when_block.event != nil
+  end
+
+  # --- Capability declaration ---
+
+  test "parses capability with context and on demand block" do
+    input = """
+    capability katachora-ddns-key {
+      context infra.networking
+
+      on demand {
+        log "unlocking"
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [cap]}} = Parser.parse(input)
+    assert %AST.Capability{name: "katachora-ddns-key"} = cap
+    assert cap.context == "infra.networking"
+    assert [%AST.Log{}] = cap.body
+  end
+
+  test "parses capability without context" do
+    input = """
+    capability simple-key {
+      on demand {
+        log "simple"
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [cap]}} = Parser.parse(input)
+    assert %AST.Capability{name: "simple-key"} = cap
+    assert cap.context == nil
+    assert [%AST.Log{}] = cap.body
+  end
+
+  # --- Emit statement ---
+
+  test "parses emit with command expression" do
+    input = """
+    rule test {
+      when X {
+        emit [EVENT::fire]
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [emit] = when_block.body
+    assert %AST.Emit{value: %AST.Command{module: "EVENT", verb: "fire"}} = emit
+    assert emit.type == nil
+    assert emit.destination == nil
+    assert emit.label == nil
+  end
+
+  test "parses emit with as label" do
+    input = """
+    rule test {
+      when X {
+        emit [EVENT::fire]
+          as :my.label
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [emit] = when_block.body
+    assert %AST.Emit{label: "my.label"} = emit
+  end
+
+  test "parses emit with type" do
+    input = """
+    rule test {
+      when X {
+        emit state [EVENT::fire]
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [emit] = when_block.body
+    assert %AST.Emit{type: :state} = emit
+  end
+
+  # --- Demand statement ---
+
+  test "parses demand statement" do
+    input = """
+    rule test {
+      when X {
+        demand katachora-ddns-key
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [demand] = when_block.body
+    assert %AST.Demand{capability: "katachora-ddns-key"} = demand
+  end
+
+  # --- When with MODULE::name event pattern ---
+
+  test "parses when with MODULE::name event" do
+    input = """
+    rule test {
+      when CONDITION::networkchanged {
+        log "triggered"
+      }
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    assert %AST.When{event: "CONDITION::networkchanged"} = when_block
+  end
+
+  # --- Full ddns example ---
+
+  test "parses ddns example file" do
+    source = File.read!("priv/examples/ddns.rule")
+    assert {:ok, %AST.Program{declarations: declarations}} = Parser.parse(source)
+    assert length(declarations) == 3
+
+    [cap, cond_decl, rule] = declarations
+    assert %AST.Capability{name: "katachora-ddns-key"} = cap
+    assert %AST.Condition{name: "networkchanged"} = cond_decl
+    assert %AST.Rule{name: "update-ddns"} = rule
+
+    # Capability has context and on-demand body with emit
+    assert cap.context == "infra.networking"
+    assert [%AST.Emit{} = cap_emit] = cap.body
+    assert %AST.Command{module: "SECRET", verb: "unlock"} = cap_emit.value
+    assert cap_emit.label == "katachora.ddns.key"
+
+    # Condition has when block with emit
+    [when_block] = cond_decl.body
+    assert %AST.When{} = when_block
+    [cond_emit] = when_block.body
+    assert %AST.Emit{} = cond_emit
+
+    # Rule has context, when block with demand, lets, emit
+    [context_node, when_block2] = rule.body
+    assert %AST.Context{path: "infra.networking.dns"} = context_node
+    assert %AST.When{event: "CONDITION::networkchanged"} = when_block2
+    [demand | _rest] = when_block2.body
+    assert %AST.Demand{capability: "katachora-ddns-key"} = demand
+  end
 end

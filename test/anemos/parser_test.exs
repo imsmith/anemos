@@ -153,8 +153,8 @@ defmodule Anemos.ParserTest do
     assert %AST.Condition{name: "networkchanged"} = cond_decl
     [when_block] = cond_decl.body
     assert %AST.When{} = when_block
-    # Event should capture the compound expression
-    assert when_block.event != nil
+    # Event should be a structured compound expression
+    assert {:compound, :or, ["INFRA::ip4_addr_changed", "INFRA::ip6_addr_changed"]} = when_block.event
   end
 
   # --- Capability declaration ---
@@ -273,6 +273,55 @@ defmodule Anemos.ParserTest do
     assert {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [when_block] = rule.body
     assert %AST.When{event: "CONDITION::networkchanged"} = when_block
+  end
+
+  # --- Error path tests ---
+
+  test "emit with no command expression returns error" do
+    input = """
+    rule test {
+      when X {
+        emit
+      }
+    }
+    """
+
+    assert {:error, msg} = Parser.parse(input)
+    assert msg =~ "Expected command expression after emit"
+  end
+
+  test "demand with no name returns error" do
+    input = """
+    rule test {
+      when X {
+        demand
+      }
+    }
+    """
+
+    assert {:error, msg} = Parser.parse(input)
+    assert msg =~ "Expected capability name after 'demand'"
+  end
+
+  test "capability missing on demand block returns error" do
+    input = """
+    capability broken {
+      context infra.networking
+    }
+    """
+
+    assert {:error, msg} = Parser.parse(input)
+    assert msg =~ "Expected"
+  end
+
+  test "condition with empty body returns error" do
+    input = """
+    condition broken {
+    }
+    """
+
+    assert {:error, msg} = Parser.parse(input)
+    assert is_binary(msg)
   end
 
   # --- Full ddns example ---

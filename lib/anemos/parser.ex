@@ -216,22 +216,36 @@ defmodule Anemos.Parser do
   end
 
   # Parse compound event expressions like: INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed
-  # Returns a string representation of the compound event
+  # Returns a structured tuple: {:compound, :or, [events]} or {:compound, :and, [events]}
   defp parse_compound_event([{:rparen, _, _} | _] = tokens, acc) do
-    {:ok, acc |> Enum.reverse() |> Enum.join(" "), tokens}
+    parts = Enum.reverse(acc)
+    event = build_compound_event(parts)
+    {:ok, event, tokens}
   end
 
   defp parse_compound_event([{:module_id, _, mod}, {:double_colon, _, _}, {:identifier, _, name} | rest], acc) do
-    parse_compound_event(rest, ["#{mod}::#{name}" | acc])
+    parse_compound_event(rest, [{:event, "#{mod}::#{name}"} | acc])
+  end
+
+  defp parse_compound_event([{:module_id, _, name} | rest], acc) when name in ["OR", "AND"] do
+    op = name |> String.downcase() |> String.to_atom()
+    parse_compound_event(rest, [{:op, op} | acc])
   end
 
   defp parse_compound_event([{:module_id, _, name} | rest], acc) do
-    # OR, AND lex as module_id (uppercase)
-    parse_compound_event(rest, [name | acc])
+    parse_compound_event(rest, [{:event, name} | acc])
   end
 
   defp parse_compound_event([{_, meta, _} | _], _acc) do
     {:error, "Unexpected token in compound event on line #{meta[:line]}"}
+  end
+
+  defp build_compound_event(parts) do
+    events = for {:event, e} <- parts, do: e
+    ops = for {:op, o} <- parts, do: o
+    # Use the first operator found (all should be the same in well-formed input)
+    op = List.first(ops) || :or
+    {:compound, op, events}
   end
 
   defp parse_optional_duration([{:keyword, _, :for}, {:duration, _, duration} | rest]) do
@@ -332,15 +346,13 @@ defmodule Anemos.Parser do
     case parse_emit_command(tokens) do
       {:ok, command, destination, rest} ->
         # Parse optional "to" destination (outside brackets, if not found inside)
-        {destination, rest} = if destination == nil do
-          parse_optional_to(rest)
-        else
-          {destination, rest}
+        with {:ok, destination, rest} <- if(destination == nil,
+               do: parse_optional_to(rest),
+               else: {:ok, destination, rest}),
+             # Parse optional "as" label
+             {:ok, label, rest} <- parse_optional_as(rest) do
+          {:ok, %AST.Emit{type: type, value: command, destination: destination, label: label, line: line}, rest}
         end
-        # Parse optional "as" label
-        {label, rest} = parse_optional_as(rest)
-
-        {:ok, %AST.Emit{type: type, value: command, destination: destination, label: label, line: line}, rest}
 
       {:error, _} = err ->
         err
@@ -351,16 +363,10 @@ defmodule Anemos.Parser do
   defp parse_emit_command([{:lbracket, _, _} | rest]) do
     case rest do
       [{:module_id, meta, mod}, {:double_colon, _, _} | rest] ->
-        {verb, rest} = parse_command_verb(rest)
-
-        case parse_emit_command_args(rest, [], nil) do
-          {:ok, args, destination, rest} ->
-            case expect(rest, :rbracket) do
-              {:ok, rest} ->
-                {:ok, %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]}, destination, rest}
-              {:error, _} = err -> err
-            end
-          {:error, _} = err -> err
+        with {:ok, verb, rest} <- parse_command_verb(rest),
+             {:ok, args, destination, rest} <- parse_emit_command_args(rest, [], nil),
+             {:ok, rest} <- expect(rest, :rbracket) do
+          {:ok, %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]}, destination, rest}
         end
 
       [{_, meta, _} | _] ->
@@ -373,6 +379,10 @@ defmodule Anemos.Parser do
 
   defp parse_emit_command([{_, meta, _} | _]) do
     {:error, "Expected command expression after emit on line #{meta[:line]}"}
+  end
+
+  defp parse_emit_command([]) do
+    {:error, "Expected command expression after emit but got end of input"}
   end
 
   # Parse command args for emit, tracking destination
@@ -410,12 +420,12 @@ defmodule Anemos.Parser do
 
   defp parse_optional_to([{:keyword, _, :to} | rest]) do
     case parse_destination(rest) do
-      {:ok, dest, rest} -> {dest, rest}
-      _ -> {nil, rest}
+      {:ok, dest, rest} -> {:ok, dest, rest}
+      {:error, _} = err -> err
     end
   end
 
-  defp parse_optional_to(tokens), do: {nil, tokens}
+  defp parse_optional_to(tokens), do: {:ok, nil, tokens}
 
   defp parse_destination([{:keyword, _, :channel}, {:lparen, _, _} | rest]) do
     case parse_dotted_path_until_rparen(rest) do
@@ -453,17 +463,20 @@ defmodule Anemos.Parser do
 
   defp parse_optional_as([{:keyword, _, :as} | rest]) do
     case rest do
-      [{:atom, _, name} | rest] -> {name, rest}
-      [{:interp_atom, _, name} | rest] -> {name, rest}
+      [{:atom, _, name} | rest] -> {:ok, name, rest}
+      [{:interp_atom, _, name} | rest] -> {:ok, name, rest}
       # identifier followed by interp_atom: "ddns.update." + ":{?fqdn}"
       [{:identifier, _, prefix}, {:interp_atom, _, suffix} | rest] ->
-        {"#{prefix}:{#{suffix}}", rest}
-      [{:identifier, _, name} | rest] -> {name, rest}
-      _ -> {nil, rest}
+        {:ok, "#{prefix}:{#{suffix}}", rest}
+      [{:identifier, _, name} | rest] -> {:ok, name, rest}
+      [{_, meta, _} | _] ->
+        {:error, "Expected label after 'as' on line #{meta[:line]}"}
+      [] ->
+        {:error, "Expected label after 'as' but got end of input"}
     end
   end
 
-  defp parse_optional_as(tokens), do: {nil, tokens}
+  defp parse_optional_as(tokens), do: {:ok, nil, tokens}
 
   # --- Demand ---
 
@@ -546,22 +559,10 @@ defmodule Anemos.Parser do
   defp parse_command([{:lbracket, _, _} | rest]) do
     case rest do
       [{:module_id, meta, mod}, {:double_colon, _, _} | rest] ->
-        {verb, rest} = parse_command_verb(rest)
-
-        case parse_command_args(rest, []) do
-          {:ok, args, rest} ->
-            case expect(rest, :rbracket) do
-              {:ok, rest} ->
-                {:ok,
-                 %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]},
-                 rest}
-
-              {:error, _} = err ->
-                err
-            end
-
-          {:error, _} = err ->
-            err
+        with {:ok, verb, rest} <- parse_command_verb(rest),
+             {:ok, args, rest} <- parse_command_args(rest, []),
+             {:ok, rest} <- expect(rest, :rbracket) do
+          {:ok, %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]}, rest}
         end
 
       [{_, meta, _} | _] ->
@@ -573,11 +574,15 @@ defmodule Anemos.Parser do
   end
 
   # Verb can be a keyword or identifier
-  defp parse_command_verb([{:keyword, _, kw} | rest]), do: {Atom.to_string(kw), rest}
-  defp parse_command_verb([{:identifier, _, name} | rest]), do: {name, rest}
+  defp parse_command_verb([{:keyword, _, kw} | rest]), do: {:ok, Atom.to_string(kw), rest}
+  defp parse_command_verb([{:identifier, _, name} | rest]), do: {:ok, name, rest}
 
   defp parse_command_verb([{_, meta, _} | _]) do
-    raise "Expected verb after :: on line #{meta[:line]}"
+    {:error, "Expected verb after :: on line #{meta[:line]}"}
+  end
+
+  defp parse_command_verb([]) do
+    {:error, "Expected verb after :: but got end of input"}
   end
 
   # Command args: consume expressions until ]
@@ -803,7 +808,11 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.Condition{name: name, body: Enum.reverse(body), line: meta[:line]}, rest}
+      if body == [] do
+        {:error, "Condition '#{name}' has empty body on line #{meta[:line]}"}
+      else
+        {:ok, %AST.Condition{name: name, body: Enum.reverse(body), line: meta[:line]}, rest}
+      end
     end
   end
 

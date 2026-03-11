@@ -28,13 +28,41 @@ More examples in `priv/examples/`.
 
 ## Install and Run
 
-Requires Elixir 1.19+.
+Requires Elixir 1.19+ / OTP 28+.
 
 ```bash
 git clone <repo-url> && cd anemos
 mix deps.get
 mix compile
-mix anemos.run priv/examples/garage-lights.rule
+```
+
+### Usage
+
+```bash
+mix anemos.run <file> --event <EVENT_NAME>
+```
+
+Examples:
+
+```bash
+$ mix anemos.run priv/examples/garage-lights.rule --event SENSOR_MOTION_DETECTED
+Parsing priv/examples/garage-lights.rule...
+Dispatched SENSOR_MOTION_DETECTED -- 1 operation(s):
+
+  [DEVICE::set "garage.lights" "on"]
+
+$ mix anemos.run priv/examples/garage-lights.rule --event SENSOR_NO_MOTION
+Parsing priv/examples/garage-lights.rule...
+Dispatched SENSOR_NO_MOTION -- 1 operation(s):
+
+  [DEVICE::set "garage.lights" "off"]
+```
+
+### Programmatic API
+
+```elixir
+source = File.read!("priv/examples/garage-lights.rule")
+{:ok, results} = Anemos.run(source, event: "SENSOR_MOTION_DETECTED")
 ```
 
 ## Pipeline

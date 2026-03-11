@@ -9,3 +9,4 @@ Reference documents distilled from the Obsidian vault at `~/Documents/remote.vau
 | [modal-logic.md](modal-logic.md) | Modal logic operators and EBNF grammar used in the policy DSL |
 | [language-ergonomics.md](language-ergonomics.md) | Language design principles from Pinker's Words and Rules |
 | [future-features.md](future-features.md) | Features NOT in v0.1.0 that will need to be built |
+| [tcl-sketch-analysis.md](tcl-sketch-analysis.md) | Pre-spec Tcl design sketches analyzed against the spec — gap inventory |

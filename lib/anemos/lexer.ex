@@ -205,6 +205,18 @@ defmodule Anemos.Lexer do
   Tokenize the given input string.
 
   Returns `{:ok, tokens}` or `{:error, message, line, col}`.
+
+  ## Examples
+
+      iex> {:ok, tokens} = Anemos.Lexer.tokenize("rule test { }")
+      iex> Enum.map(tokens, &elem(&1, 0))
+      [:keyword, :identifier, :lbrace, :rbrace]
+
+      iex> {:ok, tokens} = Anemos.Lexer.tokenize("when EVENT for 5min { }")
+      iex> Enum.map(tokens, &elem(&1, 0))
+      [:keyword, :module_id, :keyword, :duration, :lbrace, :rbrace]
+
+      iex> {:error, _, _, _} = Anemos.Lexer.tokenize("~~~")
   """
   @spec tokenize(String.t()) :: {:ok, list()} | {:error, String.t(), pos_integer(), pos_integer()}
   def tokenize(input) do

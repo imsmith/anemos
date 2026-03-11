@@ -3,6 +3,8 @@ defmodule Anemos.LexerTest do
 
   alias Anemos.Lexer
 
+  doctest Anemos.Lexer
+
   test "tokenizes a minimal rule" do
     input = ~s|rule garage-lights-on { }|
     assert {:ok, tokens} = Lexer.tokenize(input)

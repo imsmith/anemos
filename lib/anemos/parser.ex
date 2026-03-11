@@ -33,6 +33,21 @@ defmodule Anemos.Parser do
 
   # --- Public API ---
 
+  @doc """
+  Parse a source string into an AST.
+
+  Returns `{:ok, %Anemos.AST.Program{}}` or `{:error, message}`.
+
+  ## Examples
+
+      iex> {:ok, %Anemos.AST.Program{declarations: [rule]}} =
+      ...>   Anemos.Parser.parse("rule test { when EVENT { log \\"hello\\" } }")
+      iex> rule.name
+      "test"
+      iex> [%Anemos.AST.When{event: "EVENT", body: [%Anemos.AST.Log{}]}] = rule.body
+
+      iex> {:error, _msg} = Anemos.Parser.parse("rule { }")
+  """
   @spec parse(String.t()) :: {:ok, AST.Program.t()} | {:error, String.t()}
   def parse(source) when is_binary(source) do
     case Anemos.Lexer.tokenize(source) do

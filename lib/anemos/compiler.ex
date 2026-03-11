@@ -17,6 +17,22 @@ defmodule Anemos.Compiler do
   alias Anemos.AST
   alias Anemos.CompiledRule
 
+  @doc """
+  Compile an AST into a list of executable `%Anemos.CompiledRule{}` structs.
+
+  Each rule with `when` blocks produces one `CompiledRule` per event subscription.
+  The handler closure takes `(event_name, context)` and returns `{:ok, [operation]}`.
+
+  ## Examples
+
+      iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { log \\"hi\\" } }")
+      iex> {:ok, [compiled]} = Anemos.Compiler.compile(ast)
+      iex> compiled.name
+      "r"
+      iex> compiled.subscriptions
+      ["EV"]
+      iex> {:ok, [%{type: :log, value: "hi"}]} = compiled.handler.("EV", %{})
+  """
   # TODO: Add {:error, String.t()} return when the compiler needs to reject invalid AST.
   # For v0.1.0, the catch-all clauses silently drop unknown nodes.
   @spec compile(AST.Program.t()) :: {:ok, [CompiledRule.t()]}

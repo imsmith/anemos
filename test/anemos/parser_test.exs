@@ -3,6 +3,8 @@ defmodule Anemos.ParserTest do
 
   alias Anemos.{Parser, AST}
 
+  doctest Anemos.Parser
+
   test "parses minimal rule with when block and command" do
     input = """
     rule garage-lights-on {

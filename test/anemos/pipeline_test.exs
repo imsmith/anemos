@@ -1,6 +1,8 @@
 defmodule Anemos.PipelineTest do
   use ExUnit.Case
 
+  doctest Anemos
+
   test "end-to-end: parse → compile → dispatch → observe" do
     input = """
     rule garage-lights-on {

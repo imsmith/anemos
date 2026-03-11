@@ -24,6 +24,14 @@ defmodule Anemos do
     - `:context` — optional context map (default `%{}`)
 
   Returns `{:ok, results}` or `{:error, reason}`.
+
+  ## Examples
+
+      iex> source = "rule t { when EV { [DEVICE::set \\"light\\" \\"on\\"] } }"
+      iex> {:ok, [%{module: "DEVICE", verb: "set", args: ["light", "on"]}]} =
+      ...>   Anemos.run(source, event: "EV")
+
+      iex> {:error, _} = Anemos.run("rule {", event: "EV")
   """
   @spec run(String.t(), keyword()) :: {:ok, list()} | {:error, String.t()}
   def run(source, opts) do

@@ -3,6 +3,8 @@ defmodule Anemos.CompilerTest do
 
   alias Anemos.{Compiler, Parser}
 
+  doctest Anemos.Compiler
+
   test "compiles a rule to a module with handle_event/2" do
     input = """
     rule garage-lights-on {

@@ -21,9 +21,36 @@ defmodule Mix.Tasks.Anemos.Run do
     source = File.read!(file)
     event = extract_event(args)
 
+    Mix.shell().info("Parsing #{file}...")
+
     case Anemos.run(source, event: event) do
+      {:ok, []} ->
+        Mix.shell().info("No rules matched event #{event}.")
+
       {:ok, results} ->
-        Enum.each(results, fn op -> Mix.shell().info(inspect(op)) end)
+        Mix.shell().info("Dispatched #{event} -- #{length(results)} operation(s):\n")
+
+        Enum.each(results, fn
+          %{module: mod, verb: verb, args: args} ->
+            Mix.shell().info("  [#{mod}::#{verb} #{Enum.map_join(args, " ", &inspect/1)}]")
+
+          %{type: :log, value: value} ->
+            Mix.shell().info("  log #{inspect(value)}")
+
+          %{type: :emit, value: value} = op ->
+            dest = if op[:destination], do: " to #{op[:destination]}", else: ""
+            label = if op[:label], do: " as #{op[:label]}", else: ""
+            Mix.shell().info("  emit #{inspect(value)}#{dest}#{label}")
+
+          %{type: :demand, capability: cap} ->
+            Mix.shell().info("  demand #{cap}")
+
+          %{type: :set, name: name, value: value} ->
+            Mix.shell().info("  set #{name} = #{inspect(value)}")
+
+          other ->
+            Mix.shell().info("  #{inspect(other)}")
+        end)
 
       {:error, reason} ->
         Mix.shell().error("Error: #{reason}")

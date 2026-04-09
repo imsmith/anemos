@@ -1,4 +1,6 @@
 defmodule Anemos.ParserTest do
+  @moduledoc false
+
   use ExUnit.Case, async: true
 
   alias Anemos.{Parser, AST}
@@ -354,7 +356,7 @@ defmodule Anemos.ParserTest do
     # Rule has context, when block with demand, lets, emit
     [context_node, when_block2] = rule.body
     assert %AST.Context{path: "infra.networking.dns"} = context_node
-    assert %AST.When{event: "CONDITION::networkchanged"} = when_block2
+    assert %AST.When{event: "CONDITION_networkchanged"} = when_block2
     [demand | _rest] = when_block2.body
     assert %AST.Demand{capability: "katachora-ddns-key"} = demand
   end

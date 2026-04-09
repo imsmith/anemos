@@ -19,7 +19,7 @@ condition networkchanged {
 rule update-ddns {
   context infra.networking.dns
 
-  when CONDITION::networkchanged {
+  when CONDITION_networkchanged {
     demand katachora-ddns-key
 
     let fqdn = ?fqdn

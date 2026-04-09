@@ -102,6 +102,33 @@ defmodule Anemos.PipelineTest do
     assert "CONDITION_networkchanged" in hd(compiled.rules).subscriptions
   end
 
+  test "? variables resolve from context_data option" do
+    input = """
+    rule greet {
+      when GREET {
+        log ?name
+      }
+    }
+    """
+
+    context = %{context_data: %{"name" => "ian"}}
+    {:ok, results} = Anemos.run(input, event: "GREET", context: context)
+    assert [%{type: :log, value: "ian"}] = results
+  end
+
+  test "? variables return nil when context_data key missing" do
+    input = """
+    rule greet {
+      when GREET {
+        log ?missing
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "GREET", context: %{context_data: %{}})
+    assert [%{type: :log, value: nil}] = results
+  end
+
   test "multi-rule file with specific event only fires matching rules" do
     input = """
     rule lights-on {

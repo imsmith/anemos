@@ -101,6 +101,29 @@ defmodule Anemos.Runtime.DispatcherTest do
     assert [{:ok, %{type: :log, value: "hello world"}}] = results
   end
 
+  test "log operations emit through Logger" do
+    input = """
+    rule log-test {
+      when LOG_EVENT {
+        log "hello from anemos"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        results = Dispatcher.dispatch(dispatcher, "LOG_EVENT")
+        assert [{:ok, %{type: :log, value: "hello from anemos"}}] = results
+      end)
+
+    assert log =~ "hello from anemos"
+  end
+
   test "unknown module in operation returns error result" do
     input = """
     rule unknown-mod {

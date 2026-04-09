@@ -8,6 +8,7 @@ defmodule Anemos.Runtime.Dispatcher do
   """
 
   use GenServer
+  require Logger
 
   alias Anemos.Runtime.{CapabilityServer, ConditionServer, ModuleRegistry}
 
@@ -223,7 +224,8 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  defp execute_op(%{type: :log} = op, _context, _registry, _capability_servers) do
+  defp execute_op(%{type: :log, value: value} = op, _context, _registry, _capability_servers) do
+    Logger.info("[anemos] #{value}")
     {:ok, op}
   end
 

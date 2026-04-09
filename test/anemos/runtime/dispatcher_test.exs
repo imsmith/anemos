@@ -452,4 +452,55 @@ defmodule Anemos.Runtime.DispatcherTest do
       _ -> false
     end)
   end
+
+  # --- Emit label re-dispatch ---
+
+  test "emit with label dispatches label as event" do
+    input = """
+    rule emitter {
+      when SOURCE_EVENT {
+        emit [EVENT::fire] as :my.event
+      }
+    }
+
+    rule listener {
+      when my.event {
+        log "received emit"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: rules}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: rules, registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
+
+    log_values =
+      Enum.flat_map(results, fn
+        {:ok, %{type: :log, value: v}} -> [v]
+        _ -> []
+      end)
+
+    assert "received emit" in log_values
+  end
+
+  test "emit without label returns op as-is" do
+    input = """
+    rule emitter {
+      when SOURCE_EVENT {
+        emit [EVENT::fire]
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
+    assert [{:ok, %{type: :emit}}] = results
+  end
 end

@@ -229,6 +229,19 @@ defmodule Anemos.Parser do
     end
   end
 
+  # Identifier event name (e.g. my.event — used for emit label re-dispatch targets)
+  defp parse_when([{:identifier, meta, event} | rest]) do
+    {duration, rest} = parse_optional_duration(rest)
+
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]},
+       rest}
+    end
+  end
+
   # Compound event in parens: (EVENT1 OR EVENT2)
   defp parse_when([{:lparen, meta, _} | rest]) do
     case parse_compound_event(rest, []) do

@@ -158,12 +158,24 @@ defmodule Anemos.Runtime.Dispatcher do
         {:ok, ops, new_persistent} ->
           new_st = put_in(st.rule_bindings[rule.name], new_persistent)
 
-          executed =
+          all_results =
             Enum.flat_map(ops, fn op ->
-              List.wrap(execute_op(op, context, st.registry, st.capability_servers))
+              List.wrap(execute_op(op, context, new_st.registry, new_st.capability_servers))
             end)
 
-          {results_acc ++ executed, new_st}
+          {normal_results, emit_events} =
+            Enum.split_with(all_results, fn
+              {:emit_event, _, _} -> false
+              _ -> true
+            end)
+
+          {emit_results, new_st} =
+            Enum.reduce(emit_events, {[], new_st}, fn {:emit_event, label, op}, {acc, s} ->
+              {sub_results, s} = dispatch_to_rules(label, context, s)
+              {acc ++ [{:ok, op} | sub_results], s}
+            end)
+
+          {results_acc ++ normal_results ++ emit_results, new_st}
 
         {:error, reason} ->
           {results_acc ++ [{:error, {:handler_crash, rule.name, reason}}], st}
@@ -228,6 +240,11 @@ defmodule Anemos.Runtime.Dispatcher do
   defp execute_op(%{type: :log, value: value} = op, _context, _registry, _capability_servers) do
     Logger.info("[anemos] #{value}")
     {:ok, op}
+  end
+
+  defp execute_op(%{type: :emit, label: label} = op, _context, _registry, _capability_servers)
+       when is_binary(label) do
+    {:emit_event, label, op}
   end
 
   defp execute_op(%{type: :emit} = op, _context, _registry, _capability_servers) do

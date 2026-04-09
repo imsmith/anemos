@@ -241,4 +241,65 @@ defmodule Anemos.Runtime.DispatcherTest do
     Dispatcher.dispatch(dispatcher, "EV")
     assert Dispatcher.condition_state(dispatcher, "test_cond") == true
   end
+
+  # --- Demand integration ---
+
+  test "demand operation invokes capability server and returns result" do
+    input = """
+    rule demand-test {
+      when TEST_EVENT {
+        demand test-cap
+        log "after demand"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled_rule]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: [compiled_rule],
+        registry: registry,
+        capabilities: [
+          %Anemos.CompiledCapability{
+            name: "test-cap",
+            context: "test",
+            handler: fn _ctx -> {:ok, [%{type: :emit, value: "cap-result"}]} end
+          }
+        ]
+      )
+
+    results = Dispatcher.dispatch(dispatcher, "TEST_EVENT")
+    # Should have capability result + log
+    assert length(results) >= 2
+    values = Enum.map(results, fn {:ok, v} -> v end)
+    assert Enum.any?(values, &match?(%{type: :emit, value: "cap-result"}, &1))
+    assert Enum.any?(values, &match?(%{type: :log, value: "after demand"}, &1))
+  end
+
+  test "demand for missing capability returns error" do
+    input = """
+    rule demand-missing {
+      when TEST_EVENT {
+        demand nonexistent
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled_rule]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: [compiled_rule],
+        registry: registry,
+        capabilities: []
+      )
+
+    results = Dispatcher.dispatch(dispatcher, "TEST_EVENT")
+    assert [{:error, {:unknown_capability, "nonexistent"}}] = results
+  end
 end

@@ -9,7 +9,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
   use GenServer
 
-  alias Anemos.Runtime.{ConditionServer, ModuleRegistry}
+  alias Anemos.Runtime.{CapabilityServer, ConditionServer, ModuleRegistry}
 
   # --- Client API ---
 
@@ -17,8 +17,9 @@ defmodule Anemos.Runtime.Dispatcher do
     rules = Keyword.fetch!(opts, :rules)
     registry = Keyword.fetch!(opts, :registry)
     conditions = Keyword.get(opts, :conditions, [])
+    capabilities = Keyword.get(opts, :capabilities, [])
     name = Keyword.get(opts, :name)
-    GenServer.start_link(__MODULE__, {rules, registry, conditions}, name: name)
+    GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities}, name: name)
   end
 
   @spec dispatch(pid() | atom(), String.t(), map()) :: list()
@@ -34,7 +35,7 @@ defmodule Anemos.Runtime.Dispatcher do
   # --- Server callbacks ---
 
   @impl true
-  def init({rules, registry, compiled_conditions}) do
+  def init({rules, registry, compiled_conditions, compiled_capabilities}) do
     index = build_index(rules)
     dispatcher_pid = self()
 
@@ -54,8 +55,26 @@ defmodule Anemos.Runtime.Dispatcher do
         {cond_spec.name, %{pid: pid, subscriptions: cond_spec.subscriptions}}
       end)
 
+    capability_servers =
+      Map.new(compiled_capabilities, fn cap ->
+        {:ok, pid} =
+          CapabilityServer.start_link(
+            name_str: cap.name,
+            context: cap.context || "",
+            handler: cap.handler
+          )
+
+        {cap.name, pid}
+      end)
+
     {:ok,
-     %{rules: rules, index: index, registry: registry, condition_servers: condition_servers}}
+     %{
+       rules: rules,
+       index: index,
+       registry: registry,
+       condition_servers: condition_servers,
+       capability_servers: capability_servers
+     }}
   end
 
   @impl true
@@ -108,8 +127,13 @@ defmodule Anemos.Runtime.Dispatcher do
 
     Enum.flat_map(matching, fn rule ->
       case safe_handle(rule, event_name, context) do
-        {:ok, ops} -> Enum.map(ops, &execute_op(&1, context, state.registry))
-        {:error, reason} -> [{:error, {:handler_crash, rule.name, reason}}]
+        {:ok, ops} ->
+          Enum.flat_map(ops, fn op ->
+            List.wrap(execute_op(op, context, state.registry, state.capability_servers))
+          end)
+
+        {:error, reason} ->
+          [{:error, {:handler_crash, rule.name, reason}}]
       end
     end)
   end
@@ -152,26 +176,31 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
-  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, registry) do
+  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, registry, _capability_servers) do
     case ModuleRegistry.lookup(registry, mod_name) do
       {:ok, mod} -> mod.handle_verb(verb, args, context)
       :error -> {:error, {:unknown_module, mod_name}}
     end
   end
 
-  defp execute_op(%{type: :log} = op, _context, _registry) do
+  defp execute_op(%{type: :log} = op, _context, _registry, _capability_servers) do
     {:ok, op}
   end
 
-  defp execute_op(%{type: :emit} = op, _context, _registry) do
+  defp execute_op(%{type: :emit} = op, _context, _registry, _capability_servers) do
     {:ok, op}
   end
 
-  defp execute_op(%{type: :demand} = op, _context, _registry) do
-    {:ok, op}
+  defp execute_op(%{type: :demand, capability: cap_name} = op, context, _registry, capability_servers) do
+    demands = [%{capability: cap_name, flag: Map.get(op, :flag, :requisite)}]
+
+    case Anemos.Runtime.Demand.evaluate(demands, capability_servers, context) do
+      {:ok, ops} -> Enum.map(ops, fn result_op -> {:ok, result_op} end)
+      {:error, _} = err -> [err]
+    end
   end
 
-  defp execute_op(%{type: :set} = op, _context, _registry) do
+  defp execute_op(%{type: :set} = op, _context, _registry, _capability_servers) do
     {:ok, op}
   end
 end

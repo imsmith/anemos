@@ -1,4 +1,5 @@
 defmodule Anemos.Runtime.DispatcherTest do
+  @moduledoc false
   use ExUnit.Case, async: true
 
   alias Anemos.Runtime.{Dispatcher, ModuleRegistry}
@@ -14,7 +15,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, registry} = ModuleRegistry.start_link([])
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
@@ -35,7 +36,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, registry} = ModuleRegistry.start_link([])
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
@@ -62,7 +63,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, compiled_rules} = Compiler.compile(ast)
+    {:ok, %{rules: compiled_rules}} = Compiler.compile(ast)
 
     {:ok, registry} = ModuleRegistry.start_link([])
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
@@ -88,7 +89,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, registry} = ModuleRegistry.start_link([])
 
@@ -108,7 +109,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, registry} = ModuleRegistry.start_link([])
 
@@ -128,7 +129,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, registry} = ModuleRegistry.start_link([])
 

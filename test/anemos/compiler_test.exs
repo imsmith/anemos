@@ -1,4 +1,5 @@
 defmodule Anemos.CompilerTest do
+  @moduledoc false
   use ExUnit.Case, async: true
 
   alias Anemos.{Compiler, Parser}
@@ -15,7 +16,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, modules} = Compiler.compile(ast)
+    {:ok, %{rules: modules}} = Compiler.compile(ast)
 
     assert [compiled] = modules
     assert compiled.name == "garage-lights-on"
@@ -34,7 +35,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
 
@@ -56,7 +57,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :log, value: "yes"}] = ops
@@ -76,7 +77,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :log, value: "no"}] = ops
@@ -93,7 +94,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :log, value: "hello"}] = ops
@@ -110,7 +111,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     # let with a command value stores the command op; log resolves $title to it
@@ -130,7 +131,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
 
@@ -148,7 +149,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :emit, emit_type: :state, label: "my.label"}] = ops
@@ -167,7 +168,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, modules} = Compiler.compile(ast)
+    {:ok, %{rules: modules}} = Compiler.compile(ast)
 
     assert length(modules) == 2
     [a, b] = modules
@@ -193,7 +194,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     assert compiled.subscriptions == ["INFRA::ip4", "INFRA::ip6"]
   end
@@ -208,7 +209,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :demand, capability: "katachora-ddns-key"}] = ops
@@ -224,7 +225,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :set, name: "x", value: "value"}] = ops
@@ -242,7 +243,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :log, value: "different"}] = ops
@@ -260,7 +261,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     assert compiled.subscriptions == ["SENSOR_MOTION_DETECTED"]
     {:ok, ops} = compiled.handler.("SENSOR_MOTION_DETECTED", %{})
@@ -278,7 +279,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :command, module: "DEVICE", verb: "set", args: ["greeting", "world"]}] = ops
@@ -288,7 +289,7 @@ defmodule Anemos.CompilerTest do
 
   test "empty program (no declarations) returns {:ok, []}" do
     ast = %Anemos.AST.Program{declarations: []}
-    assert {:ok, []} = Compiler.compile(ast)
+    assert {:ok, %{rules: []}} = Compiler.compile(ast)
   end
 
   test "rule with no when blocks produces no compiled rules" do
@@ -303,7 +304,7 @@ defmodule Anemos.CompilerTest do
       ]
     }
 
-    assert {:ok, []} = Compiler.compile(ast)
+    assert {:ok, %{rules: []}} = Compiler.compile(ast)
   end
 
   test "unresolvable $nonexistent variable reference returns nil" do
@@ -316,7 +317,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, [compiled]} = Compiler.compile(ast)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
     assert [%{type: :log, value: nil}] = ops
@@ -337,11 +338,68 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    {:ok, modules} = Compiler.compile(ast)
+    {:ok, %{rules: modules}} = Compiler.compile(ast)
 
     assert length(modules) == 2
     names = Enum.map(modules, & &1.name)
     assert "a" in names
     assert "b" in names
+  end
+
+  # --- Condition and Capability compilation ---
+
+  test "compiles condition declaration into CompiledCondition" do
+    input = """
+    condition networkchanged {
+      when (INFRA_ip4_addr_changed OR INFRA_ip6_addr_changed) {
+        log "network changed"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert compiled.conditions != []
+    [cond] = compiled.conditions
+    assert cond.name == "networkchanged"
+    assert "INFRA_ip4_addr_changed" in cond.subscriptions
+    assert "INFRA_ip6_addr_changed" in cond.subscriptions
+    assert is_function(cond.evaluator, 2)
+  end
+
+  test "compiles capability declaration into CompiledCapability" do
+    input = """
+    capability test-key {
+      context infra.networking
+
+      on demand {
+        log "unlocked"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert compiled.capabilities != []
+    [cap] = compiled.capabilities
+    assert cap.name == "test-key"
+    assert cap.context == "infra.networking"
+    assert is_function(cap.handler, 1)
+  end
+
+  test "mixed declarations: rules, conditions, capabilities all compiled" do
+    source = File.read!("priv/examples/ddns.rule")
+    {:ok, ast} = Parser.parse(source)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert length(compiled.rules) == 1
+    assert length(compiled.conditions) == 1
+    assert length(compiled.capabilities) == 1
+
+    assert hd(compiled.rules).name == "update-ddns"
+    assert hd(compiled.conditions).name == "networkchanged"
+    assert hd(compiled.capabilities).name == "katachora-ddns-key"
   end
 end

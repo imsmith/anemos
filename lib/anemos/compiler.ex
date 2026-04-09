@@ -5,20 +5,33 @@ defmodule Anemos.CompiledRule do
   The handler takes `(event_name, context)` and returns `{:ok, [operation]}`
   where each operation is a map describing what to do.
   """
+  @enforce_keys [:name, :subscriptions, :handler]
   defstruct [:name, :subscriptions, :handler, :meta]
+end
+
+defmodule Anemos.CompilationResult do
+  @moduledoc """
+  Result of compiling an Anemos program.
+
+  All fields default to empty lists — no fields are required at construction.
+  """
+  @enforce_keys []
+  defstruct rules: [], conditions: [], capabilities: []
 end
 
 defmodule Anemos.Compiler do
   @moduledoc """
-  Walks the AST produced by `Anemos.Parser` and produces `%Anemos.CompiledRule{}`
-  structs with executable closures. No code generation, no Module.create.
+  Walks the AST produced by `Anemos.Parser` and produces `%Anemos.CompiledRule{}`,
+  `%Anemos.CompiledCondition{}`, and `%Anemos.CompiledCapability{}` structs with
+  executable closures. No code generation, no Module.create.
   """
 
   alias Anemos.AST
   alias Anemos.CompiledRule
 
   @doc """
-  Compile an AST into a list of executable `%Anemos.CompiledRule{}` structs.
+  Compile an AST into an `%Anemos.CompilationResult{}` containing compiled rules,
+  conditions, and capabilities.
 
   Each rule with `when` blocks produces one `CompiledRule` per event subscription.
   The handler closure takes `(event_name, context)` and returns `{:ok, [operation]}`.
@@ -26,7 +39,7 @@ defmodule Anemos.Compiler do
   ## Examples
 
       iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { log \\"hi\\" } }")
-      iex> {:ok, [compiled]} = Anemos.Compiler.compile(ast)
+      iex> {:ok, %{rules: [compiled]}} = Anemos.Compiler.compile(ast)
       iex> compiled.name
       "r"
       iex> compiled.subscriptions
@@ -35,24 +48,70 @@ defmodule Anemos.Compiler do
   """
   # TODO: Add {:error, String.t()} return when the compiler needs to reject invalid AST.
   # For v0.1.0, the catch-all clauses silently drop unknown nodes.
-  @spec compile(AST.Program.t()) :: {:ok, [CompiledRule.t()]}
+  @spec compile(AST.Program.t()) :: {:ok, Anemos.CompilationResult.t()}
   def compile(%AST.Program{declarations: declarations}) do
-    compiled =
-      declarations
-      |> Enum.flat_map(&compile_declaration/1)
+    result =
+      Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
+        case compile_declaration(decl) do
+          {:rule, rules} -> %{acc | rules: acc.rules ++ rules}
+          {:condition, cond} -> %{acc | conditions: acc.conditions ++ [cond]}
+          {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
+          :skip -> acc
+        end
+      end)
 
-    {:ok, compiled}
+    {:ok, result}
   end
 
   # --- Declaration dispatch ---
 
-  defp compile_declaration(%AST.Rule{} = rule) do
-    compile_rule(rule)
+  defp compile_declaration(%AST.Rule{} = rule), do: {:rule, compile_rule(rule)}
+
+  defp compile_declaration(%AST.Condition{} = cond_decl) do
+    {:condition, compile_condition(cond_decl)}
   end
 
-  # Skip non-rule declarations for now (conditions, capabilities).
-  # They'll be referenced by rules but don't produce handlers directly.
-  defp compile_declaration(_other), do: []
+  defp compile_declaration(%AST.Capability{} = cap) do
+    {:capability, compile_capability(cap)}
+  end
+
+  defp compile_declaration(_other), do: :skip
+
+  # --- Condition compilation ---
+
+  defp compile_condition(%AST.Condition{name: name, body: body}) do
+    when_blocks = extract_when_blocks(body)
+
+    subscriptions =
+      Enum.flat_map(when_blocks, fn %AST.When{event: event} ->
+        event_to_subscriptions(event)
+      end)
+
+    side_effects = Enum.flat_map(when_blocks, fn %AST.When{body: when_body} -> when_body end)
+    evaluator = fn _event_name, _context -> true end
+
+    %Anemos.CompiledCondition{
+      name: name,
+      subscriptions: subscriptions,
+      evaluator: evaluator,
+      side_effects: side_effects
+    }
+  end
+
+  # --- Capability compilation ---
+
+  defp compile_capability(%AST.Capability{name: name, context: context, body: body}) do
+    handler = fn _context ->
+      {ops, _bindings} = eval_body(body, %{}, %{})
+      {:ok, ops}
+    end
+
+    %Anemos.CompiledCapability{
+      name: name,
+      context: context,
+      handler: handler
+    }
+  end
 
   # --- Rule compilation ---
 

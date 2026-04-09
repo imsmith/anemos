@@ -39,7 +39,7 @@ defmodule Anemos do
     context = Keyword.get(opts, :context, %{})
 
     with {:ok, ast} <- Parser.parse(source),
-         {:ok, rules} <- Compiler.compile(ast),
+         {:ok, %{rules: rules}} <- Compiler.compile(ast),
          {:ok, registry} <- ModuleRegistry.start_link([]) do
       try do
         Enum.each(@default_modules, fn {name, mod} ->

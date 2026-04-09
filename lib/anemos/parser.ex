@@ -149,6 +149,13 @@ defmodule Anemos.Parser do
     end
   end
 
+  defp parse_rule_body([{:keyword, _, :at} | rest], acc) do
+    case parse_at(rest) do
+      {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
   defp parse_rule_body(tokens, acc) do
     case parse_statement(tokens) do
       {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
@@ -313,6 +320,82 @@ defmodule Anemos.Parser do
 
   defp parse_optional_duration(tokens), do: {nil, tokens}
 
+  # --- At ---
+
+  # at interval(duration) { ... }
+  defp parse_at([
+         {:keyword, meta, :interval},
+         {:lparen, _, _},
+         {:duration, _, dur},
+         {:rparen, _, _} | rest
+       ]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.At{time_spec: {:interval, dur}, body: Enum.reverse(body), line: meta[:line]},
+       rest}
+    end
+  end
+
+  # at <time_literal> every <recurrence> { ... }
+  defp parse_at([{:time_literal, meta, time}, {:keyword, _, :every} | rest]) do
+    {recurrence, rest} = parse_recurrence(rest)
+
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.At{
+         time_spec: {:recurring, {:time, time}, recurrence},
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  # at <time_literal> { ... }
+  defp parse_at([{:time_literal, meta, time} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.At{time_spec: {:time, time}, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
+  # at DATE_YYYY.MM.DD { ... }
+  defp parse_at([{:date_literal, meta, date} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.At{time_spec: {:date, date}, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
+  # at DAY_weekday { ... }
+  defp parse_at([{:day_literal, meta, day} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.At{time_spec: {:day, day}, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_at([{_, meta, _} | _]) do
+    {:error, "Expected time spec after 'at' on line #{meta[:line]}"}
+  end
+
+  defp parse_at([]) do
+    {:error, "Expected time spec after 'at' but got end of input"}
+  end
+
+  # Recurrence: day | weekday | weekend | <day_name_identifier>
+  defp parse_recurrence([{:keyword, _, :day} | rest]), do: {:day, rest}
+
+  defp parse_recurrence([{:identifier, _, name} | rest]),
+    do: {String.to_atom(name), rest}
+
+  defp parse_recurrence(tokens), do: {:day, tokens}
+
   # --- Statements ---
 
   defp parse_statements_until_rbrace([{:rbrace, _, _} | _] = tokens, acc), do: {:ok, acc, tokens}
@@ -331,6 +414,7 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :demand} | rest]), do: parse_demand(rest)
   defp parse_statement([{:keyword, _, :if} | rest]), do: parse_if(rest)
   defp parse_statement([{:keyword, _, :when} | rest]), do: parse_when(rest)
+  defp parse_statement([{:keyword, _, :at} | rest]), do: parse_at(rest)
   defp parse_statement([{:keyword, _, :context} | rest]), do: parse_context(rest)
   defp parse_statement([{:lbracket, _, _} | _] = tokens), do: parse_command_statement(tokens)
 

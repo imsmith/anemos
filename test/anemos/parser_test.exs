@@ -391,6 +391,112 @@ defmodule Anemos.ParserTest do
     assert is_binary(msg)
   end
 
+  # --- At blocks ---
+
+  test "parses at with HH:MM time" do
+    input = """
+    rule scheduled {
+      at 13:00 {
+        log "time to go"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:time, {13, 0}}, body: [%AST.Log{}]} = at_block
+  end
+
+  test "parses at with interval" do
+    input = """
+    rule polling {
+      at interval(5min) {
+        log "tick"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:interval, {5, :min}}} = at_block
+  end
+
+  test "parses at with time and every day" do
+    input = """
+    rule daily {
+      at 09:00 every day {
+        log "morning"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:recurring, {:time, {9, 0}}, :day}} = at_block
+  end
+
+  test "parses at with every weekday" do
+    input = """
+    rule workday {
+      at 09:00 every weekday {
+        log "work"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:recurring, {:time, {9, 0}}, :weekday}} = at_block
+  end
+
+  test "parses at with every specific day" do
+    input = """
+    rule weekly {
+      at 09:00 every monday {
+        log "week start"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:recurring, {:time, {9, 0}}, :monday}} = at_block
+  end
+
+  test "parses at with DATE prefix" do
+    input = """
+    rule deadline {
+      at DATE_2026.04.15 {
+        log "due"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:date, {2026, 4, 15}}} = at_block
+  end
+
+  test "parses at with DAY prefix" do
+    input = """
+    rule weekly {
+      at DAY_friday {
+        log "weekend"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [at_block] = rule.body
+    assert %AST.At{time_spec: {:day, :friday}} = at_block
+  end
+
+  test "parses at inside condition" do
+    input = """
+    condition statuscheck {
+      at 11:00 every weekday {
+        log "checking"
+      }
+    }
+    """
+    {:ok, %AST.Program{declarations: [cond_decl]}} = Parser.parse(input)
+    [at_block] = cond_decl.body
+    assert %AST.At{time_spec: {:recurring, {:time, {11, 0}}, :weekday}} = at_block
+  end
+
   # --- Full ddns example ---
 
   test "parses ddns example file" do

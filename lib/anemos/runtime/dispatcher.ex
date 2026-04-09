@@ -45,6 +45,16 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @doc """
+  Loads compiled rules, conditions, and capabilities into a running dispatcher.
+
+  New declarations are added to the existing set — nothing is replaced.
+  """
+  @spec load(pid() | atom(), Anemos.CompilationResult.t()) :: :ok
+  def load(dispatcher, compiled) do
+    GenServer.call(dispatcher, {:load, compiled})
+  end
+
+  @doc """
   Returns the current boolean state of a named condition, or `nil` if not found.
   """
   @spec condition_state(pid() | atom(), String.t()) :: boolean() | nil
@@ -126,6 +136,57 @@ defmodule Anemos.Runtime.Dispatcher do
       end)
 
     {:reply, results ++ synthetic_results, state}
+  end
+
+  @impl true
+  def handle_call({:load, compiled}, _from, state) do
+    dispatcher_pid = self()
+
+    # Start new condition servers
+    new_condition_servers =
+      Map.new(compiled.conditions, fn cond_spec ->
+        {:ok, pid} =
+          ConditionServer.start_link(
+            name_str: cond_spec.name,
+            subscriptions: cond_spec.subscriptions,
+            evaluator: cond_spec.evaluator,
+            side_effects: cond_spec.side_effects,
+            side_effect_handler: cond_spec.side_effect_handler,
+            on_transition: fn name ->
+              send(dispatcher_pid, {:condition_transition, name})
+            end
+          )
+
+        {cond_spec.name, %{pid: pid, subscriptions: cond_spec.subscriptions}}
+      end)
+
+    # Start new capability servers
+    new_capability_servers =
+      Map.new(compiled.capabilities, fn cap ->
+        {:ok, pid} =
+          CapabilityServer.start_link(
+            name_str: cap.name,
+            context: cap.context || "",
+            handler: cap.handler
+          )
+
+        {cap.name, pid}
+      end)
+
+    # Merge into existing state
+    merged_rules = state.rules ++ compiled.rules
+    merged_conditions = Map.merge(state.condition_servers, new_condition_servers)
+    merged_capabilities = Map.merge(state.capability_servers, new_capability_servers)
+
+    new_state = %{
+      state
+      | rules: merged_rules,
+        index: build_index(merged_rules),
+        condition_servers: merged_conditions,
+        capability_servers: merged_capabilities
+    }
+
+    {:reply, :ok, new_state}
   end
 
   @impl true

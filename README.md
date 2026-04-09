@@ -197,8 +197,10 @@ source.rule → Lexer → Parser → Compiler → Dispatcher
 ## Project Status
 
 **v0.1.0** — Core pipeline is functional. Conditions, capabilities, demand
-gating, context filtering, and variable binding all work. Module backends
-are stubs (DEVICE, FILE echo back structures). No persistence, no real
+gating, context filtering, variable binding, emit re-dispatch, and Logger
+integration all work. Log operations go through Elixir Logger. Emits with
+labels re-dispatch as events. Condition side effects fire on transition.
+Module backends are stubs (DEVICE, FILE echo back structures) — no real
 I/O integrations yet.
 
 ## Docs

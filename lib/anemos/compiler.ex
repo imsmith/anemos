@@ -2,8 +2,9 @@ defmodule Anemos.CompiledRule do
   @moduledoc """
   A compiled rule: name, event subscriptions, and a handler closure.
 
-  The handler takes `(event_name, context)` and returns `{:ok, [operation]}`
-  where each operation is a map describing what to do.
+  The handler takes `(event_name, context, persistent_bindings)` and returns
+  `{:ok, [operation], updated_persistent_bindings}`. Persistent bindings hold
+  `set` values that survive across firings.
   """
   @enforce_keys [:name, :subscriptions, :handler]
   defstruct [:name, :subscriptions, :handler, :meta]
@@ -11,7 +12,7 @@ defmodule Anemos.CompiledRule do
   @type t :: %__MODULE__{
           name: String.t(),
           subscriptions: [String.t()],
-          handler: (String.t(), map() -> {:ok, [map()]}),
+          handler: (String.t(), map(), map() -> {:ok, [map()], map()}),
           meta: map() | nil
         }
 end

@@ -197,4 +197,22 @@ defmodule Anemos.RuntimeTest do
 
     assert {:error, _} = Anemos.Runtime.load(:test_err, "rule { broken")
   end
+
+  test "at interval fires through runtime" do
+    start_supervised!({Anemos.Runtime, name: :test_at_rt})
+
+    Anemos.Runtime.load(:test_at_rt, """
+    rule tick {
+      at interval(50ms) {
+        log "tick"
+      }
+    }
+    """)
+
+    # Give the interval time to fire
+    Process.sleep(150)
+
+    # Verify scheduler process is running
+    assert Process.alive?(Process.whereis(:"test_at_rt.scheduler"))
+  end
 end

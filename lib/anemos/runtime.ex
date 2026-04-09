@@ -31,7 +31,7 @@ defmodule Anemos.Runtime do
 
   use Supervisor
 
-  alias Anemos.Runtime.{ContextStore, Dispatcher, ModuleRegistry}
+  alias Anemos.Runtime.{ContextStore, Dispatcher, ModuleRegistry, Scheduler}
 
   @doc """
   Starts the runtime supervisor.
@@ -55,6 +55,9 @@ defmodule Anemos.Runtime do
     with {:ok, ast} <- Anemos.Parser.parse(source),
          {:ok, compiled} <- Anemos.Compiler.compile(ast) do
       Dispatcher.load(dispatcher_name(name), compiled)
+      if compiled.schedules != [] do
+        Scheduler.schedule(scheduler_name(name), compiled.schedules)
+      end
       :ok
     end
   end
@@ -158,7 +161,10 @@ defmodule Anemos.Runtime do
        rules: [],
        registry: registry_name(name),
        conditions: [],
-       capabilities: []}
+       capabilities: []},
+      {Scheduler,
+       name: scheduler_name(name),
+       runtime_name: name}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
@@ -170,4 +176,5 @@ defmodule Anemos.Runtime do
   defp registry_name(name), do: :"#{name}.registry"
   defp context_store_name(name), do: :"#{name}.context_store"
   defp dispatcher_name(name), do: :"#{name}.dispatcher"
+  defp scheduler_name(name), do: :"#{name}.scheduler"
 end

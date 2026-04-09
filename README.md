@@ -219,6 +219,32 @@ Three sigils, two binding keywords:
 The keyword determines the kind: `let fqdn = ?fqdn` creates `@fqdn`.
 The sigil is how you read it back.
 
+### Scheduled Triggers
+
+`at` blocks are clock-driven event sources. They fire at specific times,
+on intervals, or on recurring schedules.
+
+```
+; One-shot
+at 13:00 { log "lunch" }
+
+; Interval
+at interval(5min) { log "tick" }
+
+; Recurring
+at 09:00 every day { log "morning" }
+at 11:00 every weekday { log "standup" }
+at 09:00 every monday { log "week start" }
+
+; Prefixed forms
+at TIME_1300 { log "lunch" }
+at DATE_2026.04.15 { log "deadline" }
+at DAY_friday { log "weekend" }
+```
+
+`at` blocks work inside both rules and conditions. In a condition,
+the condition becomes true at the scheduled time.
+
 ### Modules
 
 Modules are external — registered dynamically, never defined in policy.
@@ -228,6 +254,24 @@ modules provide how.
 ```
 [DEVICE::set "light" "on"]
 [INFRA::get_ip "eth0" type:ipv4]
+```
+
+Define modules with the `Anemos.Module` macro — a declarative mapping
+of verbs to functions:
+
+```elixir
+defmodule MyApp.Anemos.Secret do
+  use Anemos.Module, name: "SECRET"
+
+  verb :unlock, &Comn.Secret.unlock/2
+  verb :rotate, fn args, ctx -> Comn.Secret.rotate(hd(args), ctx[:tenant]) end
+end
+```
+
+Register with just the module — name comes from the macro:
+
+```elixir
+Anemos.Runtime.register(:anemos, MyApp.Anemos.Secret)
 ```
 
 ### Emit
@@ -240,35 +284,57 @@ emit [EVENT::fire] as :my.event
 emit state [SENSOR::reading] to channel(telemetry) as :sensor.update
 ```
 
+### Event Protocol
+
+Implement the `Anemos.Event` protocol on your application's event types
+for zero-translation dispatch:
+
+```elixir
+defimpl Anemos.Event, for: MyApp.MQTTMessage do
+  def name(msg), do: msg.topic |> String.upcase() |> String.replace("/", "_")
+  def context(msg), do: msg.topic
+  def payload(msg), do: msg.body
+end
+
+# Dispatch directly — no wrapping
+Anemos.Runtime.dispatch(:anemos, mqtt_message)
+```
+
+The protocol has three callbacks: `name/1` (for rule matching), `context/1`
+(for listener filtering), `payload/1` (for `?` variable resolution).
+String dispatch still works for simple cases.
+
 ## Architecture
 
 ```
-                    ┌─────────────────────────────────┐
-                    │       Anemos.Runtime             │
-                    │       (Supervisor)               │
-                    └──┬──────────┬──────────┬─────────┘
-                       │          │          │
-              ModuleRegistry  ContextStore  Dispatcher
-              (Agent)         (Agent)       (GenServer)
-                                               │
-                              ┌────────────────┼────────────────┐
-                              │                │                │
-                     ConditionServer    CapabilityServer    Rule Index
-                     (GenServer×N)     (GenServer×N)       (in-memory)
+                    ┌──────────────────────────────────────────┐
+                    │            Anemos.Runtime                │
+                    │            (Supervisor)                  │
+                    └──┬──────────┬──────────┬──────────┬──────┘
+                       │          │          │          │
+              ModuleRegistry  ContextStore  Dispatcher  Scheduler
+              (Agent)         (Agent)       (GenServer) (GenServer)
+                                               │          │
+                              ┌────────────────┼───┐      │
+                              │                │   │   AT_* events
+                     ConditionServer    CapServer  Rule    │
+                     (GenServer×N)     (GS×N)    Index ◄───┘
 ```
 
 Policies are loaded via `Anemos.Runtime.load/2`, which parses, compiles,
-and merges new declarations into the running dispatcher. Multiple policies
-accumulate. Log operations go through Elixir Logger. Emits with labels
-re-dispatch as events. Condition side effects fire on transition. `set`
-bindings persist across event firings.
+and merges new declarations into the running dispatcher. The scheduler
+manages timers for `at` blocks and dispatches synthetic `AT_*` events.
+Multiple policies accumulate. Log operations go through Elixir Logger.
+Emits with labels re-dispatch as events. Condition side effects fire on
+transition. `set` bindings persist across event firings.
 
 ## Project Status
 
 **v0.1.0** — Supervisable interpreter with dynamic policy and module loading.
 Conditions, capabilities, demand gating, context filtering, variable binding,
-emit re-dispatch, and Logger integration all work end-to-end. Module backends
-are stubs (DEVICE, FILE echo back structures) — bring your own implementations.
+emit re-dispatch, scheduled `at` triggers, Logger integration, `Anemos.Module`
+macro, and `Anemos.Event` protocol all work end-to-end. Module backends are
+stubs (DEVICE, FILE echo back structures) — bring your own implementations.
 
 ## Docs
 

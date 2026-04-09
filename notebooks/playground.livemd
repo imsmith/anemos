@@ -310,6 +310,59 @@ IO.inspect(results, label: "alarm results")
 IO.inspect(Anemos.Runtime.condition_state(:playground, "alarm"), label: "alarm active?")
 ```
 
+## Scheduled Triggers
+
+`at` blocks are clock-driven event sources — they fire on a schedule
+without needing an external event.
+
+```elixir
+{:ok, _sup} = Supervisor.start_link(
+  [{Anemos.Runtime, name: :scheduled}],
+  strategy: :one_for_one
+)
+
+Anemos.Runtime.load(:scheduled, """
+rule heartbeat {
+  at interval(100ms) {
+    log "tick"
+  }
+}
+""")
+
+# Wait and see ticks in the log output
+Process.sleep(350)
+IO.puts("(check log output above for tick messages)")
+```
+
+`at` also works with specific times and recurrence:
+
+```elixir
+# These compile and schedule — they won't fire in the playground
+# unless you happen to be running at the right time, but they
+# demonstrate the syntax.
+
+{:ok, ast} = Anemos.Parser.parse("""
+condition statuscheck {
+  at 11:00 every weekday {
+    log "time for standup"
+  }
+}
+
+rule deadline {
+  at DATE_2026.12.31 {
+    log "happy new year"
+  }
+}
+""")
+
+{:ok, compiled} = Anemos.Compiler.compile(ast)
+
+IO.puts("Schedules compiled:")
+for sched <- compiled.schedules do
+  IO.puts("  #{sched.event_name} — #{inspect(sched.time_spec)}, recurrence: #{inspect(sched.recurrence)}")
+end
+```
+
 ## Sandbox
 
 Write your own policy below and experiment.

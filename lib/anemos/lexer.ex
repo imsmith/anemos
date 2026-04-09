@@ -12,7 +12,7 @@ defmodule Anemos.Lexer do
     else elseif while for each every foreach do return done nextevent nextrule
     log show list graph trace explain exists infer assert unless until as with
     by that import export version signed_by scope state effect stream to channel
-    service self
+    service self interval
   )a
 
   @word_operators ~w(
@@ -20,7 +20,7 @@ defmodule Anemos.Lexer do
     matches_glob matches_regex
   )a
 
-  @duration_units ~w(s min h d days minutes seconds hours)
+  @duration_units ~w(ms s min h d days minutes seconds hours)
 
   # --- Primitives ---
 
@@ -74,6 +74,39 @@ defmodule Anemos.Lexer do
     integer(min: 1)
     |> tag(:integer_raw)
     |> label("integer")
+
+  # TIME_HHMM prefixed time (e.g. TIME_1300)
+  time_prefix =
+    string("TIME_")
+    |> ascii_string([?0..?9], 4)
+    |> tag(:time_prefix_raw)
+    |> label("TIME_ prefix")
+
+  # DATE_YYYY.MM.DD prefixed date
+  date_prefix =
+    string("DATE_")
+    |> ascii_string([?0..?9], 4)
+    |> ignore(string("."))
+    |> ascii_string([?0..?9], 2)
+    |> ignore(string("."))
+    |> ascii_string([?0..?9], 2)
+    |> tag(:date_prefix_raw)
+    |> label("DATE_ prefix")
+
+  # DAY_weekday
+  day_prefix =
+    string("DAY_")
+    |> ascii_string([?a..?z], min: 1)
+    |> tag(:day_prefix_raw)
+    |> label("DAY_ prefix")
+
+  # HH:MM time literal — two digits, colon, two digits
+  time_literal =
+    ascii_string([?0..?9], 2)
+    |> ignore(string(":"))
+    |> ascii_string([?0..?9], 2)
+    |> tag(:time_literal_raw)
+    |> label("time literal")
 
   # Module ID / Event ID: starts with uppercase, all-caps body with optional lowercase tail.
   # Matches: DEVICE, SENSOR_MOTION_DETECTED, CONDITION_networkchanged
@@ -221,6 +254,10 @@ defmodule Anemos.Lexer do
       interp_atom,
       atom_literal,
       query_var,
+      date_prefix,
+      time_prefix,
+      day_prefix,
+      time_literal,
       duration,
       float_literal,
       module_id,
@@ -301,6 +338,33 @@ defmodule Anemos.Lexer do
     value = String.to_float("#{whole}.#{frac}")
     token = {:float, [line: line], value}
     build_tokens(rest, line, [token | acc])
+  end
+
+  # Time literal HH:MM
+  defp build_tokens([{:time_literal_raw, [hour_str, min_str]} | rest], line, acc) do
+    hour = String.to_integer(hour_str)
+    minute = String.to_integer(min_str)
+    build_tokens(rest, line, [{:time_literal, [line: line], {hour, minute}} | acc])
+  end
+
+  # TIME_HHMM prefixed time
+  defp build_tokens([{:time_prefix_raw, [_, hhmm]} | rest], line, acc) do
+    {hour, _} = Integer.parse(String.slice(hhmm, 0, 2))
+    {minute, _} = Integer.parse(String.slice(hhmm, 2, 2))
+    build_tokens(rest, line, [{:time_literal, [line: line], {hour, minute}} | acc])
+  end
+
+  # DATE_YYYY.MM.DD prefixed date
+  defp build_tokens([{:date_prefix_raw, [_, year_str, month_str, day_str]} | rest], line, acc) do
+    year = String.to_integer(year_str)
+    month = String.to_integer(month_str)
+    day = String.to_integer(day_str)
+    build_tokens(rest, line, [{:date_literal, [line: line], {year, month, day}} | acc])
+  end
+
+  # DAY_weekday prefixed day
+  defp build_tokens([{:day_prefix_raw, [_, day_name]} | rest], line, acc) do
+    build_tokens(rest, line, [{:day_literal, [line: line], String.to_atom(day_name)} | acc])
   end
 
   # Integer

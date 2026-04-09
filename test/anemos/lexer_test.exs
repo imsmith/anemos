@@ -80,4 +80,29 @@ defmodule Anemos.LexerTest do
     assert {:ok, tokens} = Lexer.tokenize("SENSOR_MOTION_DETECTED")
     assert [{:module_id, _, "SENSOR_MOTION_DETECTED"}] = tokens
   end
+
+  test "tokenizes HH:MM time literal" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("at 13:00 {")
+    assert [{:keyword, _, :at}, {:time_literal, _, {13, 0}}, {:lbrace, _, _}] = tokens
+  end
+
+  test "tokenizes TIME_HHMM prefixed time" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("TIME_1300")
+    assert [{:time_literal, _, {13, 0}}] = tokens
+  end
+
+  test "tokenizes DATE_YYYY.MM.DD" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("DATE_2026.04.15")
+    assert [{:date_literal, _, {2026, 4, 15}}] = tokens
+  end
+
+  test "tokenizes DAY_weekday" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("DAY_monday")
+    assert [{:day_literal, _, :monday}] = tokens
+  end
+
+  test "tokenizes interval keyword" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("interval(5min)")
+    assert [{:keyword, _, :interval}, {:lparen, _, _}, {:duration, _, {5, :min}}, {:rparen, _, _}] = tokens
+  end
 end

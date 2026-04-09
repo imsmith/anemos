@@ -230,8 +230,8 @@ defmodule Anemos.Compiler do
     {[op], bindings}
   end
 
-  defp eval_statement(%AST.Demand{capability: cap}, _context, bindings) do
-    {[%{type: :demand, capability: cap}], bindings}
+  defp eval_statement(%AST.Demand{capability: cap, flag: flag}, _context, bindings) do
+    {[%{type: :demand, capability: cap, flag: flag || :requisite}], bindings}
   end
 
   defp eval_statement(%AST.Context{body: body}, context, bindings) do

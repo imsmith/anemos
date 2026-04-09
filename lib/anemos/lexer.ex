@@ -102,6 +102,18 @@ defmodule Anemos.Lexer do
     |> tag(:module_id_raw)
     |> label("module ID")
 
+  # Demand flags: --required, --optional, --sufficient, --requisite
+  demand_flag =
+    string("--")
+    |> choice([
+      string("required"),
+      string("optional"),
+      string("sufficient"),
+      string("requisite")
+    ])
+    |> tag(:demand_flag_raw)
+    |> label("demand flag")
+
   # Identifier: starts with lowercase letter, can contain letters, digits, hyphens, underscores, dots
   identifier =
     ascii_char([?a..?z])
@@ -213,6 +225,7 @@ defmodule Anemos.Lexer do
       float_literal,
       module_id,
       integer_literal,
+      demand_flag,
       operators,
       delimiters,
       identifier
@@ -300,6 +313,11 @@ defmodule Anemos.Lexer do
   defp build_tokens([{:module_id_raw, [value]} | rest], line, acc) do
     token = {:module_id, [line: line], value}
     build_tokens(rest, line, [token | acc])
+  end
+
+  # Demand flag
+  defp build_tokens([{:demand_flag_raw, [_, value]} | rest], line, acc) do
+    build_tokens(rest, line, [{:demand_flag, [line: line], String.to_atom(value)} | acc])
   end
 
   # Identifier — check if it's a keyword or word operator

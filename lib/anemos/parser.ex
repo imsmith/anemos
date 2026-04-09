@@ -548,7 +548,13 @@ defmodule Anemos.Parser do
   # --- Demand ---
 
   defp parse_demand([{:identifier, meta, name} | rest]) do
-    {:ok, %AST.Demand{capability: name, line: meta[:line]}, rest}
+    {flag, rest} =
+      case rest do
+        [{:demand_flag, _, flag_value} | rest] -> {flag_value, rest}
+        _ -> {:requisite, rest}
+      end
+
+    {:ok, %AST.Demand{capability: name, flag: flag, line: meta[:line]}, rest}
   end
 
   defp parse_demand([{_, meta, _} | _]) do

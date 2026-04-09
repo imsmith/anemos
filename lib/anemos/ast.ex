@@ -60,7 +60,7 @@ defmodule Anemos.AST do
   end
 
   defmodule Demand do
-    defstruct [:capability, :line]
+    defstruct [:capability, :flag, :line]
   end
 
   defmodule Log do

@@ -264,6 +264,68 @@ defmodule Anemos.ParserTest do
     assert %AST.Demand{capability: "katachora-ddns-key"} = demand
   end
 
+  # --- Demand flags ---
+
+  test "parses demand with --optional flag" do
+    input = """
+    rule flagged {
+      when EV {
+        demand my-cap --optional
+      }
+    }
+    """
+
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [demand] = when_block.body
+    assert %AST.Demand{capability: "my-cap", flag: :optional} = demand
+  end
+
+  test "parses demand with --required flag" do
+    input = """
+    rule flagged {
+      when EV {
+        demand my-cap --required
+      }
+    }
+    """
+
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [demand] = when_block.body
+    assert %AST.Demand{capability: "my-cap", flag: :required} = demand
+  end
+
+  test "parses demand with --sufficient flag" do
+    input = """
+    rule flagged {
+      when EV {
+        demand my-cap --sufficient
+      }
+    }
+    """
+
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [demand] = when_block.body
+    assert %AST.Demand{capability: "my-cap", flag: :sufficient} = demand
+  end
+
+  test "bare demand defaults to requisite flag" do
+    input = """
+    rule bare {
+      when EV {
+        demand my-cap
+      }
+    }
+    """
+
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [when_block] = rule.body
+    [demand] = when_block.body
+    assert %AST.Demand{capability: "my-cap", flag: :requisite} = demand
+  end
+
   # --- When with MODULE::name event pattern ---
 
   test "parses when with MODULE::name event" do

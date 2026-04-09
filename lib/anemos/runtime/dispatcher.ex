@@ -3,20 +3,22 @@ defmodule Anemos.Runtime.Dispatcher do
   GenServer holding compiled rules indexed by subscription.
 
   Dispatches events to matching rules, executes resulting operations
-  via the ModuleRegistry.
+  via the ModuleRegistry. Also manages ConditionServer instances and
+  routes synthetic CONDITION_<name> events when conditions transition.
   """
 
   use GenServer
 
-  alias Anemos.Runtime.ModuleRegistry
+  alias Anemos.Runtime.{ConditionServer, ModuleRegistry}
 
   # --- Client API ---
 
   def start_link(opts) do
     rules = Keyword.fetch!(opts, :rules)
     registry = Keyword.fetch!(opts, :registry)
+    conditions = Keyword.get(opts, :conditions, [])
     name = Keyword.get(opts, :name)
-    GenServer.start_link(__MODULE__, {rules, registry}, name: name)
+    GenServer.start_link(__MODULE__, {rules, registry, conditions}, name: name)
   end
 
   @spec dispatch(pid() | atom(), String.t(), map()) :: list()
@@ -24,39 +26,120 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.call(dispatcher, {:dispatch, event_name, context})
   end
 
+  @spec condition_state(pid() | atom(), String.t()) :: boolean() | nil
+  def condition_state(dispatcher, condition_name) do
+    GenServer.call(dispatcher, {:condition_state, condition_name})
+  end
+
   # --- Server callbacks ---
 
   @impl true
-  def init({rules, registry}) do
+  def init({rules, registry, compiled_conditions}) do
     index = build_index(rules)
-    {:ok, %{rules: rules, index: index, registry: registry}}
+    dispatcher_pid = self()
+
+    condition_servers =
+      Map.new(compiled_conditions, fn cond_spec ->
+        {:ok, pid} =
+          ConditionServer.start_link(
+            name_str: cond_spec.name,
+            subscriptions: cond_spec.subscriptions,
+            evaluator: cond_spec.evaluator,
+            side_effects: cond_spec.side_effects,
+            on_transition: fn name ->
+              send(dispatcher_pid, {:condition_transition, name})
+            end
+          )
+
+        {cond_spec.name, %{pid: pid, subscriptions: cond_spec.subscriptions}}
+      end)
+
+    {:ok,
+     %{rules: rules, index: index, registry: registry, condition_servers: condition_servers}}
   end
 
   @impl true
   def handle_call({:dispatch, event_name, context}, _from, state) do
-    matching = Map.get(state.index, event_name, [])
+    # Route event to all condition servers (async cast)
+    Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
+      ConditionServer.handle_event(pid, event_name, context)
+    end)
 
-    results =
-      matching
-      |> Enum.flat_map(fn rule ->
-        case safe_handle(rule, event_name, context) do
-          {:ok, ops} ->
-            Enum.map(ops, &execute_op(&1, context, state.registry))
+    # Synchronize: call get_state on each condition server to ensure all casts
+    # have been processed before we drain the transition messages from our mailbox.
+    Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
+      ConditionServer.get_state(pid)
+    end)
 
-          {:error, reason} ->
-            [{:error, {:handler_crash, rule.name, reason}}]
-        end
+    # Collect any condition transition messages now in our mailbox
+    synthetic_events = collect_transitions()
+
+    # Dispatch original event to matching rules
+    results = dispatch_to_rules(event_name, context, state)
+
+    # Dispatch synthetic CONDITION_<name> events to matching rules
+    synthetic_results =
+      Enum.flat_map(synthetic_events, fn cond_name ->
+        dispatch_to_rules("CONDITION_#{cond_name}", context, state)
       end)
 
-    {:reply, results, state}
+    {:reply, results ++ synthetic_results, state}
+  end
+
+  @impl true
+  def handle_call({:condition_state, name}, _from, state) do
+    case Map.get(state.condition_servers, name) do
+      %{pid: pid} -> {:reply, ConditionServer.get_state(pid), state}
+      nil -> {:reply, nil, state}
+    end
+  end
+
+  @impl true
+  def handle_info({:condition_transition, _name}, state) do
+    # Transition messages are drained synchronously during dispatch;
+    # any that arrive outside a dispatch cycle are silently ignored.
+    {:noreply, state}
   end
 
   # --- Private ---
 
+  defp dispatch_to_rules(event_name, context, state) do
+    matching = Map.get(state.index, event_name, [])
+
+    Enum.flat_map(matching, fn rule ->
+      case safe_handle(rule, event_name, context) do
+        {:ok, ops} -> Enum.map(ops, &execute_op(&1, context, state.registry))
+        {:error, reason} -> [{:error, {:handler_crash, rule.name, reason}}]
+      end
+    end)
+  end
+
+  defp collect_transitions do
+    collect_transitions([])
+  end
+
+  defp collect_transitions(acc) do
+    receive do
+      {:condition_transition, name} -> collect_transitions([name | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  # Crash boundary for compiled rule handler closures. Catches exception types
+  # that can arise from evaluated user-supplied .rule code. Unexpected exception
+  # types are intentionally left to crash and restart via the supervisor.
   defp safe_handle(rule, event_name, context) do
     rule.handler.(event_name, context)
   rescue
-    e -> {:error, Exception.message(e)}
+    e in RuntimeError -> {:error, Exception.message(e)}
+    e in ArgumentError -> {:error, Exception.message(e)}
+    e in FunctionClauseError -> {:error, Exception.message(e)}
+    e in MatchError -> {:error, Exception.message(e)}
+    e in BadMapError -> {:error, Exception.message(e)}
+    e in KeyError -> {:error, Exception.message(e)}
+    e in UndefinedFunctionError -> {:error, Exception.message(e)}
+    e in ArithmeticError -> {:error, Exception.message(e)}
   catch
     kind, reason -> {:error, {kind, reason}}
   end

@@ -155,4 +155,90 @@ defmodule Anemos.Runtime.DispatcherTest do
     # Dispatcher still alive
     assert Process.alive?(dispatcher)
   end
+
+  # --- Condition integration ---
+
+  test "condition server triggers CONDITION_<name> event to matching rules" do
+    rule_input = """
+    rule react-to-condition {
+      when CONDITION_networkchanged {
+        log "network changed!"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(rule_input)
+    {:ok, %{rules: [compiled_rule]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: [compiled_rule],
+        registry: registry,
+        conditions: [
+          %Anemos.CompiledCondition{
+            name: "networkchanged",
+            subscriptions: ["RAW_EVENT"],
+            evaluator: fn _event, _ctx -> true end,
+            side_effects: []
+          }
+        ]
+      )
+
+    results = Dispatcher.dispatch(dispatcher, "RAW_EVENT")
+    assert [{:ok, %{type: :log, value: "network changed!"}}] = results
+  end
+
+  test "condition that stays false does not trigger rules" do
+    rule_input = """
+    rule react-to-condition {
+      when CONDITION_never_true {
+        log "should not fire"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(rule_input)
+    {:ok, %{rules: [compiled_rule]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: [compiled_rule],
+        registry: registry,
+        conditions: [
+          %Anemos.CompiledCondition{
+            name: "never_true",
+            subscriptions: ["RAW_EVENT"],
+            evaluator: fn _event, _ctx -> false end,
+            side_effects: []
+          }
+        ]
+      )
+
+    results = Dispatcher.dispatch(dispatcher, "RAW_EVENT")
+    assert results == []
+  end
+
+  test "condition queryable via dispatcher" do
+    {:ok, registry} = ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: [],
+        registry: registry,
+        conditions: [
+          %Anemos.CompiledCondition{
+            name: "test_cond",
+            subscriptions: ["EV"],
+            evaluator: fn _event, _ctx -> true end,
+            side_effects: []
+          }
+        ]
+      )
+
+    assert Dispatcher.condition_state(dispatcher, "test_cond") == false
+    Dispatcher.dispatch(dispatcher, "EV")
+    assert Dispatcher.condition_state(dispatcher, "test_cond") == true
+  end
 end

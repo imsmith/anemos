@@ -1,0 +1,276 @@
+# Anemos Playground
+
+```elixir
+Mix.install([
+  {:anemos, path: Path.expand("../", __DIR__)}
+])
+```
+
+## The Pipeline
+
+Anemos processes `.rule` files through a pipeline: **Lexer → Parser → Compiler → Dispatcher**.
+
+Let's walk through each stage.
+
+## 1. Lexing
+
+The lexer turns source text into tokens.
+
+```elixir
+source = ~S|rule lights { when MOTION { [DEVICE::set "light" "on"] } }|
+
+{:ok, tokens} = Anemos.Lexer.tokenize(source)
+```
+
+Try changing the source and re-running. Notice how keywords, module IDs,
+strings, and operators each get their own token type.
+
+## 2. Parsing
+
+The parser turns tokens into a typed AST.
+
+```elixir
+{:ok, ast} = Anemos.Parser.parse(source)
+```
+
+Inspect the structure — every node carries a `:line` for error reporting:
+
+```elixir
+[rule] = ast.declarations
+IO.inspect(rule.name, label: "rule name")
+IO.inspect(rule.body, label: "body")
+```
+
+## 3. Compiling
+
+The compiler produces executable closures and process specs.
+
+```elixir
+{:ok, compiled} = Anemos.Compiler.compile(ast)
+
+IO.inspect(length(compiled.rules), label: "rules")
+IO.inspect(length(compiled.conditions), label: "conditions")
+IO.inspect(length(compiled.capabilities), label: "capabilities")
+```
+
+Each compiled rule has a handler function you can call directly:
+
+```elixir
+[rule] = compiled.rules
+IO.inspect(rule.subscriptions, label: "listens for")
+
+{:ok, ops} = rule.handler.("MOTION", %{})
+IO.inspect(ops, label: "operations")
+```
+
+## 4. Full Pipeline
+
+`Anemos.run/2` does all of the above in one call:
+
+```elixir
+{:ok, results} = Anemos.run(source, event: "MOTION")
+IO.inspect(results)
+```
+
+## Garage Lights
+
+The classic example — motion sensor controls lights.
+
+```elixir
+garage = """
+rule garage-lights-on {
+  context "garage.motion.sensor" {
+    when SENSOR_MOTION_DETECTED {
+      [DEVICE::set "garage.lights" "on"]
+    }
+  }
+}
+
+rule garage-lights-off {
+  context "garage.motion.sensor" {
+    when SENSOR_NO_MOTION for 10min {
+      [DEVICE::set "garage.lights" "off"]
+    }
+  }
+}
+"""
+
+{:ok, on_results} = Anemos.run(garage, event: "SENSOR_MOTION_DETECTED")
+IO.inspect(on_results, label: "motion detected")
+
+{:ok, off_results} = Anemos.run(garage, event: "SENSOR_NO_MOTION")
+IO.inspect(off_results, label: "no motion")
+```
+
+## Conditions
+
+Conditions are stateful — they track boolean state and emit synthetic events
+when transitioning from false to true.
+
+```elixir
+policy = """
+condition temp_high {
+  when TEMP_READING_HIGH {
+    log "temperature threshold exceeded"
+  }
+}
+
+rule alert-on-temp {
+  when CONDITION_temp_high {
+    log "ALERT: temperature is high"
+    [DEVICE::set "fan" "on"]
+  }
+}
+"""
+
+{:ok, ast} = Anemos.Parser.parse(policy)
+{:ok, compiled} = Anemos.Compiler.compile(ast)
+
+IO.inspect(hd(compiled.conditions).name, label: "condition")
+IO.inspect(hd(compiled.conditions).subscriptions, label: "watches for")
+IO.inspect(hd(compiled.rules).subscriptions, label: "rule listens for")
+```
+
+Now run it — the raw event triggers the condition, which fires the rule:
+
+```elixir
+{:ok, results} = Anemos.run(policy, event: "TEMP_READING_HIGH")
+IO.inspect(results, label: "results")
+```
+
+## Capabilities and Demand
+
+Capabilities are passive actions invoked via `demand`. They use PAM-style
+control flags for failure semantics.
+
+```elixir
+policy = """
+capability audit-key {
+  context security
+
+  on demand {
+    log "audit key unlocked"
+  }
+}
+
+rule secure-action {
+  when SECURE_EVENT {
+    demand audit-key
+    log "proceeding with secure action"
+  }
+}
+"""
+
+{:ok, results} = Anemos.run(policy, event: "SECURE_EVENT")
+IO.inspect(results, label: "results")
+```
+
+Try adding `--optional` to the demand and changing the capability name
+to something that doesn't exist — see how PAM flags affect behavior.
+
+## Variable Sigils
+
+Three sigils with distinct resolution paths:
+
+- `?name` — resolve from external context data
+- `@name` — immutable binding (created by `let`)
+- `$name` — mutable binding (created by `set`)
+
+```elixir
+policy = """
+rule greet {
+  when GREET_EVENT {
+    let greeting = "hello"
+    set count = 1
+    log @greeting
+    log ?user
+  }
+}
+"""
+
+# Pass context data for ?user resolution
+context = %{context_data: %{"user" => "ian"}}
+{:ok, results} = Anemos.run(policy, event: "GREET_EVENT", context: context)
+IO.inspect(results, label: "results")
+```
+
+## Demand Flags
+
+PAM-style control flags govern failure behavior in demand stacks.
+
+```elixir
+policy = """
+capability required-cap {
+  context test
+
+  on demand {
+    log "required capability met"
+  }
+}
+
+rule stacked-demands {
+  when TEST_EVENT {
+    demand required-cap
+    demand nonexistent-cap --optional
+    log "both demands evaluated"
+  }
+}
+"""
+
+{:ok, results} = Anemos.run(policy, event: "TEST_EVENT")
+IO.inspect(results, label: "with --optional on missing cap")
+```
+
+The `--optional` flag lets the rule continue even though `nonexistent-cap`
+doesn't exist. Try removing `--optional` and see what happens.
+
+## The Full ddns.rule
+
+The most complex example — condition, capability, and rule working together.
+
+```elixir
+source = File.read!(Path.expand("../priv/examples/ddns.rule", __DIR__))
+IO.puts(source)
+```
+
+```elixir
+{:ok, ast} = Anemos.Parser.parse(source)
+{:ok, compiled} = Anemos.Compiler.compile(ast)
+
+IO.puts("Declarations compiled:")
+IO.puts("  #{length(compiled.rules)} rule(s)")
+IO.puts("  #{length(compiled.conditions)} condition(s)")
+IO.puts("  #{length(compiled.capabilities)} capability(s)")
+IO.puts("")
+
+for cond <- compiled.conditions do
+  IO.puts("Condition '#{cond.name}' watches: #{inspect(cond.subscriptions)}")
+end
+
+for rule <- compiled.rules do
+  IO.puts("Rule '#{rule.name}' listens for: #{inspect(rule.subscriptions)}")
+end
+
+for cap <- compiled.capabilities do
+  IO.puts("Capability '#{cap.name}' in context: #{cap.context}")
+end
+```
+
+## Sandbox
+
+Write your own policy below and experiment.
+
+```elixir
+my_policy = """
+; Write your policy here
+
+rule my-rule {
+  when MY_EVENT {
+    log "it works!"
+  }
+}
+"""
+
+{:ok, results} = Anemos.run(my_policy, event: "MY_EVENT")
+IO.inspect(results)
+```

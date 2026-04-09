@@ -454,4 +454,98 @@ defmodule Anemos.CompilerTest do
     {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{context_data: %{}}, %{})
     assert [%{type: :log, value: nil}] = ops
   end
+
+  # --- at block compilation ---
+
+  test "at block in rule produces schedule and rule subscribed to AT_ event" do
+    input = """
+    rule scheduled {
+      at 13:00 {
+        log "time"
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert length(compiled.schedules) == 1
+    [sched] = compiled.schedules
+    assert sched.event_name == "AT_13_00"
+    assert sched.time_spec == {:time, {13, 0}}
+    assert sched.recurrence == nil
+
+    assert length(compiled.rules) == 1
+    [rule] = compiled.rules
+    assert "AT_13_00" in rule.subscriptions
+  end
+
+  test "at interval produces schedule with interval recurrence" do
+    input = """
+    rule polling {
+      at interval(5min) {
+        log "tick"
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert length(compiled.schedules) == 1
+    [sched] = compiled.schedules
+    assert sched.event_name == "AT_INTERVAL_5min"
+    assert sched.time_spec == {:interval, {5, :min}}
+    assert sched.recurrence == :interval
+  end
+
+  test "at with every produces recurring schedule" do
+    input = """
+    rule daily {
+      at 09:00 every day {
+        log "morning"
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    [sched] = compiled.schedules
+    assert sched.event_name == "AT_09_00"
+    assert sched.time_spec == {:time, {9, 0}}
+    assert sched.recurrence == :day
+  end
+
+  test "at in condition produces schedule" do
+    input = """
+    condition statuscheck {
+      at 11:00 every weekday {
+        log "checking"
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert length(compiled.schedules) == 1
+    [sched] = compiled.schedules
+    assert sched.event_name == "AT_11_00"
+    assert sched.recurrence == :weekday
+  end
+
+  test "rule with both when and at blocks" do
+    input = """
+    rule mixed {
+      when EVENT_A {
+        log "event"
+      }
+      at 09:00 {
+        log "morning"
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    assert length(compiled.rules) == 2
+    assert length(compiled.schedules) == 1
+  end
 end

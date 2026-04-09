@@ -70,8 +70,10 @@ defmodule Anemos.Compiler do
     result =
       Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
         case compile_declaration(decl) do
-          {:rule, rules} -> %{acc | rules: acc.rules ++ rules}
-          {:condition, cond} -> %{acc | conditions: acc.conditions ++ [cond]}
+          {:rule, rules, schedules} ->
+            %{acc | rules: acc.rules ++ rules, schedules: acc.schedules ++ schedules}
+          {:condition, cond, schedules} ->
+            %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
           {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
           :skip -> acc
         end
@@ -82,10 +84,14 @@ defmodule Anemos.Compiler do
 
   # --- Declaration dispatch ---
 
-  defp compile_declaration(%AST.Rule{} = rule), do: {:rule, compile_rule(rule)}
+  defp compile_declaration(%AST.Rule{} = rule) do
+    {rules, schedules} = compile_rule(rule)
+    {:rule, rules, schedules}
+  end
 
   defp compile_declaration(%AST.Condition{} = cond_decl) do
-    {:condition, compile_condition(cond_decl)}
+    {condition, schedules} = compile_condition(cond_decl)
+    {:condition, condition, schedules}
   end
 
   defp compile_declaration(%AST.Capability{} = cap) do
@@ -98,33 +104,46 @@ defmodule Anemos.Compiler do
 
   defp compile_condition(%AST.Condition{name: name, body: body}) do
     when_blocks = extract_when_blocks(body)
+    at_blocks = extract_at_blocks(body)
 
     subscriptions =
       Enum.flat_map(when_blocks, fn %AST.When{event: event} ->
         event_to_subscriptions(event)
       end)
 
-    side_effect_body = Enum.flat_map(when_blocks, fn %AST.When{body: when_body} -> when_body end)
+    {at_schedules, at_subscriptions} =
+      if at_blocks == [] do
+        {[], []}
+      else
+        {scheds, _rules} = at_blocks |> Enum.map(&compile_at_block(&1, nil)) |> Enum.unzip()
+        {scheds, Enum.map(scheds, & &1.event_name)}
+      end
+
+    all_bodies =
+      Enum.flat_map(when_blocks, fn %AST.When{body: b} -> b end) ++
+        Enum.flat_map(at_blocks, fn %AST.At{body: b} -> b end)
 
     side_effect_handler =
-      if side_effect_body == [] do
+      if all_bodies == [] do
         nil
       else
         fn ->
-          {ops, _bindings} = eval_body(side_effect_body, %{}, %{})
+          {ops, _bindings} = eval_body(all_bodies, %{}, %{})
           {:ok, ops}
         end
       end
 
     evaluator = fn _event_name, _context -> true end
 
-    %Anemos.CompiledCondition{
+    condition = %Anemos.CompiledCondition{
       name: name,
-      subscriptions: subscriptions,
+      subscriptions: subscriptions ++ at_subscriptions,
       evaluator: evaluator,
-      side_effects: side_effect_body,
+      side_effects: all_bodies,
       side_effect_handler: side_effect_handler
     }
+
+    {condition, at_schedules}
   end
 
   # --- Capability compilation ---
@@ -146,20 +165,26 @@ defmodule Anemos.Compiler do
 
   defp compile_rule(%AST.Rule{name: name, body: body}) do
     context_path = extract_context_path(body)
-    # Collect all when blocks (possibly nested inside context blocks)
     when_blocks = extract_when_blocks(body)
+    at_blocks = extract_at_blocks(body)
 
-    Enum.map(when_blocks, fn %AST.When{event: event, body: when_body} ->
-      subscriptions = event_to_subscriptions(event)
-      handler = build_handler(when_body)
+    when_rules =
+      Enum.map(when_blocks, fn %AST.When{event: event, body: when_body} ->
+        subscriptions = event_to_subscriptions(event)
+        handler = build_handler(when_body)
+        %CompiledRule{name: name, subscriptions: subscriptions, handler: handler, meta: %{context_path: context_path}}
+      end)
 
-      %CompiledRule{
-        name: name,
-        subscriptions: subscriptions,
-        handler: handler,
-        meta: %{context_path: context_path}
-      }
-    end)
+    {at_schedules, at_rules} =
+      if at_blocks == [] do
+        {[], []}
+      else
+        at_blocks
+        |> Enum.map(&compile_at_block(&1, context_path))
+        |> Enum.unzip()
+      end
+
+    {when_rules ++ at_rules, at_schedules}
   end
 
   defp extract_context_path(body) do
@@ -177,6 +202,64 @@ defmodule Anemos.Compiler do
       %AST.Context{body: ctx_body} -> extract_when_blocks(ctx_body)
       _other -> []
     end)
+  end
+
+  # --- Extract at blocks from rule/condition body ---
+
+  defp extract_at_blocks(body) do
+    Enum.flat_map(body, fn
+      %AST.At{} = a -> [a]
+      %AST.Context{body: ctx_body} -> extract_at_blocks(ctx_body)
+      _other -> []
+    end)
+  end
+
+  # --- Compile a single at block into {schedule, rule} ---
+
+  defp compile_at_block(%AST.At{time_spec: time_spec, body: body}, context_path) do
+    {event_name, parsed_spec, recurrence} = at_spec_to_event(time_spec)
+    handler = build_handler(body)
+
+    schedule = %Anemos.CompiledSchedule{
+      event_name: event_name,
+      time_spec: parsed_spec,
+      recurrence: recurrence,
+      context: context_path
+    }
+
+    rule = %Anemos.CompiledRule{
+      name: "at_#{event_name}",
+      subscriptions: [event_name],
+      handler: handler,
+      meta: %{context_path: context_path}
+    }
+
+    {schedule, rule}
+  end
+
+  # --- at time_spec → {event_name, parsed_spec, recurrence} ---
+
+  defp at_spec_to_event({:time, {h, m}}) do
+    name = "AT_#{String.pad_leading("#{h}", 2, "0")}_#{String.pad_leading("#{m}", 2, "0")}"
+    {name, {:time, {h, m}}, nil}
+  end
+
+  defp at_spec_to_event({:interval, {amount, unit} = dur}) do
+    {"AT_INTERVAL_#{amount}#{unit}", {:interval, dur}, :interval}
+  end
+
+  defp at_spec_to_event({:recurring, {:time, {h, m}}, recurrence}) do
+    name = "AT_#{String.pad_leading("#{h}", 2, "0")}_#{String.pad_leading("#{m}", 2, "0")}"
+    {name, {:time, {h, m}}, recurrence}
+  end
+
+  defp at_spec_to_event({:date, {y, m, d} = date}) do
+    name = "AT_DATE_#{y}_#{String.pad_leading("#{m}", 2, "0")}_#{String.pad_leading("#{d}", 2, "0")}"
+    {name, {:date, date}, nil}
+  end
+
+  defp at_spec_to_event({:day, day}) do
+    {"AT_DAY_#{day}", {:day, day}, nil}
   end
 
   # --- Event to subscriptions ---

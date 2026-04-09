@@ -4,4 +4,10 @@ defmodule Anemos.CompiledCapability do
   """
   @enforce_keys [:name, :context, :handler]
   defstruct [:name, :context, :handler]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          context: String.t(),
+          handler: (map() -> {:ok, list()} | {:error, term()})
+        }
 end

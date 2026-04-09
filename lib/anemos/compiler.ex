@@ -7,6 +7,13 @@ defmodule Anemos.CompiledRule do
   """
   @enforce_keys [:name, :subscriptions, :handler]
   defstruct [:name, :subscriptions, :handler, :meta]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          subscriptions: [String.t()],
+          handler: (String.t(), map() -> {:ok, [map()]}),
+          meta: map() | nil
+        }
 end
 
 defmodule Anemos.CompilationResult do
@@ -17,6 +24,12 @@ defmodule Anemos.CompilationResult do
   """
   @enforce_keys []
   defstruct rules: [], conditions: [], capabilities: []
+
+  @type t :: %__MODULE__{
+          rules: [Anemos.CompiledRule.t()],
+          conditions: [Anemos.CompiledCondition.t()],
+          capabilities: [Anemos.CompiledCapability.t()]
+        }
 end
 
 defmodule Anemos.Compiler do

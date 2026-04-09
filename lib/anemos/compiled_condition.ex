@@ -4,4 +4,12 @@ defmodule Anemos.CompiledCondition do
   """
   @enforce_keys [:name, :subscriptions, :evaluator]
   defstruct [:name, :subscriptions, :evaluator, :side_effects, :context]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          subscriptions: [String.t()],
+          evaluator: (String.t(), map() -> boolean()),
+          side_effects: list(),
+          context: String.t() | nil
+        }
 end

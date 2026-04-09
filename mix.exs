@@ -1,4 +1,5 @@
 defmodule Anemos.MixProject do
+  @moduledoc false
   use Mix.Project
 
   def project do
@@ -27,7 +28,8 @@ defmodule Anemos.MixProject do
   defp deps do
     [
       {:nimble_parsec, "~> 1.4"},
-      {:phoenix_pubsub, "~> 2.1"}
+      {:phoenix_pubsub, "~> 2.1"},
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false}
     ]
   end
 end

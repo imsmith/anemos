@@ -75,10 +75,29 @@ defmodule Anemos.Lexer do
     |> tag(:integer_raw)
     |> label("integer")
 
-  # Module ID / Event ID: 2+ uppercase letters/digits/underscores, starts with uppercase
+  # Module ID / Event ID: starts with uppercase, all-caps body with optional lowercase tail.
+  # Matches: DEVICE, SENSOR_MOTION_DETECTED, CONDITION_networkchanged
+  #
+  # Structure: UPPER (UPPER|DIGIT)* (_ (UPPER|DIGIT)+)* (_ lowercase (lower|digit|_|-)*)?
+  #
+  # This ensures a lowercase tail only appears after an explicit underscore separator,
+  # and never fuses a bare uppercase word with adjacent lowercase letters (e.g. DEVICEfoo
+  # produces module_id "DEVICE" + identifier "foo", not "DEVICEfoo").
+  module_id_caps_segment =
+    ascii_char([?_])
+    |> ascii_char([?A..?Z, ?0..?9])
+    |> repeat(ascii_char([?A..?Z, ?0..?9]))
+
+  module_id_lower_tail =
+    ascii_char([?_])
+    |> ascii_char([?a..?z])
+    |> repeat(ascii_char([?a..?z, ?0..?9, ?_, ?-]))
+
   module_id =
     ascii_char([?A..?Z])
-    |> repeat(ascii_char([?A..?Z, ?0..?9, ?_]))
+    |> repeat(ascii_char([?A..?Z, ?0..?9]))
+    |> repeat(module_id_caps_segment)
+    |> optional(module_id_lower_tail)
     |> reduce({List, :to_string, []})
     |> tag(:module_id_raw)
     |> label("module ID")

@@ -1,4 +1,6 @@
 defmodule Anemos.LexerTest do
+  @moduledoc false
+
   use ExUnit.Case, async: true
 
   alias Anemos.Lexer
@@ -67,5 +69,15 @@ defmodule Anemos.LexerTest do
     assert {:ok, tokens} = Lexer.tokenize(input)
     {_, meta, _} = Enum.find(tokens, fn {type, _, _} -> type == :keyword end)
     assert meta[:line] == 1
+  end
+
+  test "tokenizes CONDITION_name as a single module_id token" do
+    assert {:ok, tokens} = Lexer.tokenize("CONDITION_networkchanged")
+    assert [{:module_id, _, "CONDITION_networkchanged"}] = tokens
+  end
+
+  test "tokenizes mixed-case module event like SENSOR_MOTION_DETECTED" do
+    assert {:ok, tokens} = Lexer.tokenize("SENSOR_MOTION_DETECTED")
+    assert [{:module_id, _, "SENSOR_MOTION_DETECTED"}] = tokens
   end
 end

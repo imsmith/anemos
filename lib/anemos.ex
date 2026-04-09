@@ -39,14 +39,20 @@ defmodule Anemos do
     context = Keyword.get(opts, :context, %{})
 
     with {:ok, ast} <- Parser.parse(source),
-         {:ok, %{rules: rules}} <- Compiler.compile(ast),
+         {:ok, compiled} <- Compiler.compile(ast),
          {:ok, registry} <- ModuleRegistry.start_link([]) do
       try do
         Enum.each(@default_modules, fn {name, mod} ->
           ModuleRegistry.register(registry, name, mod)
         end)
 
-        with {:ok, dispatcher} <- Dispatcher.start_link(rules: rules, registry: registry) do
+        with {:ok, dispatcher} <-
+               Dispatcher.start_link(
+                 rules: compiled.rules,
+                 registry: registry,
+                 conditions: compiled.conditions,
+                 capabilities: compiled.capabilities
+               ) do
           try do
             raw_results = Dispatcher.dispatch(dispatcher, event, context)
 

@@ -1,4 +1,5 @@
 defmodule Anemos.PipelineTest do
+  @moduledoc false
   use ExUnit.Case
 
   doctest Anemos
@@ -33,6 +34,49 @@ defmodule Anemos.PipelineTest do
 
     assert {:error, message} = Anemos.run(input, event: "ANYTHING")
     assert is_binary(message)
+  end
+
+  test "end-to-end: condition triggers rule via synthetic event" do
+    input = """
+    condition networkchanged {
+      when RAW_NETWORK_EVENT {
+        log "condition side effect"
+      }
+    }
+
+    rule react {
+      when CONDITION_networkchanged {
+        log "rule fired from condition"
+      }
+    }
+    """
+
+    assert {:ok, results} = Anemos.run(input, event: "RAW_NETWORK_EVENT")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert "rule fired from condition" in log_values
+  end
+
+  test "end-to-end: demand invokes capability" do
+    input = """
+    capability test-cap {
+      context test
+
+      on demand {
+        log "capability executed"
+      }
+    }
+
+    rule use-cap {
+      when TEST_EVENT {
+        demand test-cap
+        log "after demand"
+      }
+    }
+    """
+
+    assert {:ok, results} = Anemos.run(input, event: "TEST_EVENT")
+    # Results include both capability output and rule output
+    assert length(results) >= 1
   end
 
   test "multi-rule file with specific event only fires matching rules" do

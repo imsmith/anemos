@@ -4,6 +4,8 @@ defmodule Anemos.Runtime.CapabilityServerTest do
 
   alias Anemos.Runtime.CapabilityServer
 
+  doctest Anemos.Runtime.CapabilityServer
+
   test "starts and is addressable" do
     {:ok, pid} = CapabilityServer.start_link(
       name_str: "test-key",

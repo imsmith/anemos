@@ -4,6 +4,8 @@ defmodule Anemos.Runtime.ConditionServerTest do
 
   alias Anemos.Runtime.ConditionServer
 
+  doctest Anemos.Runtime.ConditionServer
+
   test "starts with state false" do
     {:ok, pid} = ConditionServer.start_link(
       name_str: "networkchanged",

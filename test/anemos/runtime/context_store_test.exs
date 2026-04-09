@@ -4,6 +4,8 @@ defmodule Anemos.Runtime.ContextStoreTest do
 
   alias Anemos.Runtime.ContextStore
 
+  doctest Anemos.Runtime.ContextStore
+
   test "stores and retrieves a key-value pair" do
     {:ok, store} = ContextStore.start_link([])
     ContextStore.put(store, "infra.networking.dns.fqdn", "host.example.tld")

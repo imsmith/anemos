@@ -4,6 +4,8 @@ defmodule Anemos.Runtime.DemandTest do
 
   alias Anemos.Runtime.{Demand, CapabilityServer}
 
+  doctest Anemos.Runtime.Demand
+
   defp start_capability(name, result) do
     {:ok, pid} = CapabilityServer.start_link(
       name_str: name,

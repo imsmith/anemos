@@ -5,6 +5,8 @@ defmodule Anemos.Runtime.DispatcherTest do
   alias Anemos.Runtime.{Dispatcher, ModuleRegistry}
   alias Anemos.{Parser, Compiler}
 
+  doctest Anemos.Runtime.ModuleRegistry
+
   test "dispatches event to matching rule and executes operations" do
     input = """
     rule test-dispatch {

@@ -13,6 +13,17 @@ defmodule Anemos.Runtime.Dispatcher do
 
   # --- Client API ---
 
+  @doc """
+  Starts a dispatcher.
+
+  ## Options
+
+    * `:rules` — list of `%Anemos.CompiledRule{}` structs (required)
+    * `:registry` — pid of a `ModuleRegistry` (required)
+    * `:conditions` — list of `%Anemos.CompiledCondition{}` structs (optional)
+    * `:capabilities` — list of `%Anemos.CompiledCapability{}` structs (optional)
+    * `:name` — process registration name (optional)
+  """
   def start_link(opts) do
     rules = Keyword.fetch!(opts, :rules)
     registry = Keyword.fetch!(opts, :registry)
@@ -22,11 +33,19 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities}, name: name)
   end
 
+  @doc """
+  Dispatches an event to all matching rules and conditions.
+
+  Returns a list of `{:ok, operation}` or `{:error, reason}` tuples.
+  """
   @spec dispatch(pid() | atom(), String.t(), map()) :: list()
   def dispatch(dispatcher, event_name, context \\ %{}) do
     GenServer.call(dispatcher, {:dispatch, event_name, context})
   end
 
+  @doc """
+  Returns the current boolean state of a named condition, or `nil` if not found.
+  """
   @spec condition_state(pid() | atom(), String.t()) :: boolean() | nil
   def condition_state(dispatcher, condition_name) do
     GenServer.call(dispatcher, {:condition_state, condition_name})

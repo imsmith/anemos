@@ -8,6 +8,13 @@ defmodule Anemos.Runtime.RuleSupervisor do
 
   use DynamicSupervisor
 
+  @doc """
+  Starts the rule supervisor.
+
+  ## Options
+
+    * `:name` — process registration name (defaults to `__MODULE__`)
+  """
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
     DynamicSupervisor.start_link(__MODULE__, opts, name: name)

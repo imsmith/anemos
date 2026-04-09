@@ -12,6 +12,22 @@ defmodule Anemos.Runtime.Demand do
 
   alias Anemos.Runtime.CapabilityServer
 
+  @doc """
+  Evaluates a demand stack against capability servers using PAM-style control flags.
+
+  Each demand in the list must have `:capability` (name) and `:flag` (one of
+  `:requisite`, `:required`, `:optional`, `:sufficient`).
+
+  Returns `{:ok, operations}` or `{:error, reason}`.
+
+  ## Examples
+
+      iex> {:ok, pid} = Anemos.Runtime.CapabilityServer.start_link(name_str: "k", context: "t", handler: fn _ -> {:ok, [%{type: :log, value: "ok"}]} end)
+      iex> {:ok, ops} = Anemos.Runtime.Demand.evaluate([%{capability: "k", flag: :requisite}], %{"k" => pid}, %{})
+      iex> [%{type: :log, value: "ok"}] = ops
+      [%{type: :log, value: "ok"}]
+
+  """
   @spec evaluate([map()], map(), map()) :: {:ok, list()} | {:error, term()}
   def evaluate(demands, capability_registry, context) do
     eval_stack(demands, capability_registry, context, [], nil)

@@ -8,14 +8,43 @@ defmodule Anemos.Runtime.ConditionServer do
 
   use GenServer
 
+  @doc """
+  Starts a condition server.
+
+  ## Options
+
+    * `:name_str` — the condition name (required)
+    * `:subscriptions` — list of event names this condition listens to (required)
+    * `:evaluator` — 2-arity function `(event_name, context) -> boolean` (required)
+    * `:side_effects` — AST nodes to evaluate on transition (optional)
+    * `:on_transition` — callback `(name) -> any` called on false->true (optional)
+    * `:name` — process registration name (optional)
+  """
   def start_link(opts) do
     name = Keyword.get(opts, :name)
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
+  @doc """
+  Returns the current boolean state of the condition.
+
+  ## Examples
+
+      iex> {:ok, pid} = Anemos.Runtime.ConditionServer.start_link(name_str: "test", subscriptions: ["EV"], evaluator: fn _, _ -> true end)
+      iex> Anemos.Runtime.ConditionServer.get_state(pid)
+      false
+
+  """
   @spec get_state(pid() | atom()) :: boolean()
   def get_state(server), do: GenServer.call(server, :get_state)
 
+  @doc """
+  Sends an event to the condition server for evaluation.
+
+  If the event matches a subscription and the evaluator returns `true`,
+  the condition transitions to true. Only false->true transitions trigger
+  the `on_transition` callback.
+  """
   @spec handle_event(pid() | atom(), String.t(), map()) :: :ok
   def handle_event(server, event_name, context), do: GenServer.cast(server, {:event, event_name, context})
 

@@ -1,4 +1,5 @@
 defmodule AnemosTest do
+  @moduledoc false
   use ExUnit.Case
 
   test "run/2 requires :event option" do

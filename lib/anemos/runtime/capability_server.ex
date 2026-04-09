@@ -6,11 +6,33 @@ defmodule Anemos.Runtime.CapabilityServer do
 
   use GenServer
 
+  @doc """
+  Starts a capability server.
+
+  ## Options
+
+    * `:name_str` — the capability name (required)
+    * `:context` — the context scope (required)
+    * `:handler` — 1-arity function `(context) -> {:ok, ops} | {:error, reason}` (required)
+    * `:name` — process registration name (optional)
+  """
   def start_link(opts) do
     name = Keyword.get(opts, :name)
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
+  @doc """
+  Executes the capability's on-demand handler with the given context.
+
+  Returns `{:ok, operations}` or `{:error, reason}`.
+
+  ## Examples
+
+      iex> {:ok, pid} = Anemos.Runtime.CapabilityServer.start_link(name_str: "k", context: "test", handler: fn _ -> {:ok, []} end)
+      iex> Anemos.Runtime.CapabilityServer.execute(pid, %{})
+      {:ok, []}
+
+  """
   @spec execute(pid() | atom(), map()) :: {:ok, list()} | {:error, term()}
   def execute(server, context), do: GenServer.call(server, {:execute, context})
 

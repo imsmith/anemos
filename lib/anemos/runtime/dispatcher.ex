@@ -67,6 +67,7 @@ defmodule Anemos.Runtime.Dispatcher do
             subscriptions: cond_spec.subscriptions,
             evaluator: cond_spec.evaluator,
             side_effects: cond_spec.side_effects,
+            side_effect_handler: cond_spec.side_effect_handler,
             on_transition: fn name ->
               send(dispatcher_pid, {:condition_transition, name})
             end

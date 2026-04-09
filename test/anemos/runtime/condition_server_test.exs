@@ -88,4 +88,43 @@ defmodule Anemos.Runtime.ConditionServerTest do
     ConditionServer.handle_event(pid, "EV", %{})
     assert ConditionServer.get_state(pid) == true
   end
+
+  test "side effects execute on false->true transition" do
+    test_pid = self()
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "with_effects",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effect_handler: fn ->
+          send(test_pid, :side_effect_fired)
+          {:ok, [%{type: :log, value: "condition effect"}]}
+        end
+      )
+
+    ConditionServer.handle_event(pid, "EV", %{})
+    assert_receive :side_effect_fired
+  end
+
+  test "side effects do not execute on true->true" do
+    test_pid = self()
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "no_repeat",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effect_handler: fn ->
+          send(test_pid, :side_effect_fired)
+          {:ok, []}
+        end
+      )
+
+    ConditionServer.handle_event(pid, "EV", %{})
+    assert_receive :side_effect_fired
+
+    ConditionServer.handle_event(pid, "EV", %{})
+    refute_receive :side_effect_fired, 50
+  end
 end

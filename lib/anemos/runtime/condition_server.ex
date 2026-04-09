@@ -17,6 +17,7 @@ defmodule Anemos.Runtime.ConditionServer do
     * `:subscriptions` — list of event names this condition listens to (required)
     * `:evaluator` — 2-arity function `(event_name, context) -> boolean` (required)
     * `:side_effects` — AST nodes to evaluate on transition (optional)
+    * `:side_effect_handler` — zero-arity function called on false->true (optional)
     * `:on_transition` — callback `(name) -> any` called on false->true (optional)
     * `:name` — process registration name (optional)
   """
@@ -55,6 +56,7 @@ defmodule Anemos.Runtime.ConditionServer do
       subscriptions: MapSet.new(Keyword.fetch!(opts, :subscriptions)),
       evaluator: Keyword.fetch!(opts, :evaluator),
       side_effects: Keyword.get(opts, :side_effects, []),
+      side_effect_handler: Keyword.get(opts, :side_effect_handler),
       on_transition: Keyword.get(opts, :on_transition),
       value: false
     }
@@ -70,6 +72,7 @@ defmodule Anemos.Runtime.ConditionServer do
       new_value = state.evaluator.(event_name, context)
       case {state.value, new_value} do
         {false, true} ->
+          if state.side_effect_handler, do: state.side_effect_handler.()
           if state.on_transition, do: state.on_transition.(state.name)
           {:noreply, %{state | value: true}}
         {_old, new_val} ->

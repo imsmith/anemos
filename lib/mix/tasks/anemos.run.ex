@@ -38,15 +38,13 @@ defmodule Mix.Tasks.Anemos.Run do
             Mix.shell().info("  log #{inspect(value)}")
 
           %{type: :emit, value: value} = op ->
-            dest = if op[:destination], do: " to #{op[:destination]}", else: ""
+            emit_type = if op[:emit_type], do: "#{op[:emit_type]} ", else: ""
+            dest = if op[:destination], do: " to #{inspect(op[:destination])}", else: ""
             label = if op[:label], do: " as #{op[:label]}", else: ""
-            Mix.shell().info("  emit #{inspect(value)}#{dest}#{label}")
+            Mix.shell().info("  #{emit_type}emit #{inspect(value)}#{dest}#{label}")
 
           %{type: :demand, capability: cap} ->
             Mix.shell().info("  demand #{cap}")
-
-          %{type: :set, name: name, value: value} ->
-            Mix.shell().info("  set #{name} = #{inspect(value)}")
 
           other ->
             Mix.shell().info("  #{inspect(other)}")

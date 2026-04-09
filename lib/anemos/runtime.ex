@@ -96,11 +96,26 @@ defmodule Anemos.Runtime do
   @doc """
   Dispatches an event into the running interpreter.
 
-  Returns `{:ok, results}` where results is a list of operation
-  outputs and/or `{:error, reason}` tuples.
+  Accepts either a string event name (with optional context map) or any
+  value implementing the `Anemos.Event` protocol.
+
+  ## Examples
+
+      # String API
+      Anemos.Runtime.dispatch(:anemos, "SENSOR_MOTION_DETECTED")
+      Anemos.Runtime.dispatch(:anemos, "EVENT", %{context_path: "garage"})
+
+      # Protocol API — any type that implements Anemos.Event
+      Anemos.Runtime.dispatch(:anemos, my_mqtt_message)
+
+      # Map shorthand
+      Anemos.Runtime.dispatch(:anemos, %{name: "MOTION", context: "garage", payload: %{}})
+
   """
-  @spec dispatch(atom(), String.t(), map()) :: {:ok, list()}
-  def dispatch(name, event_name, context \\ %{}) do
+  @spec dispatch(atom(), String.t() | Anemos.Event.t(), map()) :: {:ok, list()}
+  def dispatch(name, event_name, context \\ %{})
+
+  def dispatch(name, event_name, context) when is_binary(event_name) do
     raw_results = Dispatcher.dispatch(dispatcher_name(name), event_name, context)
 
     results =
@@ -110,6 +125,15 @@ defmodule Anemos.Runtime do
       end)
 
     {:ok, results}
+  end
+
+  def dispatch(name, event, _context) do
+    event_name = Anemos.Event.name(event)
+    event_context = Anemos.Event.context(event)
+    event_payload = Anemos.Event.payload(event)
+
+    context = %{context_path: event_context, context_data: event_payload}
+    dispatch(name, event_name, context)
   end
 
   @doc """

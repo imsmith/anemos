@@ -60,11 +60,26 @@ defmodule Anemos.Runtime do
   end
 
   @doc """
-  Registers an external module (e.g., `"DEVICE"`) with the runtime.
+  Registers a module with the runtime.
 
-  Modules provide verb handlers for `[MODULE::verb]` commands in policies.
-  Can be called at any time — modules accumulate.
+  Accepts either a module built with `use Anemos.Module` (which carries
+  its own name), or a name string and module pair.
+
+  ## Examples
+
+      # Module with embedded name
+      Anemos.Runtime.register(:anemos, MyApp.Anemos.Secret)
+
+      # Explicit name
+      Anemos.Runtime.register(:anemos, "DEVICE", MyApp.Device)
+
   """
+  @spec register(atom(), module()) :: :ok
+  def register(name, module) when is_atom(module) do
+    module_name = module.__anemos_name__()
+    ModuleRegistry.register(registry_name(name), module_name, module)
+  end
+
   @spec register(atom(), String.t(), module()) :: :ok
   def register(name, module_name, module) do
     ModuleRegistry.register(registry_name(name), module_name, module)

@@ -79,6 +79,29 @@ defmodule Anemos.PipelineTest do
     assert length(results) >= 1
   end
 
+  test "ddns.rule: raw event -> condition -> rule with demand" do
+    source = File.read!("priv/examples/ddns.rule")
+    {:ok, ast} = Anemos.Parser.parse(source)
+    {:ok, compiled} = Anemos.Compiler.compile(ast)
+
+    # Verify all three declaration types compiled
+    assert length(compiled.rules) == 1
+    assert length(compiled.conditions) == 1
+    assert length(compiled.capabilities) == 1
+
+    assert hd(compiled.rules).name == "update-ddns"
+    assert hd(compiled.conditions).name == "networkchanged"
+    assert hd(compiled.capabilities).name == "katachora-ddns-key"
+
+    # Verify condition subscribes to the right events
+    cond_subs = hd(compiled.conditions).subscriptions
+    assert Enum.any?(cond_subs, &String.contains?(&1, "ip4"))
+    assert Enum.any?(cond_subs, &String.contains?(&1, "ip6"))
+
+    # Verify rule subscribes to CONDITION_networkchanged
+    assert "CONDITION_networkchanged" in hd(compiled.rules).subscriptions
+  end
+
   test "multi-rule file with specific event only fires matching rules" do
     input = """
     rule lights-on {

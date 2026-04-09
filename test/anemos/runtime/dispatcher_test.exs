@@ -279,6 +279,68 @@ defmodule Anemos.Runtime.DispatcherTest do
     assert Enum.any?(values, &match?(%{type: :log, value: "after demand"}, &1))
   end
 
+  # --- Context filtering ---
+
+  test "rule with context only fires for events in that context" do
+    input = """
+    rule scoped {
+      context "garage.motion" {
+        when SENSOR_MOTION_DETECTED {
+          log "motion in garage"
+        }
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    # Event with matching context fires the rule
+    results = Dispatcher.dispatch(dispatcher, "SENSOR_MOTION_DETECTED", %{context_path: "garage.motion"})
+    assert [{:ok, %{type: :log, value: "motion in garage"}}] = results
+
+    # Event with wrong context does not fire
+    results = Dispatcher.dispatch(dispatcher, "SENSOR_MOTION_DETECTED", %{context_path: "kitchen.motion"})
+    assert results == []
+  end
+
+  test "rule with context fires for events in child context" do
+    input = """
+    rule scoped {
+      context "infra.networking" {
+        when NETWORK_EVENT {
+          log "network"
+        }
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "NETWORK_EVENT", %{context_path: "infra.networking.dns"})
+    assert [{:ok, %{type: :log, value: "network"}}] = results
+  end
+
+  test "rule without context fires for any event regardless of context" do
+    input = """
+    rule global {
+      when GLOBAL_EVENT {
+        log "global"
+      }
+    }
+    """
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    results = Dispatcher.dispatch(dispatcher, "GLOBAL_EVENT", %{context_path: "any.path"})
+    assert [{:ok, %{type: :log, value: "global"}}] = results
+  end
+
   test "demand for missing capability returns error" do
     input = """
     rule demand-missing {

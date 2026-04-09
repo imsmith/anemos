@@ -124,8 +124,11 @@ defmodule Anemos.Runtime.Dispatcher do
 
   defp dispatch_to_rules(event_name, context, state) do
     matching = Map.get(state.index, event_name, [])
+    event_context = Map.get(context, :context_path)
 
-    Enum.flat_map(matching, fn rule ->
+    matching
+    |> Enum.filter(&context_matches?(&1, event_context))
+    |> Enum.flat_map(fn rule ->
       case safe_handle(rule, event_name, context) do
         {:ok, ops} ->
           Enum.flat_map(ops, fn op ->
@@ -136,6 +139,15 @@ defmodule Anemos.Runtime.Dispatcher do
           [{:error, {:handler_crash, rule.name, reason}}]
       end
     end)
+  end
+
+  defp context_matches?(_rule, nil), do: true
+
+  defp context_matches?(rule, event_context) do
+    case get_in(rule, [Access.key(:meta), :context_path]) do
+      nil -> true
+      rule_context -> String.starts_with?(event_context, rule_context)
+    end
   end
 
   defp collect_transitions do

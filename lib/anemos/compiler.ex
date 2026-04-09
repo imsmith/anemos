@@ -116,6 +116,7 @@ defmodule Anemos.Compiler do
   # --- Rule compilation ---
 
   defp compile_rule(%AST.Rule{name: name, body: body}) do
+    context_path = extract_context_path(body)
     # Collect all when blocks (possibly nested inside context blocks)
     when_blocks = extract_when_blocks(body)
 
@@ -127,8 +128,15 @@ defmodule Anemos.Compiler do
         name: name,
         subscriptions: subscriptions,
         handler: handler,
-        meta: %{}
+        meta: %{context_path: context_path}
       }
+    end)
+  end
+
+  defp extract_context_path(body) do
+    Enum.find_value(body, nil, fn
+      %AST.Context{path: path} -> path
+      _ -> nil
     end)
   end
 

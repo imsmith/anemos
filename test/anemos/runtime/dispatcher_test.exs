@@ -145,7 +145,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     crash_rule = %{
       name: "crash-rule",
       subscriptions: ["CRASH_EVENT"],
-      handler: fn _event, _ctx -> raise "boom" end
+      handler: fn _event, _ctx, _persistent -> raise "boom" end
     }
 
     {:ok, registry} = ModuleRegistry.start_link([])
@@ -365,5 +365,68 @@ defmodule Anemos.Runtime.DispatcherTest do
 
     results = Dispatcher.dispatch(dispatcher, "TEST_EVENT")
     assert [{:error, {:unknown_capability, "nonexistent"}}] = results
+  end
+
+  # --- Set persistence ---
+
+  test "set bindings persist across firings" do
+    input = """
+    rule counter {
+      when TICK {
+        set count = 1
+        log $count
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+
+    # First firing: set count = 1
+    results1 = Dispatcher.dispatch(dispatcher, "TICK")
+
+    assert Enum.any?(results1, fn
+      {:ok, %{type: :log, value: 1}} -> true
+      _ -> false
+    end)
+
+    # Second firing: $count is available from persistent state
+    results2 = Dispatcher.dispatch(dispatcher, "TICK")
+
+    assert Enum.any?(results2, fn
+      {:ok, %{type: :log, value: 1}} -> true
+      _ -> false
+    end)
+  end
+
+  test "set bindings are readable via $ in subsequent firings" do
+    input = """
+    rule stateful {
+      when PING {
+        set seen = "yes"
+      }
+      when CHECK {
+        log $seen
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: rules}} = Compiler.compile(ast)
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, dispatcher} = Dispatcher.start_link(rules: rules, registry: registry)
+
+    # First: set the value
+    Dispatcher.dispatch(dispatcher, "PING")
+
+    # Second: read it back in a different when block
+    results = Dispatcher.dispatch(dispatcher, "CHECK")
+
+    assert Enum.any?(results, fn
+      {:ok, %{type: :log, value: "yes"}} -> true
+      _ -> false
+    end)
   end
 end

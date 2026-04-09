@@ -47,7 +47,9 @@ defmodule Anemos.Compiler do
   conditions, and capabilities.
 
   Each rule with `when` blocks produces one `CompiledRule` per event subscription.
-  The handler closure takes `(event_name, context)` and returns `{:ok, [operation]}`.
+  The handler closure takes `(event_name, context, persistent_bindings)` and
+  returns `{:ok, [operation], updated_persistent_bindings}`.
+  Persistent bindings hold `set` values that survive across firings.
 
   ## Examples
 
@@ -57,7 +59,7 @@ defmodule Anemos.Compiler do
       "r"
       iex> compiled.subscriptions
       ["EV"]
-      iex> {:ok, [%{type: :log, value: "hi"}]} = compiled.handler.("EV", %{})
+      iex> {:ok, [%{type: :log, value: "hi"}], %{}} = compiled.handler.("EV", %{}, %{})
   """
   # TODO: Add {:error, String.t()} return when the compiler needs to reject invalid AST.
   # For v0.1.0, the catch-all clauses silently drop unknown nodes.
@@ -171,9 +173,16 @@ defmodule Anemos.Compiler do
   # --- Handler builder ---
 
   defp build_handler(body) do
-    fn _event_name, context ->
-      {ops, _bindings} = eval_body(body, context, %{})
-      {:ok, ops}
+    fn _event_name, context, persistent_bindings ->
+      {ops, final_bindings} = eval_body(body, context, persistent_bindings)
+
+      # Extract set bindings to persist across firings
+      updated_persistent =
+        final_bindings
+        |> Enum.filter(fn {{:set, _}, _} -> true; _ -> false end)
+        |> Map.new()
+
+      {:ok, ops, updated_persistent}
     end
   end
 

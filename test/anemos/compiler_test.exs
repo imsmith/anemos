@@ -21,7 +21,7 @@ defmodule Anemos.CompilerTest do
     assert [compiled] = modules
     assert compiled.name == "garage-lights-on"
     assert compiled.subscriptions == ["SENSOR_MOTION_DETECTED"]
-    assert is_function(compiled.handler, 2)
+    assert is_function(compiled.handler, 3)
   end
 
   test "compiled handler returns operations list" do
@@ -37,7 +37,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
 
     assert [%{module: "DEVICE", verb: "set", args: ["light", "on"]}, %{type: :log, value: "done"}] =
              ops
@@ -59,7 +59,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :log, value: "yes"}] = ops
   end
 
@@ -79,7 +79,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :log, value: "no"}] = ops
   end
 
@@ -96,7 +96,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :log, value: "hello"}] = ops
   end
 
@@ -113,7 +113,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     # let with a command value stores the command op; log resolves $title to it
     assert [
              %{type: :command, module: "PDF", verb: "title", args: []},
@@ -133,7 +133,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
 
     assert [%{type: :emit, value: %{type: :command, module: "EVENT", verb: "fire", args: []}}] =
              ops
@@ -151,7 +151,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :emit, emit_type: :state, label: "my.label"}] = ops
   end
 
@@ -177,10 +177,10 @@ defmodule Anemos.CompilerTest do
     assert b.name == "multi-when"
     assert b.subscriptions == ["EVENT_B"]
 
-    {:ok, ops_a} = a.handler.("EVENT_A", %{})
+    {:ok, ops_a, _} = a.handler.("EVENT_A", %{}, %{})
     assert [%{type: :log, value: "a"}] = ops_a
 
-    {:ok, ops_b} = b.handler.("EVENT_B", %{})
+    {:ok, ops_b, _} = b.handler.("EVENT_B", %{}, %{})
     assert [%{type: :log, value: "b"}] = ops_b
   end
 
@@ -211,7 +211,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :demand, capability: "katachora-ddns-key"}] = ops
   end
 
@@ -227,7 +227,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :set, name: "x", value: "value"}] = ops
   end
 
@@ -245,7 +245,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :log, value: "different"}] = ops
   end
 
@@ -264,7 +264,7 @@ defmodule Anemos.CompilerTest do
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     assert compiled.subscriptions == ["SENSOR_MOTION_DETECTED"]
-    {:ok, ops} = compiled.handler.("SENSOR_MOTION_DETECTED", %{})
+    {:ok, ops, _} = compiled.handler.("SENSOR_MOTION_DETECTED", %{}, %{})
     assert [%{type: :log, value: "motion"}] = ops
   end
 
@@ -281,7 +281,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :command, module: "DEVICE", verb: "set", args: ["greeting", "world"]}] = ops
   end
 
@@ -319,7 +319,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :log, value: nil}] = ops
   end
 
@@ -417,7 +417,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     context = %{context_data: %{"fqdn" => "host.example.tld"}}
-    {:ok, ops} = compiled.handler.("TEST_EVENT", context)
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", context, %{})
     assert [%{type: :log, value: "host.example.tld"}] = ops
   end
 
@@ -434,7 +434,7 @@ defmodule Anemos.CompilerTest do
 
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
     assert [%{type: :set, name: "y", value: "mutable"}, %{type: :log, value: "immutable"}] = ops
   end
 
@@ -449,7 +449,7 @@ defmodule Anemos.CompilerTest do
 
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
-    {:ok, ops} = compiled.handler.("TEST_EVENT", %{context_data: %{}})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{context_data: %{}}, %{})
     assert [%{type: :log, value: nil}] = ops
   end
 end

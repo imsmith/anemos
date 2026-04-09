@@ -92,7 +92,8 @@ defmodule Anemos.Runtime.Dispatcher do
        index: index,
        registry: registry,
        condition_servers: condition_servers,
-       capability_servers: capability_servers
+       capability_servers: capability_servers,
+       rule_bindings: %{}
      }}
   end
 
@@ -113,12 +114,13 @@ defmodule Anemos.Runtime.Dispatcher do
     synthetic_events = collect_transitions()
 
     # Dispatch original event to matching rules
-    results = dispatch_to_rules(event_name, context, state)
+    {results, state} = dispatch_to_rules(event_name, context, state)
 
     # Dispatch synthetic CONDITION_<name> events to matching rules
-    synthetic_results =
-      Enum.flat_map(synthetic_events, fn cond_name ->
-        dispatch_to_rules("CONDITION_#{cond_name}", context, state)
+    {synthetic_results, state} =
+      Enum.reduce(synthetic_events, {[], state}, fn cond_name, {acc, st} ->
+        {res, st} = dispatch_to_rules("CONDITION_#{cond_name}", context, st)
+        {acc ++ res, st}
       end)
 
     {:reply, results ++ synthetic_results, state}
@@ -147,15 +149,22 @@ defmodule Anemos.Runtime.Dispatcher do
 
     matching
     |> Enum.filter(&context_matches?(&1, event_context))
-    |> Enum.flat_map(fn rule ->
-      case safe_handle(rule, event_name, context) do
-        {:ok, ops} ->
-          Enum.flat_map(ops, fn op ->
-            List.wrap(execute_op(op, context, state.registry, state.capability_servers))
-          end)
+    |> Enum.reduce({[], state}, fn rule, {results_acc, st} ->
+      persistent = Map.get(st.rule_bindings, rule.name, %{})
+
+      case safe_handle(rule, event_name, context, persistent) do
+        {:ok, ops, new_persistent} ->
+          new_st = put_in(st.rule_bindings[rule.name], new_persistent)
+
+          executed =
+            Enum.flat_map(ops, fn op ->
+              List.wrap(execute_op(op, context, st.registry, st.capability_servers))
+            end)
+
+          {results_acc ++ executed, new_st}
 
         {:error, reason} ->
-          [{:error, {:handler_crash, rule.name, reason}}]
+          {results_acc ++ [{:error, {:handler_crash, rule.name, reason}}], st}
       end
     end)
   end
@@ -184,8 +193,8 @@ defmodule Anemos.Runtime.Dispatcher do
   # Crash boundary for compiled rule handler closures. Catches exception types
   # that can arise from evaluated user-supplied .rule code. Unexpected exception
   # types are intentionally left to crash and restart via the supervisor.
-  defp safe_handle(rule, event_name, context) do
-    rule.handler.(event_name, context)
+  defp safe_handle(rule, event_name, context, persistent_bindings) do
+    rule.handler.(event_name, context, persistent_bindings)
   rescue
     e in RuntimeError -> {:error, Exception.message(e)}
     e in ArgumentError -> {:error, Exception.message(e)}

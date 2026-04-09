@@ -24,12 +24,13 @@ defmodule Anemos.CompilationResult do
   All fields default to empty lists — no fields are required at construction.
   """
   @enforce_keys []
-  defstruct rules: [], conditions: [], capabilities: []
+  defstruct rules: [], conditions: [], capabilities: [], schedules: []
 
   @type t :: %__MODULE__{
           rules: [Anemos.CompiledRule.t()],
           conditions: [Anemos.CompiledCondition.t()],
-          capabilities: [Anemos.CompiledCapability.t()]
+          capabilities: [Anemos.CompiledCapability.t()],
+          schedules: [Anemos.CompiledSchedule.t()]
         }
 end
 

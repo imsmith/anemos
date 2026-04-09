@@ -150,9 +150,8 @@ defmodule Anemos.Compiler do
   # --- Handler builder ---
 
   defp build_handler(body) do
-    fn _event_name, _context ->
-      # TODO: context will be used when runtime provides event payload / state lookups
-      {ops, _bindings} = eval_body(body, %{}, %{})
+    fn _event_name, context ->
+      {ops, _bindings} = eval_body(body, context, %{})
       {:ok, ops}
     end
   end
@@ -188,10 +187,10 @@ defmodule Anemos.Compiler do
     {ops, new_bindings} =
       case resolved do
         %{type: :command} = cmd_op ->
-          {[cmd_op], Map.put(bindings, name, cmd_op)}
+          {[cmd_op], Map.put(bindings, {:let, name}, cmd_op)}
 
         other ->
-          {[], Map.put(bindings, name, other)}
+          {[], Map.put(bindings, {:let, name}, other)}
       end
 
     {ops, new_bindings}
@@ -199,7 +198,7 @@ defmodule Anemos.Compiler do
 
   defp eval_statement(%AST.Set{name: name, value: value}, context, bindings) do
     resolved = resolve_expr(value, context, bindings)
-    {[%{type: :set, name: name, value: resolved}], bindings}
+    {[%{type: :set, name: name, value: resolved}], Map.put(bindings, {:set, name}, resolved)}
   end
 
   defp eval_statement(
@@ -247,10 +246,19 @@ defmodule Anemos.Compiler do
 
   defp resolve_expr(%AST.Literal{value: value}, _context, _bindings), do: value
 
-  # TODO: VarRef sigil ($/@/?) distinction is currently ignored — all resolve
-  # the same way via bindings lookup. Differentiate when runtime semantics require it.
-  defp resolve_expr(%AST.VarRef{name: name}, _context, bindings) do
-    Map.get(bindings, name)
+  # ? — resolve from context data (external, from the event context map)
+  defp resolve_expr(%AST.VarRef{sigil: "?", name: name}, context, _bindings) do
+    get_in(context, [:context_data, name])
+  end
+
+  # @ — resolve from let bindings (immutable/ephemeral)
+  defp resolve_expr(%AST.VarRef{sigil: "@", name: name}, _context, bindings) do
+    Map.get(bindings, {:let, name})
+  end
+
+  # $ — resolve from set bindings (mutable/persistent)
+  defp resolve_expr(%AST.VarRef{sigil: "$", name: name}, _context, bindings) do
+    Map.get(bindings, {:set, name})
   end
 
   defp resolve_expr(%AST.Command{module: mod, verb: verb, args: args}, context, bindings) do

@@ -88,7 +88,7 @@ defmodule Anemos.CompilerTest do
     rule let-rule {
       when TEST_EVENT {
         let x = "hello"
-        log $x
+        log @x
       }
     }
     """
@@ -105,7 +105,7 @@ defmodule Anemos.CompilerTest do
     rule let-cmd-rule {
       when TEST_EVENT {
         let title = [PDF::title]
-        log $title
+        log @title
       }
     }
     """
@@ -268,12 +268,12 @@ defmodule Anemos.CompilerTest do
     assert [%{type: :log, value: "motion"}] = ops
   end
 
-  test "command with var ref argument resolves from context" do
+  test "command with var ref argument resolves from let bindings" do
     input = """
     rule varref-rule {
       when TEST_EVENT {
         let name = "world"
-        [DEVICE::set "greeting" $name]
+        [DEVICE::set "greeting" @name]
       }
     }
     """
@@ -401,5 +401,55 @@ defmodule Anemos.CompilerTest do
     assert hd(compiled.rules).name == "update-ddns"
     assert hd(compiled.conditions).name == "networkchanged"
     assert hd(compiled.capabilities).name == "katachora-ddns-key"
+  end
+
+  # --- Variable sigil differentiation ---
+
+  test "? variable resolves from context data, not bindings" do
+    input = """
+    rule query-rule {
+      when TEST_EVENT {
+        log ?fqdn
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    context = %{context_data: %{"fqdn" => "host.example.tld"}}
+    {:ok, ops} = compiled.handler.("TEST_EVENT", context)
+    assert [%{type: :log, value: "host.example.tld"}] = ops
+  end
+
+  test "@ reads let bindings, $ reads set bindings" do
+    input = """
+    rule sigil-rule {
+      when TEST_EVENT {
+        let x = "immutable"
+        set y = "mutable"
+        log @x
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, ops} = compiled.handler.("TEST_EVENT", %{})
+    assert [%{type: :set, name: "y", value: "mutable"}, %{type: :log, value: "immutable"}] = ops
+  end
+
+  test "? returns nil when context data key is missing" do
+    input = """
+    rule missing-query {
+      when TEST_EVENT {
+        log ?nonexistent
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    {:ok, ops} = compiled.handler.("TEST_EVENT", %{context_data: %{}})
+    assert [%{type: :log, value: nil}] = ops
   end
 end

@@ -215,7 +215,7 @@ defmodule Anemos.CompilerTest do
     assert [%{type: :demand, capability: "katachora-ddns-key"}] = ops
   end
 
-  test "set produces set operation" do
+  test "set updates persistent bindings without producing ops" do
     input = """
     rule set-rule {
       when TEST_EVENT {
@@ -227,8 +227,9 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
-    assert [%{type: :set, name: "x", value: "value"}] = ops
+    {:ok, ops, persistent} = compiled.handler.("TEST_EVENT", %{}, %{})
+    assert ops == []
+    assert persistent == %{{:set, "x"} => "value"}
   end
 
   test "ne comparison in if block" do
@@ -434,8 +435,9 @@ defmodule Anemos.CompilerTest do
 
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
-    assert [%{type: :set, name: "y", value: "mutable"}, %{type: :log, value: "immutable"}] = ops
+    {:ok, ops, persistent} = compiled.handler.("TEST_EVENT", %{}, %{})
+    assert [%{type: :log, value: "immutable"}] = ops
+    assert persistent == %{{:set, "y"} => "mutable"}
   end
 
   test "? returns nil when context data key is missing" do

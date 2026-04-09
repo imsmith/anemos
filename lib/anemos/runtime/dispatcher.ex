@@ -242,7 +242,4 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  defp execute_op(%{type: :set} = op, _context, _registry, _capability_servers) do
-    {:ok, op}
-  end
 end

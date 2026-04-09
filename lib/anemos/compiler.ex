@@ -102,14 +102,26 @@ defmodule Anemos.Compiler do
         event_to_subscriptions(event)
       end)
 
-    side_effects = Enum.flat_map(when_blocks, fn %AST.When{body: when_body} -> when_body end)
+    side_effect_body = Enum.flat_map(when_blocks, fn %AST.When{body: when_body} -> when_body end)
+
+    side_effect_handler =
+      if side_effect_body == [] do
+        nil
+      else
+        fn ->
+          {ops, _bindings} = eval_body(side_effect_body, %{}, %{})
+          {:ok, ops}
+        end
+      end
+
     evaluator = fn _event_name, _context -> true end
 
     %Anemos.CompiledCondition{
       name: name,
       subscriptions: subscriptions,
       evaluator: evaluator,
-      side_effects: side_effects
+      side_effects: side_effect_body,
+      side_effect_handler: side_effect_handler
     }
   end
 
@@ -228,7 +240,7 @@ defmodule Anemos.Compiler do
 
   defp eval_statement(%AST.Set{name: name, value: value}, context, bindings) do
     resolved = resolve_expr(value, context, bindings)
-    {[%{type: :set, name: name, value: resolved}], Map.put(bindings, {:set, name}, resolved)}
+    {[], Map.put(bindings, {:set, name}, resolved)}
   end
 
   defp eval_statement(

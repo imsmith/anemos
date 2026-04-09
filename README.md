@@ -58,14 +58,73 @@ rule update-ddns {
 
 More examples in `priv/examples/`.
 
-## Install and Run
+## Integration
 
-Requires Elixir 1.19+ / OTP 28+.
+Anemos is a language interpreter, not an application. Start a blank runtime
+in your supervision tree, then load modules and policies into it dynamically.
 
-```bash
-git clone <repo-url> && cd anemos
-mix deps.get
-mix compile
+### Supervise the runtime
+
+```elixir
+children = [
+  {Anemos.Runtime, name: :anemos}
+]
+
+Supervisor.start_link(children, strategy: :one_for_one)
+```
+
+### Register modules
+
+Modules provide the implementation behind `[MODULE::verb]` commands.
+Register them at any time — they accumulate.
+
+```elixir
+Anemos.Runtime.register(:anemos, "DEVICE", MyApp.Device)
+Anemos.Runtime.register(:anemos, "INFRA", MyApp.Infra)
+Anemos.Runtime.register(:anemos, "SECRET", MyApp.Secret)
+```
+
+### Load policies
+
+Policies can be loaded one at a time or in bulk. They accumulate —
+each `load/2` adds rules, conditions, and capabilities to the running
+interpreter without replacing what's already there.
+
+```elixir
+Anemos.Runtime.load(:anemos, File.read!("policies/garage.rule"))
+Anemos.Runtime.load(:anemos, File.read!("policies/ddns.rule"))
+```
+
+### Dispatch events
+
+```elixir
+{:ok, results} = Anemos.Runtime.dispatch(:anemos, "SENSOR_MOTION_DETECTED")
+{:ok, results} = Anemos.Runtime.dispatch(:anemos, "EVENT", %{context_path: "garage"})
+```
+
+### Query state
+
+```elixir
+Anemos.Runtime.condition_state(:anemos, "networkchanged")
+# => true | false | nil
+```
+
+### Set context data
+
+Context data provides values for `?` variable resolution.
+
+```elixir
+Anemos.Runtime.put_context(:anemos, "infra.networking.dns.fqdn", "host.example.tld")
+```
+
+### One-shot API
+
+For testing and scripts, `Anemos.run/2` parses, compiles, and dispatches
+in a single call without a supervision tree:
+
+```elixir
+source = File.read!("priv/examples/garage-lights.rule")
+{:ok, results} = Anemos.run(source, event: "SENSOR_MOTION_DETECTED")
 ```
 
 ### CLI
@@ -79,13 +138,6 @@ $ mix anemos.run priv/examples/garage-lights.rule --event SENSOR_MOTION_DETECTED
 Dispatched SENSOR_MOTION_DETECTED -- 1 operation(s):
 
   [DEVICE::set "garage.lights" "on"]
-```
-
-### Programmatic API
-
-```elixir
-source = File.read!("priv/examples/garage-lights.rule")
-{:ok, results} = Anemos.run(source, event: "SENSOR_MOTION_DETECTED")
 ```
 
 ## Language Constructs
@@ -106,10 +158,10 @@ rule name {
 
 ### Conditions
 
-Conditions are stateful GenServers. They evaluate incoming events and track
+Conditions are stateful processes. They evaluate incoming events and track
 boolean state. When a condition transitions from false to true, it emits a
-synthetic `CONDITION_<name>` event. Rules can subscribe to these with `when`,
-or query current state with `if`.
+synthetic `CONDITION_<name>` event and executes its body as side effects.
+Rules can subscribe to these with `when`, or query current state with `if`.
 
 ```
 condition networkchanged {
@@ -169,7 +221,7 @@ The sigil is how you read it back.
 
 ### Modules
 
-Modules are external — registered at startup, never defined in policy.
+Modules are external — registered dynamically, never defined in policy.
 `MODULE::verb` is the dispatch syntax. Policies declare what to do;
 modules provide how.
 
@@ -178,36 +230,57 @@ modules provide how.
 [INFRA::get_ip "eth0" type:ipv4]
 ```
 
-## Pipeline
+### Emit
+
+Emit operations produce output. With a label, the label is re-dispatched
+as an event through the interpreter — other rules can react to emits.
 
 ```
-source.rule → Lexer → Parser → Compiler → Dispatcher
-                                   ↓
-                          ConditionServer (GenServer)
-                          CapabilityServer (GenServer)
-                          ContextStore (Agent)
+emit [EVENT::fire] as :my.event
+emit state [SENSOR::reading] to channel(telemetry) as :sensor.update
 ```
 
-1. **Lexer** — NimbleParsec tokenizer
-2. **Parser** — recursive descent, produces typed AST
-3. **Compiler** — compiles rules, conditions, and capabilities into process specs and closures
-4. **Dispatcher** — routes events to conditions and rules, resolves demands through capabilities
-5. **Module Registry** — maps `MODULE` names to Elixir implementations
+## Architecture
+
+```
+                    ┌─────────────────────────────────┐
+                    │       Anemos.Runtime             │
+                    │       (Supervisor)               │
+                    └──┬──────────┬──────────┬─────────┘
+                       │          │          │
+              ModuleRegistry  ContextStore  Dispatcher
+              (Agent)         (Agent)       (GenServer)
+                                               │
+                              ┌────────────────┼────────────────┐
+                              │                │                │
+                     ConditionServer    CapabilityServer    Rule Index
+                     (GenServer×N)     (GenServer×N)       (in-memory)
+```
+
+Policies are loaded via `Anemos.Runtime.load/2`, which parses, compiles,
+and merges new declarations into the running dispatcher. Multiple policies
+accumulate. Log operations go through Elixir Logger. Emits with labels
+re-dispatch as events. Condition side effects fire on transition. `set`
+bindings persist across event firings.
 
 ## Project Status
 
-**v0.1.0** — Core pipeline is functional. Conditions, capabilities, demand
-gating, context filtering, variable binding, emit re-dispatch, and Logger
-integration all work. Log operations go through Elixir Logger. Emits with
-labels re-dispatch as events. Condition side effects fire on transition.
-Module backends are stubs (DEVICE, FILE echo back structures) — no real
-I/O integrations yet.
+**v0.1.0** — Supervisable interpreter with dynamic policy and module loading.
+Conditions, capabilities, demand gating, context filtering, variable binding,
+emit re-dispatch, and Logger integration all work end-to-end. Module backends
+are stubs (DEVICE, FILE echo back structures) — bring your own implementations.
 
 ## Docs
 
 ```bash
 mix docs
 open doc/index.html
+```
+
+Interactive playground:
+
+```bash
+livebook server notebooks/playground.livemd
 ```
 
 ## License

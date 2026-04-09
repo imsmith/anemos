@@ -172,9 +172,9 @@ to something that doesn't exist — see how PAM flags affect behavior.
 
 Three sigils with distinct resolution paths:
 
-- `?name` — resolve from external context data
-- `@name` — immutable binding (created by `let`)
-- `$name` — mutable binding (created by `set`)
+* `?name` — resolve from external context data
+* `@name` — immutable binding (created by `let`)
+* `$name` — mutable binding (created by `set`)
 
 ```elixir
 policy = """
@@ -256,6 +256,60 @@ for cap <- compiled.capabilities do
 end
 ```
 
+## Supervised Runtime
+
+The normal way to use Anemos is as a supervised interpreter. Start it blank,
+then load modules and policies dynamically.
+
+```elixir
+# Start a supervised runtime
+{:ok, _sup} = Supervisor.start_link(
+  [{Anemos.Runtime, name: :playground}],
+  strategy: :one_for_one
+)
+
+# Register a module
+Anemos.Runtime.register(:playground, "DEVICE", Anemos.Runtime.Modules.Device)
+
+# Load a policy
+Anemos.Runtime.load(:playground, """
+rule lights-on {
+  when MOTION {
+    [DEVICE::set "light" "on"]
+  }
+}
+""")
+
+# Dispatch an event
+{:ok, results} = Anemos.Runtime.dispatch(:playground, "MOTION")
+IO.inspect(results, label: "dispatch results")
+```
+
+Load more policies into the same runtime — they accumulate:
+
+```elixir
+Anemos.Runtime.load(:playground, """
+condition alarm {
+  when INTRUSION_DETECTED {
+    log "alarm triggered"
+  }
+}
+
+rule alert {
+  when CONDITION_alarm {
+    log "ALERT: intrusion!"
+    [DEVICE::set "siren" "on"]
+  }
+}
+""")
+
+{:ok, results} = Anemos.Runtime.dispatch(:playground, "INTRUSION_DETECTED")
+IO.inspect(results, label: "alarm results")
+
+# Query condition state
+IO.inspect(Anemos.Runtime.condition_state(:playground, "alarm"), label: "alarm active?")
+```
+
 ## Sandbox
 
 Write your own policy below and experiment.
@@ -264,9 +318,18 @@ Write your own policy below and experiment.
 my_policy = """
 ; Write your policy here
 
-rule my-rule {
-  when MY_EVENT {
-    log "it works!"
+condition statuscheck {
+  at (11:00 and 16:00) every workday 
+}
+
+rule watch-my-active-projects {
+  context mission.dev.projects
+
+  when CONDITION_statuscheck {
+    filter :p001 {:worksOn ?project} 
+      |> map ?project {:status :active} 
+      |> reduce counter ?project
+      |> emit [EVENT::publish counter to channel(active.projects.count)]
   }
 }
 """

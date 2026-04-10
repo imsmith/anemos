@@ -240,7 +240,17 @@ at 09:00 every monday { log "week start" }
 at TIME_1300 { log "lunch" }
 at DATE_2026.04.15 { log "deadline" }
 at DAY_friday { log "weekend" }
+
+; Natural language dates
+at NLD_tomorrow { log "due" }
+at NLD_next.wednesday { log "standup" }
+at NLD_end.of.month { log "reports" }
+at NLD_next.week { log "new sprint" }
 ```
+
+Supported NLD expressions: `today`, `tomorrow`, `yesterday`,
+`next.monday`..`next.sunday`, `next.week`, `next.month`, `next.year`,
+`end.of.month`, `end.of.week`.
 
 `at` blocks work inside both rules and conditions. In a condition,
 the condition becomes true at the scheduled time.
@@ -407,9 +417,10 @@ transition. `set` bindings persist across event firings.
 **v0.1.0** — Supervisable interpreter with dynamic policy and module loading.
 Conditions, capabilities, demand gating, context filtering, variable binding,
 emit re-dispatch, scheduled `at` triggers, triple patterns, full operator
-precedence (14 levels), channel connectors with message envelopes, Logger
-integration, `Anemos.Module` macro, and `Anemos.Event` protocol all work
-end-to-end. Module backends are stubs — bring your own implementations.
+precedence (14 levels), channel connectors with message envelopes, NLD
+natural language dates, Logger integration, `Anemos.Module` macro, and
+`Anemos.Event` protocol all work end-to-end. Module backends are stubs —
+bring your own implementations.
 
 ## Docs
 

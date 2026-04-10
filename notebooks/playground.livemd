@@ -353,6 +353,24 @@ rule deadline {
     log "happy new year"
   }
 }
+
+rule tomorrow-task {
+  at NLD_tomorrow {
+    log "reminder: do the thing"
+  }
+}
+
+rule weekly-review {
+  at NLD_next.friday {
+    log "time for weekly review"
+  }
+}
+
+rule end-of-month {
+  at NLD_end.of.month {
+    log "reports due"
+  }
+}
 """)
 
 {:ok, compiled} = Anemos.Compiler.compile(ast)
@@ -360,6 +378,18 @@ rule deadline {
 IO.puts("Schedules compiled:")
 for sched <- compiled.schedules do
   IO.puts("  #{sched.event_name} — #{inspect(sched.time_spec)}, recurrence: #{inspect(sched.recurrence)}")
+end
+```
+
+Natural language date expressions resolve at schedule time:
+
+```elixir
+# See what NLD expressions resolve to
+for expr <- ~w(today tomorrow next.wednesday next.week end.of.month next.year) do
+  case Anemos.Runtime.NLD.resolve(expr) do
+    {:ok, dt} -> IO.puts("  NLD_#{expr} → #{NaiveDateTime.to_string(dt)}")
+    {:error, _} -> IO.puts("  NLD_#{expr} → (unknown)")
+  end
 end
 ```
 

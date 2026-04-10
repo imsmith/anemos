@@ -111,9 +111,11 @@ defmodule Anemos.Parser do
 
   defp parse_rule([{:identifier, meta, name} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace),
+         {rule_meta, rest} <- parse_rule_metadata(rest, %{}),
          {:ok, body, rest} <- parse_rule_body(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.Rule{name: name, body: Enum.reverse(body), line: meta[:line]}, rest}
+      rule_meta = if rule_meta == %{}, do: nil, else: rule_meta
+      {:ok, %AST.Rule{name: name, body: Enum.reverse(body), meta: rule_meta, line: meta[:line]}, rest}
     end
   end
 
@@ -124,6 +126,26 @@ defmodule Anemos.Parser do
   defp parse_rule([]) do
     {:error, "Expected rule name but got end of input"}
   end
+
+  # Rule metadata: version, signed_by, scope — parsed before body
+  defp parse_rule_metadata([{:keyword, _, :version}, {:string, _, version} | rest], acc) do
+    parse_rule_metadata(rest, Map.put(acc, :version, version))
+  end
+
+  defp parse_rule_metadata([{:keyword, _, :version}, {:identifier, _, version} | rest], acc) do
+    parse_rule_metadata(rest, Map.put(acc, :version, version))
+  end
+
+  defp parse_rule_metadata([{:keyword, _, :signed_by}, {:atom, _, signer} | rest], acc) do
+    parse_rule_metadata(rest, Map.put(acc, :signed_by, signer))
+  end
+
+  defp parse_rule_metadata([{:keyword, _, :scope}, {:identifier, _, scope} | rest], acc)
+       when scope in ["local", "global", "mesh"] do
+    parse_rule_metadata(rest, Map.put(acc, :scope, String.to_atom(scope)))
+  end
+
+  defp parse_rule_metadata(tokens, acc), do: {acc, tokens}
 
   # Rule body: context blocks, when blocks, or statements
   defp parse_rule_body([{:rbrace, _, _} | _] = tokens, acc), do: {:ok, acc, tokens}

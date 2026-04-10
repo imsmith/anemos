@@ -115,7 +115,7 @@ defmodule Anemos.Compiler do
       if at_blocks == [] do
         {[], []}
       else
-        {scheds, _rules} = at_blocks |> Enum.map(&compile_at_block(&1, nil)) |> Enum.unzip()
+        {scheds, _rules} = at_blocks |> Enum.map(&compile_at_block(&1, %{})) |> Enum.unzip()
         {scheds, Enum.map(scheds, & &1.event_name)}
       end
 
@@ -163,16 +163,18 @@ defmodule Anemos.Compiler do
 
   # --- Rule compilation ---
 
-  defp compile_rule(%AST.Rule{name: name, body: body}) do
+  defp compile_rule(%AST.Rule{name: name, body: body, meta: rule_meta}) do
     context_path = extract_context_path(body)
     when_blocks = extract_when_blocks(body)
     at_blocks = extract_at_blocks(body)
+
+    compiled_meta = Map.merge(rule_meta || %{}, %{context_path: context_path})
 
     when_rules =
       Enum.map(when_blocks, fn %AST.When{event: event, body: when_body} ->
         subscriptions = event_to_subscriptions(event)
         handler = build_handler(when_body)
-        %CompiledRule{name: name, subscriptions: subscriptions, handler: handler, meta: %{context_path: context_path}}
+        %CompiledRule{name: name, subscriptions: subscriptions, handler: handler, meta: compiled_meta}
       end)
 
     {at_schedules, at_rules} =
@@ -180,7 +182,7 @@ defmodule Anemos.Compiler do
         {[], []}
       else
         at_blocks
-        |> Enum.map(&compile_at_block(&1, context_path))
+        |> Enum.map(&compile_at_block(&1, compiled_meta))
         |> Enum.unzip()
       end
 
@@ -216,9 +218,10 @@ defmodule Anemos.Compiler do
 
   # --- Compile a single at block into {schedule, rule} ---
 
-  defp compile_at_block(%AST.At{time_spec: time_spec, body: body}, context_path) do
+  defp compile_at_block(%AST.At{time_spec: time_spec, body: body}, compiled_meta) do
     {event_name, parsed_spec, recurrence} = at_spec_to_event(time_spec)
     handler = build_handler(body)
+    context_path = Map.get(compiled_meta, :context_path)
 
     schedule = %Anemos.CompiledSchedule{
       event_name: event_name,
@@ -231,7 +234,7 @@ defmodule Anemos.Compiler do
       name: "at_#{event_name}",
       subscriptions: [event_name],
       handler: handler,
-      meta: %{context_path: context_path}
+      meta: compiled_meta
     }
 
     {schedule, rule}

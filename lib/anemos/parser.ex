@@ -8,28 +8,21 @@ defmodule Anemos.Parser do
 
   alias Anemos.AST
 
-  @comparison_ops [
-    :eq,
-    :ne,
-    :gt,
-    :lt,
-    :ge,
-    :le,
-    :==,
-    :!=,
-    :>,
-    :<,
-    :>=,
-    :<=,
-    :in,
-    :notin,
-    :contains,
-    :starts_with,
-    :ends_with,
-    :matches_glob,
-    :matches_regex
-  ]
-  @logical_ops [:and, :or, :&&, :||]
+  # Operator precedence table (higher number = tighter binding)
+  # From spec section 7.1, inverted so higher = tighter
+  @precedence %{
+    in: 1, notin: 1, contains: 1, starts_with: 1, ends_with: 1, matches_glob: 1, matches_regex: 1,
+    ||: 2, or: 2,
+    &&: 3, and: 3,
+    |: 4,
+    ^: 5,
+    &: 6,
+    ==: 7, !=: 7, ===: 7, !==: 7, eq: 7, ne: 7,
+    <: 8, <=: 8, >: 8, >=: 8, lt: 8, le: 8, gt: 8, ge: 8,
+    "<<": 9, ">>": 9,
+    +: 10, -: 10,
+    *: 11, /: 11, %: 11
+  }
 
   # --- Public API ---
 
@@ -783,78 +776,58 @@ defmodule Anemos.Parser do
     end
   end
 
-  # --- Expression parsing ---
-  # Simple: parse an atom, then check for binary op
+  # --- Expression parsing (precedence climbing) ---
 
-  defp parse_expression(tokens) do
+  defp parse_expression(tokens), do: parse_expr(tokens, 0)
+
+  defp parse_expr(tokens, min_prec) do
     case parse_atom_expression(tokens) do
       {:ok, left, rest} ->
-        maybe_parse_binary_op(left, rest)
+        climb(left, rest, min_prec)
 
       {:error, _} = err ->
         err
     end
   end
 
-  defp maybe_parse_binary_op(left, [{:word_operator, _, op} | rest])
-       when op in @comparison_ops or op in @logical_ops do
-    case parse_atom_expression(rest) do
-      {:ok, right, rest} ->
-        node = %AST.BinaryOp{op: op, left: left, right: right, line: node_line(left)}
-        maybe_parse_binary_op(node, rest)
+  defp climb(left, tokens, min_prec) do
+    case peek_binary_op(tokens) do
+      {:ok, op, prec, rest} when prec >= min_prec ->
+        case parse_expr(rest, prec + 1) do
+          {:ok, right, rest} ->
+            node = %AST.BinaryOp{op: op, left: left, right: right, line: node_line(left)}
+            climb(node, rest, min_prec)
 
-      {:error, _} = err ->
-        err
+          {:error, _} = err ->
+            err
+        end
+
+      _ ->
+        {:ok, left, tokens}
     end
   end
 
-  defp maybe_parse_binary_op(left, [{:operator, _, op} | rest])
-       when op in @comparison_ops or op in @logical_ops do
-    case parse_atom_expression(rest) do
-      {:ok, right, rest} ->
-        node = %AST.BinaryOp{op: op, left: left, right: right, line: node_line(left)}
-        maybe_parse_binary_op(node, rest)
+  # Peek at the next token to see if it's a binary operator; return {op, precedence, rest}
+  defp peek_binary_op([{:word_operator, _, op} | rest]) do
+    case Map.fetch(@precedence, op) do
+      {:ok, prec} -> {:ok, op, prec, rest}
+      :error -> :not_op
+    end
+  end
 
-      {:error, _} = err ->
-        err
+  defp peek_binary_op([{:operator, _, op} | rest]) do
+    case Map.fetch(@precedence, op) do
+      {:ok, prec} -> {:ok, op, prec, rest}
+      :error -> :not_op
     end
   end
 
   # Handle AND/OR/IN as module_ids (uppercase versions)
-  defp maybe_parse_binary_op(left, [{:module_id, _, "IN"} | rest]) do
-    case parse_atom_expression(rest) do
-      {:ok, right, rest} ->
-        node = %AST.BinaryOp{op: :in, left: left, right: right, line: node_line(left)}
-        maybe_parse_binary_op(node, rest)
+  defp peek_binary_op([{:module_id, _, "IN"} | rest]), do: {:ok, :in, @precedence[:in], rest}
+  defp peek_binary_op([{:module_id, _, "AND"} | rest]), do: {:ok, :and, @precedence[:and], rest}
+  defp peek_binary_op([{:module_id, _, "OR"} | rest]), do: {:ok, :or, @precedence[:or], rest}
 
-      {:error, _} = err ->
-        err
-    end
-  end
-
-  defp maybe_parse_binary_op(left, [{:module_id, _, "AND"} | rest]) do
-    case parse_atom_expression(rest) do
-      {:ok, right, rest} ->
-        node = %AST.BinaryOp{op: :and, left: left, right: right, line: node_line(left)}
-        maybe_parse_binary_op(node, rest)
-
-      {:error, _} = err ->
-        err
-    end
-  end
-
-  defp maybe_parse_binary_op(left, [{:module_id, _, "OR"} | rest]) do
-    case parse_atom_expression(rest) do
-      {:ok, right, rest} ->
-        node = %AST.BinaryOp{op: :or, left: left, right: right, line: node_line(left)}
-        maybe_parse_binary_op(node, rest)
-
-      {:error, _} = err ->
-        err
-    end
-  end
-
-  defp maybe_parse_binary_op(left, rest), do: {:ok, left, rest}
+  defp peek_binary_op(_), do: :not_op
 
   # Atom expressions (non-binary)
   defp parse_atom_expression([{:string, meta, value} | rest]) do
@@ -914,22 +887,31 @@ defmodule Anemos.Parser do
     parse_command(tokens)
   end
 
-  # Parenthesized expression
+  # Parenthesized expression — try full expression first, fall back to multi-element list
   defp parse_atom_expression([{:lparen, meta, _} | rest]) do
-    case parse_paren_contents(rest, []) do
-      {:ok, elements, rest} ->
+    case parse_expression(rest) do
+      {:ok, expr, [{:rparen, _, _} | _] = rest} ->
         with {:ok, rest} <- expect(rest, :rparen) do
-          expr =
-            case elements do
-              [single] -> single
-              multiple -> %AST.ListLiteral{elements: multiple, line: meta[:line]}
-            end
-
           {:ok, expr, rest}
         end
 
-      {:error, _} = err ->
-        err
+      _ ->
+        # Fall back: collect atoms until rparen (for tuple-like constructs)
+        case parse_paren_contents(rest, []) do
+          {:ok, elements, rest} ->
+            with {:ok, rest} <- expect(rest, :rparen) do
+              expr =
+                case elements do
+                  [single] -> single
+                  multiple -> %AST.ListLiteral{elements: multiple, line: meta[:line]}
+                end
+
+              {:ok, expr, rest}
+            end
+
+          {:error, _} = err ->
+            err
+        end
     end
   end
 
@@ -947,6 +929,16 @@ defmodule Anemos.Parser do
     case parse_atom_expression(rest) do
       {:ok, operand, rest} ->
         {:ok, %AST.UnaryOp{op: :not, operand: operand, line: node_line(operand)}, rest}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  defp parse_atom_expression([{:operator, _, :"~"} | rest]) do
+    case parse_atom_expression(rest) do
+      {:ok, operand, rest} ->
+        {:ok, %AST.UnaryOp{op: :"~", operand: operand, line: node_line(operand)}, rest}
 
       {:error, _} = err ->
         err

@@ -214,7 +214,13 @@ defmodule Anemos.Lexer do
       string("|>") |> replace(:|>),
       string(">=") |> replace(:>=),
       string("<=") |> replace(:<=),
+      string("<<") |> replace(:"<<"),
+      string(">>") |> replace(:">>"),
+      string("++") |> replace(:++),
       string("::") |> replace(:"::"),
+      string("~&") |> replace(:"~&"),
+      string("~|") |> replace(:"~|"),
+      string("~") |> replace(:"~"),
       string("=") |> replace(:=),
       string(">") |> replace(:>),
       string("<") |> replace(:<),
@@ -223,6 +229,9 @@ defmodule Anemos.Lexer do
       string("*") |> replace(:*),
       string("/") |> replace(:/),
       string("%") |> replace(:%),
+      string("^") |> replace(:^),
+      string("&") |> replace(:&),
+      string("|") |> replace(:|),
       string("!") |> replace(:!)
     ])
     |> tag(:operator_raw)
@@ -285,7 +294,7 @@ defmodule Anemos.Lexer do
       iex> Enum.map(tokens, &elem(&1, 0))
       [:keyword, :module_id, :keyword, :duration, :lbrace, :rbrace]
 
-      iex> {:error, _, _, _} = Anemos.Lexer.tokenize("~~~")
+      iex> {:error, _, _, _} = Anemos.Lexer.tokenize("@@@")
   """
   @spec tokenize(String.t()) :: {:ok, list()} | {:error, String.t(), pos_integer(), pos_integer()}
   def tokenize(input) do

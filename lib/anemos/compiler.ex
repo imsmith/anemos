@@ -41,6 +41,8 @@ defmodule Anemos.Compiler do
   executable closures. No code generation, no Module.create.
   """
 
+  import Bitwise
+
   alias Anemos.AST
   alias Anemos.CompiledRule
 
@@ -403,6 +405,7 @@ defmodule Anemos.Compiler do
     case op do
       :not -> !val
       :! -> !val
+      :"~" -> Bitwise.bnot(val)
     end
   end
 
@@ -419,18 +422,37 @@ defmodule Anemos.Compiler do
     r = resolve_expr(right, context, bindings)
 
     case op do
+      # Comparison
       op when op in [:eq, :==] -> l == r
       op when op in [:ne, :!=] -> l != r
+      :=== -> l === r
+      :!== -> l !== r
       op when op in [:gt, :>] -> l > r
       op when op in [:lt, :<] -> l < r
       op when op in [:ge, :>=] -> l >= r
       op when op in [:le, :<=] -> l <= r
+      # Logical
       op when op in [:and, :&&] -> l && r
       op when op in [:or, :||] -> l || r
+      # Membership / string
       :in -> l in List.wrap(r)
+      :notin -> l not in List.wrap(r)
       :contains -> String.contains?(to_string(l), to_string(r))
       :starts_with -> String.starts_with?(to_string(l), to_string(r))
       :ends_with -> String.ends_with?(to_string(l), to_string(r))
+      :matches_regex -> String.match?(to_string(l), Regex.compile!(to_string(r)))
+      # Arithmetic
+      :+ -> l + r
+      :- -> l - r
+      :* -> l * r
+      :/ -> l / r
+      :% -> rem(l, r)
+      # Bitwise
+      :& -> Bitwise.band(l, r)
+      :| -> Bitwise.bor(l, r)
+      :^ -> Bitwise.bxor(l, r)
+      :"<<" -> Bitwise.bsl(l, r)
+      :">>" -> Bitwise.bsr(l, r)
       _ -> false
     end
   end
@@ -441,6 +463,7 @@ defmodule Anemos.Compiler do
     case op do
       :not -> !val
       :! -> !val
+      :"~" -> Bitwise.bnot(val)
     end
   end
 

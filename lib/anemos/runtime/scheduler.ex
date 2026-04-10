@@ -111,6 +111,14 @@ defmodule Anemos.Runtime.Scheduler do
     Process.send_after(self(), {:fire, name}, ms)
   end
 
+  defp start_timer(%{time_spec: {:nld, text}, event_name: name, recurrence: nil}) do
+    case Anemos.Runtime.NLD.resolve_ms(text) do
+      {:ok, ms} when ms > 0 -> Process.send_after(self(), {:fire, name}, ms)
+      {:ok, _} -> nil
+      {:error, _} -> nil
+    end
+  end
+
   defp schedule_next_occurrence(%{time_spec: {:time, {h, m}}, recurrence: recurrence} = sched) do
     ms = ms_until_next_occurrence(h, m, recurrence)
     Process.send_after(self(), {:fire_recurring, sched.event_name, sched}, ms)

@@ -100,6 +100,13 @@ defmodule Anemos.Lexer do
     |> tag(:day_prefix_raw)
     |> label("DAY_ prefix")
 
+  # NLD_<natural-language-date> (e.g. NLD_tomorrow, NLD_next.wednesday)
+  nld_prefix =
+    string("NLD_")
+    |> ascii_string([?a..?z, ?.], min: 1)
+    |> tag(:nld_prefix_raw)
+    |> label("NLD_ prefix")
+
   # HH:MM time literal — two digits, colon, two digits
   time_literal =
     ascii_string([?0..?9], 2)
@@ -266,6 +273,7 @@ defmodule Anemos.Lexer do
       query_var,
       date_prefix,
       time_prefix,
+      nld_prefix,
       day_prefix,
       time_literal,
       duration,
@@ -370,6 +378,11 @@ defmodule Anemos.Lexer do
     month = String.to_integer(month_str)
     day = String.to_integer(day_str)
     build_tokens(rest, line, [{:date_literal, [line: line], {year, month, day}} | acc])
+  end
+
+  # NLD_ natural language date
+  defp build_tokens([{:nld_prefix_raw, [_, text]} | rest], line, acc) do
+    build_tokens(rest, line, [{:nld_literal, [line: line], text} | acc])
   end
 
   # DAY_weekday prefixed day

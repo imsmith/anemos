@@ -262,6 +262,11 @@ defmodule Anemos.Compiler do
     {"AT_DAY_#{day}", {:day, day}, nil}
   end
 
+  defp at_spec_to_event({:nld, text}) do
+    safe_name = text |> String.replace(".", "_")
+    {"AT_NLD_#{safe_name}", {:nld, text}, nil}
+  end
+
   # --- Event to subscriptions ---
 
   defp event_to_subscriptions({:compound, _op, events}), do: events

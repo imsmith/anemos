@@ -364,6 +364,15 @@ defmodule Anemos.Parser do
     end
   end
 
+  # at NLD_expression { ... }
+  defp parse_at([{:nld_literal, meta, text} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.At{time_spec: {:nld, text}, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
   # at DAY_weekday { ... }
   defp parse_at([{:day_literal, meta, day} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace),

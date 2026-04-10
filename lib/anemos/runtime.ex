@@ -97,6 +97,17 @@ defmodule Anemos.Runtime do
   end
 
   @doc """
+  Connects a channel connector to the runtime.
+
+  The connector must implement the `Anemos.Channel` behaviour.
+  Replaces the current connector (default: `Anemos.Channel.Logger`).
+  """
+  @spec connect(atom(), module()) :: :ok
+  def connect(name, connector) do
+    GenServer.call(dispatcher_name(name), {:set_connector, connector})
+  end
+
+  @doc """
   Dispatches an event into the running interpreter.
 
   Accepts either a string event name (with optional context map) or any

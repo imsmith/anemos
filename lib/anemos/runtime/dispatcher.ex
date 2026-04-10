@@ -30,8 +30,9 @@ defmodule Anemos.Runtime.Dispatcher do
     registry = Keyword.fetch!(opts, :registry)
     conditions = Keyword.get(opts, :conditions, [])
     capabilities = Keyword.get(opts, :capabilities, [])
+    channel_connector = Keyword.get(opts, :channel_connector, Anemos.Channel.Logger)
     name = Keyword.get(opts, :name)
-    GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities}, name: name)
+    GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities, channel_connector}, name: name)
   end
 
   @doc """
@@ -65,7 +66,7 @@ defmodule Anemos.Runtime.Dispatcher do
   # --- Server callbacks ---
 
   @impl true
-  def init({rules, registry, compiled_conditions, compiled_capabilities}) do
+  def init({rules, registry, compiled_conditions, compiled_capabilities, channel_connector}) do
     index = build_index(rules)
     dispatcher_pid = self()
 
@@ -108,6 +109,7 @@ defmodule Anemos.Runtime.Dispatcher do
        condition_servers: condition_servers,
        capability_servers: capability_servers,
        triple_store: triple_store,
+       channel_connector: channel_connector,
        rule_bindings: %{}
      }}
   end
@@ -198,6 +200,11 @@ defmodule Anemos.Runtime.Dispatcher do
       %{pid: pid} -> {:reply, ConditionServer.get_state(pid), state}
       nil -> {:reply, nil, state}
     end
+  end
+
+  @impl true
+  def handle_call({:set_connector, connector}, _from, state) do
+    {:reply, :ok, %{state | channel_connector: connector}}
   end
 
   @impl true
@@ -306,13 +313,26 @@ defmodule Anemos.Runtime.Dispatcher do
     {:ok, op}
   end
 
-  defp execute_op(%{type: :emit, label: label} = op, _context, _state)
-       when is_binary(label) do
-    {:emit_event, label, op}
-  end
+  defp execute_op(%{type: :emit} = op, _context, state) do
+    # Publish to channel if destination is present
+    if match?({:channel, _}, op[:destination]) do
+      {:channel, channel_path} = op.destination
+      envelope = %Anemos.Envelope{
+        type: op[:emit_type],
+        payload: op.value,
+        label: op[:label],
+        channel: channel_path,
+        timestamp: DateTime.utc_now()
+      }
+      state.channel_connector.publish(channel_path, envelope)
+    end
 
-  defp execute_op(%{type: :emit} = op, _context, _state) do
-    {:ok, op}
+    # Re-dispatch label as event if present
+    if is_binary(op[:label]) do
+      {:emit_event, op.label, op}
+    else
+      {:ok, op}
+    end
   end
 
   defp execute_op(%{type: :demand, capability: cap_name} = op, context, state) do

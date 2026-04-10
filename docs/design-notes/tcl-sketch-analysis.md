@@ -12,7 +12,7 @@ Source files: `~/toolboxes/*.tcl` and `~/github/anemos/*.tcl`
 
 Closest to valid Anemos of all sketches. Two standalone `when` blocks implementing randomized bot countermeasures.
 
-```
+```tcl
 when BOT_DETECTED {
     set action [random.int(1...8)]
     switch $action {
@@ -25,6 +25,7 @@ when BOT_DETECTED {
 ```
 
 **Gaps:**
+
 - `switch` statement — not in spec; would need `if`/`elseif` chains
 - `wait` — delay/sleep primitive not in spec
 - `drop` — bare keyword action (network policy domain)
@@ -40,6 +41,7 @@ when BOT_DETECTED {
 Rich sketch exercising conditions, capabilities, rules, `it` blocks, pipelines, and publish/subscribe destinations. Most feature-dense of all files.
 
 **Constructs near-valid:**
+
 - `condition name { if [triple] then [triple] }` — in spec
 - `capability name { context path  on demand { ... } }` — in spec, implemented
 - `rule` with `context`, `when CONDITION_name`, `demand` — in spec
@@ -47,6 +49,7 @@ Rich sketch exercising conditions, capabilities, rules, `it` blocks, pipelines, 
 - `it is_required by` — `it` block is in spec EBNF (not implemented)
 
 **Gaps:**
+
 - `filter :name { pattern } |> map |> reduce |> emit` pipeline — appears in 4 examples. Most-wanted missing feature.
 - `sign ... with signer` — crypto signing as pipeline stage
 - `capability(?arg1, ?arg2) =>` — function-call-style invocation with arrow
@@ -67,7 +70,7 @@ Rich sketch exercising conditions, capabilities, rules, `it` blocks, pipelines, 
 
 Context as first-class filtering mechanism, inline conditions, function definitions, shell execution.
 
-```
+```tcl
 context (filter "updates available" in meta.debian.12) {
     when FILTER_MATCH {
         run function.update.linux
@@ -76,6 +79,7 @@ context (filter "updates available" in meta.debian.12) {
 ```
 
 **Gaps:**
+
 - `context (filter ... in ...)` — dynamic filter expression as context path
 - `package ... to ... as ...` — archive/packaging action
 - `run function.name` — function invocation statement
@@ -99,6 +103,7 @@ context (filter "updates available" in meta.debian.12) {
 Network security policy with static/dynamic data sets and PAM-style policy evaluation.
 
 **Gaps:**
+
 - `data` blocks — static lists (`reserved-ips`, `reserved-domains`, `historical-tlds`)
 - `data dynamic { subscribe webhook/rss/amqp/git ... }` — dynamic data with subscription sources
 - `policy` block — numbered match rules with `sufficient`/`requisite` annotations (PAM model)
@@ -121,6 +126,7 @@ Same constructs as stop-data-extraction-policy: `data`, `rule` with `deny`/`perm
 Infrastructure topology DSL — completely different language concern.
 
 **Gaps (entire file is out of scope):**
+
 - `unit` — infrastructure grouping
 - `node` — compute node declaration with properties
 - `link` — network link between nodes
@@ -138,6 +144,7 @@ Infrastructure topology DSL — completely different language concern.
 Design sketchpad mixing multiple language concerns in one file.
 
 **Near-valid fragment:**
+
 ```
 rule publish-api {
     context system.discovery
@@ -146,9 +153,11 @@ rule publish-api {
     }
 }
 ```
+
 Skeleton works; complex emit payload with `{:id, :name, ...}` block args and `#` interpolation doesn't.
 
 **Gaps (beyond the rule):**
+
 - `layout` blocks — UI layout DSL
 - `query` blocks with `expect`/`return` — query language
 - `data` blocks with embedded EDN, XML, Elixir, SQLite formats

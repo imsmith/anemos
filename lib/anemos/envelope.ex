@@ -14,7 +14,8 @@ defmodule Anemos.Envelope do
     :source,
     :timestamp,
     :label,
-    :channel
+    :channel,
+    :signature
   ]
 
   @type t :: %__MODULE__{
@@ -23,6 +24,7 @@ defmodule Anemos.Envelope do
           source: String.t() | nil,
           timestamp: DateTime.t() | nil,
           label: String.t() | nil,
-          channel: String.t() | nil
+          channel: String.t() | nil,
+          signature: binary() | nil
         }
 end

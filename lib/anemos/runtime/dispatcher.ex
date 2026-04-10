@@ -228,10 +228,12 @@ defmodule Anemos.Runtime.Dispatcher do
       case safe_handle(rule, event_name, context, persistent) do
         {:ok, ops, new_persistent} ->
           new_st = put_in(st.rule_bindings[rule.name], new_persistent)
+          rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
+          exec_context = Map.put(context, :_rule_source, {rule.name, rule_context})
 
           all_results =
             Enum.flat_map(ops, fn op ->
-              List.wrap(execute_op(op, context, new_st))
+              List.wrap(execute_op(op, exec_context, new_st))
             end)
 
           {normal_results, emit_events} =
@@ -313,13 +315,22 @@ defmodule Anemos.Runtime.Dispatcher do
     {:ok, op}
   end
 
-  defp execute_op(%{type: :emit} = op, _context, state) do
+  defp execute_op(%{type: :emit} = op, context, state) do
     # Publish to channel if destination is present
     if match?({:channel, _}, op[:destination]) do
       {:channel, channel_path} = op.destination
+
+      source =
+        case context[:_rule_source] do
+          {name, nil} -> name
+          {name, ctx} -> "#{name}@#{ctx}"
+          nil -> nil
+        end
+
       envelope = %Anemos.Envelope{
         type: op[:emit_type],
         payload: op.value,
+        source: source,
         label: op[:label],
         channel: channel_path,
         timestamp: DateTime.utc_now()

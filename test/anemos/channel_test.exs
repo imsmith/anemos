@@ -47,7 +47,32 @@ defmodule Anemos.ChannelTest do
     assert %Anemos.Envelope{} = envelope
     assert envelope.channel == "security.firewall.update"
     assert envelope.label == "alert.fired"
+    assert envelope.source == "notify"
     assert envelope.timestamp != nil
+    assert envelope.signature == nil
+  end
+
+  test "envelope source includes context path when present" do
+    start_supervised!({Anemos.Runtime, name: :test_chan_src})
+
+    Anemos.Runtime.connect(:test_chan_src, TestChannel)
+
+    Anemos.Runtime.load(:test_chan_src, """
+    rule scoped-notify {
+      context infra.networking {
+        when ALERT {
+          emit [EVENT::fire] to channel(alerts) as :alert
+        }
+      }
+    }
+    """)
+
+    Anemos.Runtime.register(:test_chan_src, "EVENT", Anemos.Runtime.Modules.Device)
+
+    {:ok, _} = Anemos.Runtime.dispatch(:test_chan_src, "ALERT", %{context_path: "infra.networking"})
+
+    assert_receive {:published, "alerts", envelope}
+    assert envelope.source == "scoped-notify@infra.networking"
   end
 
   test "emit with type carries type in envelope" do

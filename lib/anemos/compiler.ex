@@ -310,6 +310,14 @@ defmodule Anemos.Compiler do
     {[%{type: :log, value: value}], bindings}
   end
 
+  # let [triple assertion] — assert a fact
+  defp eval_statement(%AST.Let{name: nil, value: %AST.Triple{} = triple}, context, bindings) do
+    s = resolve_triple_element(triple.subject, context, bindings)
+    p = resolve_triple_element(triple.predicate, context, bindings)
+    o = resolve_triple_element(triple.object, context, bindings)
+    {[%{type: :assert_triple, subject: s, predicate: p, object: o}], bindings}
+  end
+
   defp eval_statement(%AST.Let{name: name, value: value}, context, bindings) do
     resolved = resolve_expr(value, context, bindings)
 
@@ -413,7 +421,22 @@ defmodule Anemos.Compiler do
     Enum.map(elements, &resolve_expr(&1, context, bindings))
   end
 
+  # Triple pattern in expression context — return as a query descriptor
+  defp resolve_expr(%AST.Triple{subject: s, predicate: p, object: o}, context, bindings) do
+    %{
+      type: :triple_query,
+      subject: resolve_triple_element(s, context, bindings),
+      predicate: resolve_triple_element(p, context, bindings),
+      object: resolve_triple_element(o, context, bindings)
+    }
+  end
+
   defp resolve_expr(other, _context, _bindings), do: other
+
+  defp resolve_triple_element(%AST.Literal{value: value}, _context, _bindings), do: value
+  defp resolve_triple_element(%AST.VarRef{sigil: "?", name: name}, _context, _bindings), do: {:var, name}
+  defp resolve_triple_element(%AST.VarRef{} = ref, context, bindings), do: resolve_expr(ref, context, bindings)
+  defp resolve_triple_element(other, _context, _bindings), do: other
 
   # --- Condition evaluation ---
 

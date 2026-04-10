@@ -12,7 +12,7 @@ defmodule Anemos.Lexer do
     else elseif while for each every foreach do return done nextevent nextrule
     log show list graph trace explain exists infer assert unless until as with
     by that import export version signed_by scope state effect stream to channel
-    service self interval
+    service self interval then filter
   )a
 
   @word_operators ~w(
@@ -224,6 +224,7 @@ defmodule Anemos.Lexer do
       string("=") |> replace(:=),
       string(">") |> replace(:>),
       string("<") |> replace(:<),
+      string("->") |> replace(:"->"),
       string("+") |> replace(:+),
       string("-") |> replace(:-),
       string("*") |> replace(:*),

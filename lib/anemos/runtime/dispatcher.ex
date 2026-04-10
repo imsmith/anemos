@@ -10,7 +10,7 @@ defmodule Anemos.Runtime.Dispatcher do
   use GenServer
   require Logger
 
-  alias Anemos.Runtime.{CapabilityServer, ConditionServer, ModuleRegistry}
+  alias Anemos.Runtime.{CapabilityServer, ConditionServer, ModuleRegistry, TripleStore}
 
   # --- Client API ---
 
@@ -98,6 +98,8 @@ defmodule Anemos.Runtime.Dispatcher do
         {cap.name, pid}
       end)
 
+    {:ok, triple_store} = TripleStore.start_link()
+
     {:ok,
      %{
        rules: rules,
@@ -105,6 +107,7 @@ defmodule Anemos.Runtime.Dispatcher do
        registry: registry,
        condition_servers: condition_servers,
        capability_servers: capability_servers,
+       triple_store: triple_store,
        rule_bindings: %{}
      }}
   end
@@ -221,7 +224,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
           all_results =
             Enum.flat_map(ops, fn op ->
-              List.wrap(execute_op(op, context, new_st.registry, new_st.capability_servers))
+              List.wrap(execute_op(op, context, new_st))
             end)
 
           {normal_results, emit_events} =
@@ -291,34 +294,49 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
-  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, registry, _capability_servers) do
-    case ModuleRegistry.lookup(registry, mod_name) do
+  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state) do
+    case ModuleRegistry.lookup(state.registry, mod_name) do
       {:ok, mod} -> mod.handle_verb(verb, args, context)
       :error -> {:error, {:unknown_module, mod_name}}
     end
   end
 
-  defp execute_op(%{type: :log, value: value} = op, _context, _registry, _capability_servers) do
+  defp execute_op(%{type: :log, value: value} = op, _context, _state) do
     Logger.info("[anemos] #{value}")
     {:ok, op}
   end
 
-  defp execute_op(%{type: :emit, label: label} = op, _context, _registry, _capability_servers)
+  defp execute_op(%{type: :emit, label: label} = op, _context, _state)
        when is_binary(label) do
     {:emit_event, label, op}
   end
 
-  defp execute_op(%{type: :emit} = op, _context, _registry, _capability_servers) do
+  defp execute_op(%{type: :emit} = op, _context, _state) do
     {:ok, op}
   end
 
-  defp execute_op(%{type: :demand, capability: cap_name} = op, context, _registry, capability_servers) do
+  defp execute_op(%{type: :demand, capability: cap_name} = op, context, state) do
     demands = [%{capability: cap_name, flag: Map.get(op, :flag, :requisite)}]
 
-    case Anemos.Runtime.Demand.evaluate(demands, capability_servers, context) do
+    case Anemos.Runtime.Demand.evaluate(demands, state.capability_servers, context) do
       {:ok, ops} -> Enum.map(ops, fn result_op -> {:ok, result_op} end)
       {:error, _} = err -> [err]
     end
   end
 
+  defp execute_op(%{type: :assert_triple, subject: s, predicate: p, object: o} = op, _context, state) do
+    TripleStore.assert_triple(state.triple_store, s, p, o)
+    {:ok, op}
+  end
+
+  defp execute_op(%{type: :triple_query} = op, _context, state) do
+    s = triple_query_pattern(op.subject)
+    p = triple_query_pattern(op.predicate)
+    o = triple_query_pattern(op.object)
+    results = TripleStore.match(state.triple_store, s, p, o)
+    {:ok, %{type: :triple_result, query: op, results: results}}
+  end
+
+  defp triple_query_pattern({:var, _} = var), do: var
+  defp triple_query_pattern(literal), do: literal
 end

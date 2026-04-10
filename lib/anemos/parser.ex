@@ -431,8 +431,22 @@ defmodule Anemos.Parser do
     end
   end
 
+  # let [triple assertion] — assert a fact into the triple store
+  defp parse_let([{:lbracket, meta, _} | _] = tokens) do
+    case parse_bracket_expr(tokens) do
+      {:ok, %AST.Triple{} = triple, rest} ->
+        {:ok, %AST.Let{name: nil, value: triple, line: meta[:line]}, rest}
+
+      {:ok, _other, _rest} ->
+        {:error, "Expected triple pattern after 'let [' on line #{meta[:line]}"}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
   defp parse_let([{_, meta, _} | _]) do
-    {:error, "Expected 'let <name> = <expr>' on line #{meta[:line]}"}
+    {:error, "Expected 'let <name> = <expr>' or 'let [triple]' on line #{meta[:line]}"}
   end
 
   # --- Set ---
@@ -713,14 +727,14 @@ defmodule Anemos.Parser do
   # --- Command statement (top-level command as statement) ---
 
   defp parse_command_statement(tokens) do
-    parse_command(tokens)
+    parse_bracket_expr(tokens)
   end
 
-  # --- Command ---
-  # [MODULE::verb arg1 arg2 ...]
+  # --- Bracket expressions: commands [MODULE::verb ...] or triple patterns [:s :p :o] ---
 
-  defp parse_command([{:lbracket, _, _} | rest]) do
+  defp parse_bracket_expr([{:lbracket, _, _} | rest]) do
     case rest do
+      # Command: [MODULE::verb args...]
       [{:module_id, meta, mod}, {:double_colon, _, _} | rest] ->
         with {:ok, verb, rest} <- parse_command_verb(rest),
              {:ok, args, rest} <- parse_command_args(rest, []),
@@ -728,12 +742,64 @@ defmodule Anemos.Parser do
           {:ok, %AST.Command{module: mod, verb: verb, args: args, line: meta[:line]}, rest}
         end
 
+      # Triple assertion: [:s -> :p -> :o]
+      [{type, meta, _}, {:operator, _, :"->"} | _] = triple_rest when type in [:atom, :query_var] ->
+        parse_triple_assertion(triple_rest, meta)
+
+      # Triple query: [:s :p :o] or [?s :p ?o]
+      [{type, meta, _} | _] = triple_rest when type in [:atom, :query_var] ->
+        parse_triple_query(triple_rest, meta)
+
       [{_, meta, _} | _] ->
-        {:error, "Expected MODULE::verb in command on line #{meta[:line]}"}
+        {:error, "Expected MODULE::verb or triple pattern on line #{meta[:line]}"}
 
       [] ->
-        {:error, "Unexpected end of input in command"}
+        {:error, "Unexpected end of input in bracket expression"}
     end
+  end
+
+  # Triple assertion: subject -> predicate -> object
+  defp parse_triple_assertion(tokens, meta) do
+    with {:ok, subject, rest} <- parse_triple_element(tokens),
+         {:ok, rest} <- expect_operator(rest, :"->"),
+         {:ok, predicate, rest} <- parse_triple_element(rest),
+         {:ok, rest} <- expect_operator(rest, :"->"),
+         {:ok, object, rest} <- parse_triple_element(rest),
+         {:ok, rest} <- expect(rest, :rbracket) do
+      {:ok, %AST.Triple{subject: subject, predicate: predicate, object: object, line: meta[:line]}, rest}
+    end
+  end
+
+  # Triple query: subject predicate object (space-separated)
+  defp parse_triple_query(tokens, meta) do
+    with {:ok, subject, rest} <- parse_triple_element(tokens),
+         {:ok, predicate, rest} <- parse_triple_element(rest),
+         {:ok, object, rest} <- parse_triple_element(rest),
+         {:ok, rest} <- expect(rest, :rbracket) do
+      {:ok, %AST.Triple{subject: subject, predicate: predicate, object: object, line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_triple_element([{:atom, meta, name} | rest]) do
+    {:ok, %AST.Literal{type: :atom, value: name, line: meta[:line]}, rest}
+  end
+
+  defp parse_triple_element([{:query_var, meta, name} | rest]) do
+    {:ok, %AST.VarRef{sigil: "?", name: name, line: meta[:line]}, rest}
+  end
+
+  defp parse_triple_element([{:identifier, meta, name} | rest]) do
+    {:ok, %AST.Literal{type: :identifier, value: name, line: meta[:line]}, rest}
+  end
+
+  defp parse_triple_element([{_type, meta, _} | _]) do
+    {:error, "Expected atom, query var, or identifier in triple on line #{meta[:line]}"}
+  end
+
+  defp expect_operator([{:operator, _, expected} | rest], expected), do: {:ok, rest}
+
+  defp expect_operator([{_, meta, _} | _], expected) do
+    {:error, "Expected #{expected} on line #{meta[:line]}"}
   end
 
   # Verb can be a keyword or identifier
@@ -884,7 +950,7 @@ defmodule Anemos.Parser do
   end
 
   defp parse_atom_expression([{:lbracket, _, _} | _] = tokens) do
-    parse_command(tokens)
+    parse_bracket_expr(tokens)
   end
 
   # Parenthesized expression — try full expression first, fall back to multi-element list

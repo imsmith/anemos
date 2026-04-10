@@ -41,8 +41,6 @@ defmodule Anemos.Compiler do
   executable closures. No code generation, no Module.create.
   """
 
-  import Bitwise
-
   alias Anemos.AST
   alias Anemos.CompiledRule
 

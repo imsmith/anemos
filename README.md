@@ -284,6 +284,41 @@ emit [EVENT::fire] as :my.event
 emit state [SENSOR::reading] to channel(telemetry) as :sensor.update
 ```
 
+### Triple Patterns
+
+Triple patterns are RDF-like subject-predicate-object facts. Two syntaxes
+for two operations:
+
+**Assert** (arrows — create a fact):
+```
+let [:p001 -> :knows -> :p002]
+let [:p001 -> :worksOn -> :proj1]
+```
+
+**Query** (spaces — match against existing facts):
+```
+[?a :worksOn ?p]              ; binds ?a and ?p from matches
+[:p001 :knows :p002]          ; exact match check
+```
+
+Facts accumulate in a triple store within the runtime. Query variables
+bind to matched values.
+
+### Expressions
+
+Full operator precedence (14 levels, matching the language spec):
+
+```
+2 + 3 * 4          ; 14, not 20 — multiplication binds tighter
+(2 + 3) * 4        ; 20 — parentheses override
+1 == 1 and 2 == 2  ; true — comparison before logical
+5 & 3              ; 1 — bitwise AND
+1 << 3             ; 8 — left shift
+```
+
+Arithmetic (`+`, `-`, `*`, `/`, `%`), bitwise (`&`, `|`, `^`, `<<`, `>>`, `~`),
+comparison, logical, and membership operators all at correct precedence.
+
 ### Event Protocol
 
 Implement the `Anemos.Event` protocol on your application's event types
@@ -319,6 +354,9 @@ String dispatch still works for simple cases.
                               │                │   │   AT_* events
                      ConditionServer    CapServer  Rule    │
                      (GenServer×N)     (GS×N)    Index ◄───┘
+                                          │
+                                     TripleStore
+                                      (Agent)
 ```
 
 Policies are loaded via `Anemos.Runtime.load/2`, which parses, compiles,
@@ -332,9 +370,10 @@ transition. `set` bindings persist across event firings.
 
 **v0.1.0** — Supervisable interpreter with dynamic policy and module loading.
 Conditions, capabilities, demand gating, context filtering, variable binding,
-emit re-dispatch, scheduled `at` triggers, Logger integration, `Anemos.Module`
-macro, and `Anemos.Event` protocol all work end-to-end. Module backends are
-stubs (DEVICE, FILE echo back structures) — bring your own implementations.
+emit re-dispatch, scheduled `at` triggers, triple patterns, full operator
+precedence (14 levels), Logger integration, `Anemos.Module` macro, and
+`Anemos.Event` protocol all work end-to-end. Module backends are stubs
+(DEVICE, FILE echo back structures) — bring your own implementations.
 
 ## Docs
 

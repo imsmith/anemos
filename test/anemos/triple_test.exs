@@ -3,6 +3,8 @@ defmodule Anemos.TripleTest do
   use ExUnit.Case
 
   alias Anemos.{Parser, Compiler}
+
+  doctest Anemos.Runtime.TripleStore
   alias Anemos.AST
 
   # --- Parser tests ---

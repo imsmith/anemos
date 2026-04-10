@@ -339,6 +339,42 @@ The protocol has three callbacks: `name/1` (for rule matching), `context/1`
 (for listener filtering), `payload/1` (for `?` variable resolution).
 String dispatch still works for simple cases.
 
+### Channel Connectors
+
+Emits that target a channel publish through a pluggable connector.
+The connector bridges Anemos to your messaging infrastructure —
+Phoenix.PubSub, NATS, AMQP, or anything else.
+
+```elixir
+# Implement the behaviour
+defmodule MyApp.PubSubChannel do
+  @behaviour Anemos.Channel
+
+  @impl true
+  def publish(channel, envelope) do
+    Phoenix.PubSub.broadcast(MyApp.PubSub, channel, {:anemos, envelope})
+  end
+end
+
+# Connect it
+Anemos.Runtime.connect(:anemos, MyApp.PubSubChannel)
+```
+
+Default connector: `Anemos.Channel.Logger` — logs all emits so they're
+never silent.
+
+Every published message is an `%Anemos.Envelope{}`:
+
+| Field | Description |
+|-------|-------------|
+| `type` | `:state`, `:effect`, `:stream`, or nil |
+| `payload` | The emitted value |
+| `source` | Rule name and context (`"rule@context.path"`) |
+| `timestamp` | UTC time of emission |
+| `label` | Symbolic handle from `as :label` |
+| `channel` | Destination channel path |
+| `signature` | Reserved for cryptographic signing |
+
 ## Architecture
 
 ```
@@ -371,9 +407,9 @@ transition. `set` bindings persist across event firings.
 **v0.1.0** — Supervisable interpreter with dynamic policy and module loading.
 Conditions, capabilities, demand gating, context filtering, variable binding,
 emit re-dispatch, scheduled `at` triggers, triple patterns, full operator
-precedence (14 levels), Logger integration, `Anemos.Module` macro, and
-`Anemos.Event` protocol all work end-to-end. Module backends are stubs
-(DEVICE, FILE echo back structures) — bring your own implementations.
+precedence (14 levels), channel connectors with message envelopes, Logger
+integration, `Anemos.Module` macro, and `Anemos.Event` protocol all work
+end-to-end. Module backends are stubs — bring your own implementations.
 
 ## Docs
 

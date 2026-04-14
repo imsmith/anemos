@@ -179,9 +179,9 @@ defmodule Anemos.Compiler do
     compiled_meta = Map.merge(rule_meta || %{}, %{context_path: context_path})
 
     when_rules =
-      Enum.map(when_blocks, fn %AST.When{event: event, body: when_body} ->
+      Enum.map(when_blocks, fn %AST.When{event: event, body: when_body, guard: guard} ->
         subscriptions = event_to_subscriptions(event)
-        handler = build_handler(when_body)
+        handler = build_guarded_handler(when_body, guard)
         %CompiledRule{name: name, subscriptions: subscriptions, handler: handler, meta: compiled_meta}
       end)
 
@@ -285,6 +285,36 @@ defmodule Anemos.Compiler do
 
   # --- Handler builder ---
 
+  defp build_guarded_handler(body, nil), do: build_handler(body)
+
+  defp build_guarded_handler(body, {:unless, guard_expr}) do
+    inner = build_handler(body)
+
+    fn event_name, context, persistent_bindings ->
+      if eval_condition(guard_expr, context, persistent_bindings) do
+        {:ok, [], persistent_bindings}
+      else
+        inner.(event_name, context, persistent_bindings)
+      end
+    end
+  end
+
+  defp build_guarded_handler(body, {:until, guard_expr}) do
+    inner = build_handler(body)
+
+    fn event_name, context, persistent_bindings ->
+      if Map.get(persistent_bindings, {:until_tripped}, false) do
+        {:ok, [], persistent_bindings}
+      else
+        if eval_condition(guard_expr, context, persistent_bindings) do
+          {:ok, [], Map.put(persistent_bindings, {:until_tripped}, true)}
+        else
+          inner.(event_name, context, persistent_bindings)
+        end
+      end
+    end
+  end
+
   defp build_handler(body) do
     fn _event_name, context, persistent_bindings ->
       {ops, final_bindings} =
@@ -333,6 +363,17 @@ defmodule Anemos.Compiler do
     {Enum.reverse(ops_rev), final_bindings}
   end
 
+  # --- Guard checking (for if blocks) ---
+
+  defp check_guard(nil, _context, _bindings), do: nil
+
+  defp check_guard({:unless, expr}, context, bindings) do
+    if eval_condition(expr, context, bindings), do: {[], bindings}, else: nil
+  end
+
+  # until on an if block has no meaningful semantics (if blocks don't persist) — ignore
+  defp check_guard({:until, _expr}, _context, _bindings), do: nil
+
   # --- Statement evaluation ---
 
   defp eval_statement(%AST.Command{module: mod, verb: verb, args: args}, context, bindings) do
@@ -375,18 +416,24 @@ defmodule Anemos.Compiler do
   end
 
   defp eval_statement(
-         %AST.If{condition: condition, body: body, else_body: else_body},
+         %AST.If{condition: condition, guard: guard, body: body, else_body: else_body},
          context,
          bindings
        ) do
-    if eval_condition(condition, context, bindings) do
-      eval_body(body, context, bindings)
-    else
-      if else_body do
-        eval_body(else_body, context, bindings)
-      else
-        {[], bindings}
-      end
+    case check_guard(guard, context, bindings) do
+      {[], ^bindings} = guarded ->
+        guarded
+
+      nil ->
+        if eval_condition(condition, context, bindings) do
+          eval_body(body, context, bindings)
+        else
+          if else_body do
+            eval_body(else_body, context, bindings)
+          else
+            {[], bindings}
+          end
+        end
     end
   end
 

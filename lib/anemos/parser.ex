@@ -237,12 +237,13 @@ defmodule Anemos.Parser do
   defp parse_when([{:module_id, meta, mod}, {:double_colon, _, _}, {:identifier, _, name} | rest]) do
     event = "#{mod}::#{name}"
     {duration, rest} = parse_optional_duration(rest)
+    {guard, rest} = parse_optional_guard(rest)
 
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
-       %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]},
+       %AST.When{event: event, duration: duration, guard: guard, body: Enum.reverse(body), line: meta[:line]},
        rest}
     end
   end
@@ -250,12 +251,13 @@ defmodule Anemos.Parser do
   # Simple module_id event (e.g. SENSOR_MOTION_DETECTED)
   defp parse_when([{:module_id, meta, event} | rest]) do
     {duration, rest} = parse_optional_duration(rest)
+    {guard, rest} = parse_optional_guard(rest)
 
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
-       %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]},
+       %AST.When{event: event, duration: duration, guard: guard, body: Enum.reverse(body), line: meta[:line]},
        rest}
     end
   end
@@ -263,12 +265,13 @@ defmodule Anemos.Parser do
   # Identifier event name (e.g. my.event — used for emit label re-dispatch targets)
   defp parse_when([{:identifier, meta, event} | rest]) do
     {duration, rest} = parse_optional_duration(rest)
+    {guard, rest} = parse_optional_guard(rest)
 
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
-       %AST.When{event: event, duration: duration, body: Enum.reverse(body), line: meta[:line]},
+       %AST.When{event: event, duration: duration, guard: guard, body: Enum.reverse(body), line: meta[:line]},
        rest}
     end
   end
@@ -279,6 +282,7 @@ defmodule Anemos.Parser do
       {:ok, event_expr, rest} ->
         with {:ok, rest} <- expect(rest, :rparen) do
           {duration, rest} = parse_optional_duration(rest)
+          {guard, rest} = parse_optional_guard(rest)
 
           with {:ok, rest} <- expect(rest, :lbrace),
                {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
@@ -287,6 +291,7 @@ defmodule Anemos.Parser do
              %AST.When{
                event: event_expr,
                duration: duration,
+               guard: guard,
                body: Enum.reverse(body),
                line: meta[:line]
              }, rest}
@@ -344,6 +349,24 @@ defmodule Anemos.Parser do
 
   defp parse_optional_duration(tokens), do: {nil, tokens}
 
+  # --- Optional guard: unless/until ---
+
+  defp parse_optional_guard([{:keyword, _, :unless} | rest]) do
+    case parse_expression(rest) do
+      {:ok, expr, rest} -> {{:unless, expr}, rest}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_optional_guard([{:keyword, _, :until} | rest]) do
+    case parse_expression(rest) do
+      {:ok, expr, rest} -> {{:until, expr}, rest}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_optional_guard(tokens), do: {nil, tokens}
+
   # --- At ---
 
   # at interval(duration) { ... }
@@ -353,10 +376,12 @@ defmodule Anemos.Parser do
          {:duration, _, dur},
          {:rparen, _, _} | rest
        ]) do
+    {guard, rest} = parse_optional_guard(rest)
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:interval, dur}, body: Enum.reverse(body), line: meta[:line]},
+      {:ok, %AST.At{time_spec: {:interval, dur}, guard: guard, body: Enum.reverse(body), line: meta[:line]},
        rest}
     end
   end
@@ -364,6 +389,7 @@ defmodule Anemos.Parser do
   # at <time_literal> every <recurrence> { ... }
   defp parse_at([{:time_literal, meta, time}, {:keyword, _, :every} | rest]) do
     {recurrence, rest} = parse_recurrence(rest)
+    {guard, rest} = parse_optional_guard(rest)
 
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
@@ -371,6 +397,7 @@ defmodule Anemos.Parser do
       {:ok,
        %AST.At{
          time_spec: {:recurring, {:time, time}, recurrence},
+         guard: guard,
          body: Enum.reverse(body),
          line: meta[:line]
        }, rest}
@@ -379,37 +406,45 @@ defmodule Anemos.Parser do
 
   # at <time_literal> { ... }
   defp parse_at([{:time_literal, meta, time} | rest]) do
+    {guard, rest} = parse_optional_guard(rest)
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:time, time}, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok, %AST.At{time_spec: {:time, time}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
     end
   end
 
   # at DATE_YYYY.MM.DD { ... }
   defp parse_at([{:date_literal, meta, date} | rest]) do
+    {guard, rest} = parse_optional_guard(rest)
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:date, date}, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok, %AST.At{time_spec: {:date, date}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
     end
   end
 
   # at NLD_expression { ... }
   defp parse_at([{:nld_literal, meta, text} | rest]) do
+    {guard, rest} = parse_optional_guard(rest)
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:nld, text}, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok, %AST.At{time_spec: {:nld, text}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
     end
   end
 
   # at DAY_weekday { ... }
   defp parse_at([{:day_literal, meta, day} | rest]) do
+    {guard, rest} = parse_optional_guard(rest)
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:day, day}, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok, %AST.At{time_spec: {:day, day}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
     end
   end
 
@@ -723,19 +758,23 @@ defmodule Anemos.Parser do
   defp parse_if(tokens) do
     line = token_line(hd(tokens))
 
-    with {:ok, condition, rest} <- parse_expression(tokens),
-         {:ok, rest} <- expect(rest, :lbrace),
-         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
-         {:ok, rest} <- expect(rest, :rbrace) do
-      {else_body, rest} = parse_optional_else(rest)
+    with {:ok, condition, rest} <- parse_expression(tokens) do
+      {guard, rest} = parse_optional_guard(rest)
 
-      {:ok,
-       %AST.If{
-         condition: condition,
-         body: Enum.reverse(body),
-         else_body: else_body,
-         line: line
-       }, rest}
+      with {:ok, rest} <- expect(rest, :lbrace),
+           {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+           {:ok, rest} <- expect(rest, :rbrace) do
+        {else_body, rest} = parse_optional_else(rest)
+
+        {:ok,
+         %AST.If{
+           condition: condition,
+           guard: guard,
+           body: Enum.reverse(body),
+           else_body: else_body,
+           line: line
+         }, rest}
+      end
     end
   end
 

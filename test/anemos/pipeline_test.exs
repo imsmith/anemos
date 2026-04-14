@@ -152,4 +152,83 @@ defmodule Anemos.PipelineTest do
     assert length(results) == 1
     assert [%{module: "FILE", verb: "write", args: ["/tmp/log", "changed"]}] = results
   end
+
+  test "end-to-end: for loop with return exits early" do
+    input = """
+    rule scan {
+      when SCAN {
+        for item in ?items {
+          if @item == "stop" {
+            return
+          }
+          log @item
+        }
+      }
+    }
+    """
+
+    context = %{context_data: %{"items" => ["a", "b", "stop", "c"]}}
+    {:ok, results} = Anemos.run(input, event: "SCAN", context: context)
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == ["a", "b"]
+  end
+
+  test "end-to-end: nextevent chains within same rule" do
+    input = """
+    rule pipeline {
+      when START {
+        log "phase-1"
+        nextevent PHASE_TWO
+      }
+
+      when PHASE_TWO {
+        log "phase-2"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "START")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert "phase-1" in log_values
+    assert "phase-2" in log_values
+  end
+
+  test "end-to-end: while loop with set tracks state" do
+    input = """
+    rule accumulate {
+      when TICK {
+        set total = 0
+        set i = 1
+        while $i <= 5 {
+          set total = $total + $i
+          set i = $i + 1
+        }
+        log $total
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "TICK")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == [15]
+  end
+
+  test "end-to-end: nested for and if with commands" do
+    input = """
+    rule process {
+      when BATCH {
+        for item in ?items {
+          if @item != "skip" {
+            [FILE::write @item "processed"]
+          }
+        }
+      }
+    }
+    """
+
+    context = %{context_data: %{"items" => ["a", "skip", "b"]}}
+    {:ok, results} = Anemos.run(input, event: "BATCH", context: context)
+    commands = for %{module: "FILE", verb: "write", args: args} <- results, do: args
+    assert commands == [["a", "processed"], ["b", "processed"]]
+  end
 end

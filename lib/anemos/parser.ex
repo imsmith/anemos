@@ -441,6 +441,11 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :at} | rest]), do: parse_at(rest)
   defp parse_statement([{:keyword, _, :context} | rest]), do: parse_context(rest)
   defp parse_statement([{:lbracket, _, _} | _] = tokens), do: parse_command_statement(tokens)
+  defp parse_statement([{:keyword, _, :while} | rest]), do: parse_while(rest)
+  defp parse_statement([{:keyword, _, :for} | rest]), do: parse_for(rest)
+  defp parse_statement([{:keyword, _, :each} | rest]), do: parse_each(rest)
+  defp parse_statement([{:keyword, _, :every} | rest]), do: parse_each(rest)
+  defp parse_statement([{:keyword, _, :foreach} | rest]), do: parse_foreach(rest)
 
   defp parse_statement([{type, meta, _} | _]) do
     {:error, "Unexpected token #{type} on line #{meta[:line]}, expected statement"}
@@ -754,6 +759,95 @@ defmodule Anemos.Parser do
   end
 
   defp parse_optional_else(tokens), do: {nil, tokens}
+
+  # --- While ---
+
+  defp parse_while(tokens) do
+    line = token_line(hd(tokens))
+
+    with {:ok, condition, rest} <- parse_expression(tokens),
+         {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.While{condition: condition, body: Enum.reverse(body), line: line}, rest}
+    end
+  end
+
+  # --- For ---
+
+  defp parse_for(tokens) do
+    line = token_line(hd(tokens))
+
+    case tokens do
+      [{:identifier, _, var}, {:word_operator, _, :in} | rest] ->
+        with {:ok, iterable, rest} <- parse_expression(rest),
+             {:ok, rest} <- expect(rest, :lbrace),
+             {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+             {:ok, rest} <- expect(rest, :rbrace) do
+          {:ok, %AST.For{var: var, iterable: iterable, body: Enum.reverse(body), keyword: :for, line: line}, rest}
+        end
+
+      [{_, meta, _} | _] ->
+        {:error, "Expected 'for <var> in <expr>' on line #{meta[:line]}"}
+
+      [] ->
+        {:error, "Expected 'for <var> in <expr>' but got end of input"}
+    end
+  end
+
+  # --- Each / Every ---
+
+  defp parse_each(tokens) do
+    line = token_line(hd(tokens))
+
+    case tokens do
+      [{:identifier, _, var}, {:word_operator, _, :in} | rest] ->
+        with {:ok, iterable, rest} <- parse_expression(rest),
+             {:ok, rest} <- expect(rest, :lbrace),
+             {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+             {:ok, rest} <- expect(rest, :rbrace) do
+          {:ok, %AST.For{var: var, iterable: iterable, body: Enum.reverse(body), keyword: :each, line: line}, rest}
+        end
+
+      [{:identifier, _, var}, {:lbrace, _, _} | _] = all ->
+        [{:identifier, _, _} | rest] = all
+
+        with {:ok, rest} <- expect(rest, :lbrace),
+             {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+             {:ok, rest} <- expect(rest, :rbrace) do
+          {:ok, %AST.For{var: var, iterable: nil, body: Enum.reverse(body), keyword: :each, line: line}, rest}
+        end
+
+      [{_, meta, _} | _] ->
+        {:error, "Expected 'each <var> [in <expr>]' on line #{meta[:line]}"}
+
+      [] ->
+        {:error, "Expected 'each <var>' but got end of input"}
+    end
+  end
+
+  # --- Foreach ---
+
+  defp parse_foreach(tokens) do
+    line = token_line(hd(tokens))
+
+    case tokens do
+      [{:module_id, meta, mod}, {:double_colon, _, _} | rest] ->
+        with {:ok, verb, rest} <- parse_command_verb(rest),
+             {:ok, rest} <- expect(rest, :lbrace),
+             {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+             {:ok, rest} <- expect(rest, :rbrace) do
+          cmd = %AST.Command{module: mod, verb: verb, args: [], line: meta[:line]}
+          {:ok, %AST.For{var: "item", iterable: cmd, body: Enum.reverse(body), keyword: :foreach, line: line}, rest}
+        end
+
+      [{_, meta, _} | _] ->
+        {:error, "Expected 'foreach MODULE::verb' on line #{meta[:line]}"}
+
+      [] ->
+        {:error, "Expected 'foreach MODULE::verb' but got end of input"}
+    end
+  end
 
   # --- Command statement (top-level command as statement) ---
 

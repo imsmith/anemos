@@ -121,31 +121,38 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def handle_call({:dispatch, event_name, context}, _from, state) do
-    # Route event to all condition servers (async cast)
-    Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
-      ConditionServer.handle_event(pid, event_name, context)
-    end)
+    comn_ctx = build_comn_context(event_name, context)
 
-    # Synchronize: call get_state on each condition server to ensure all casts
-    # have been processed before we drain the transition messages from our mailbox.
-    Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
-      ConditionServer.get_state(pid)
-    end)
+    {results, state} =
+      Comn.Contexts.with_context(comn_ctx, fn ->
+        # Route event to all condition servers (async cast)
+        Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
+          ConditionServer.handle_event(pid, event_name, context)
+        end)
 
-    # Collect any condition transition messages now in our mailbox
-    synthetic_events = collect_transitions()
+        # Synchronize: call get_state on each condition server to ensure all casts
+        # have been processed before we drain the transition messages from our mailbox.
+        Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
+          ConditionServer.get_state(pid)
+        end)
 
-    # Dispatch original event to matching rules
-    {results, state} = dispatch_to_rules(event_name, context, state)
+        # Collect any condition transition messages now in our mailbox
+        synthetic_events = collect_transitions()
 
-    # Dispatch synthetic CONDITION_<name> events to matching rules
-    {synthetic_results, state} =
-      Enum.reduce(synthetic_events, {[], state}, fn cond_name, {acc, st} ->
-        {res, st} = dispatch_to_rules("CONDITION_#{cond_name}", context, st)
-        {acc ++ res, st}
+        # Dispatch original event to matching rules
+        {results, state} = dispatch_to_rules(event_name, context, state)
+
+        # Dispatch synthetic CONDITION_<name> events to matching rules
+        {synthetic_results, state} =
+          Enum.reduce(synthetic_events, {[], state}, fn cond_name, {acc, st} ->
+            {res, st} = dispatch_to_rules("CONDITION_#{cond_name}", context, st)
+            {acc ++ res, st}
+          end)
+
+        {results ++ synthetic_results, state}
       end)
 
-    {:reply, results ++ synthetic_results, state}
+    {:reply, results, state}
   end
 
   @impl true
@@ -217,6 +224,23 @@ defmodule Anemos.Runtime.Dispatcher do
     # Transition messages are drained synchronously during dispatch;
     # any that arrive outside a dispatch cycle are silently ignored.
     {:noreply, state}
+  end
+
+  defp build_comn_context(event_name, context) do
+    fields = [
+      request_id: Map.get(context, :request_id, generate_request_id()),
+      parent_event_id: event_name,
+      correlation_id: Map.get(context, :correlation_id),
+      trace_id: Map.get(context, :trace_id),
+      actor: Map.get(context, :actor),
+      metadata: %{context_path: Map.get(context, :context_path)}
+    ]
+
+    Comn.Contexts.ContextStruct.new(fields)
+  end
+
+  defp generate_request_id do
+    :crypto.strong_rand_bytes(8) |> Base.hex_encode32(case: :lower, padding: false)
   end
 
   # --- Comn callbacks ---

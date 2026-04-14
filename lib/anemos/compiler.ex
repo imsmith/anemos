@@ -381,6 +381,44 @@ defmodule Anemos.Compiler do
     eval_body(body, context, bindings)
   end
 
+  @while_limit 10_000
+
+  defp eval_statement(%AST.While{condition: condition, body: body}, context, bindings) do
+    eval_while(condition, body, context, bindings, [], 0)
+  end
+
+  defp eval_while(_condition, _body, _context, bindings, ops_acc, iteration)
+       when iteration >= @while_limit do
+    {ops_acc, bindings}
+  end
+
+  defp eval_while(condition, body, context, bindings, ops_acc, iteration) do
+    if eval_condition(condition, context, bindings) do
+      {new_ops, new_bindings} = eval_body(body, context, bindings)
+      eval_while(condition, body, context, new_bindings, ops_acc ++ new_ops, iteration + 1)
+    else
+      {ops_acc, bindings}
+    end
+  end
+
+  defp eval_statement(%AST.For{var: var, iterable: iterable, body: body}, context, bindings) do
+    collection = resolve_iterable(iterable, context, bindings)
+
+    Enum.reduce(collection, {[], bindings}, fn item, {ops_acc, bindings_acc} ->
+      iter_bindings = Map.put(bindings_acc, {:let, var}, item)
+      {new_ops, new_bindings} = eval_body(body, context, iter_bindings)
+      cleaned = Map.delete(new_bindings, {:let, var})
+      {ops_acc ++ new_ops, cleaned}
+    end)
+  end
+
+  defp resolve_iterable(nil, _context, _bindings), do: []
+
+  defp resolve_iterable(expr, context, bindings) do
+    result = resolve_expr(expr, context, bindings)
+    List.wrap(result)
+  end
+
   defp eval_statement(_other, _context, bindings) do
     {[], bindings}
   end

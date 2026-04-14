@@ -430,10 +430,13 @@ defmodule Anemos.Compiler do
 
   defp eval_statement(%AST.For{var: var, iterable: iterable, body: body}, context, bindings) do
     collection = resolve_iterable(iterable, context, bindings)
+    outer_ops = Process.get(:anemos_accumulated_ops, [])
 
     Enum.reduce(collection, {[], bindings}, fn item, {ops_acc, bindings_acc} ->
+      Process.put(:anemos_accumulated_ops, outer_ops ++ ops_acc)
       iter_bindings = Map.put(bindings_acc, {:let, var}, item)
       {new_ops, new_bindings} = eval_body(body, context, iter_bindings)
+      Process.put(:anemos_accumulated_ops, outer_ops)
       cleaned = Map.delete(new_bindings, {:let, var})
       {ops_acc ++ new_ops, cleaned}
     end)

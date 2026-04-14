@@ -161,6 +161,26 @@ defmodule Anemos.FlowControlTest do
     assert log_values == [1, 2]
   end
 
+  test "return inside for loop exits the handler" do
+    input = """
+    rule r {
+      when EV {
+        for item in ?items {
+          if @item == 2 {
+            return
+          }
+          log @item
+        }
+      }
+    }
+    """
+
+    context = %{context_data: %{"items" => [1, 2, 3]}}
+    {:ok, results} = Anemos.run(input, event: "EV", context: context)
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == [1]
+  end
+
   test "parses nextrule with target" do
     input = """
     rule r {

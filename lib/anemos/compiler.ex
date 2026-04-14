@@ -56,6 +56,7 @@ defmodule Anemos.Compiler do
   Supported statement types: `let`, `set`, `log`, `emit`, `demand`, `if`,
   `while`, `for`/`each`/`every`/`foreach`, `return`, `done`, `nextevent`,
   `nextrule`, `context`, commands (`[MODULE::verb ...]`), and triple patterns.
+  Guard modifiers (`unless`, `until`) on `when`, `if`, and `at` blocks.
 
   ## Examples
 

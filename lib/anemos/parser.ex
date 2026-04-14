@@ -8,6 +8,7 @@ defmodule Anemos.Parser do
   Supported declarations: `rule`, `condition`, `capability`.
 
   Supported trigger blocks: `when`, `if`, `at`, `context`.
+  Guard modifiers: `unless`, `until` (on `when`, `if`, `at`).
 
   Supported statements: `let`, `set`, `log`, `emit`, `demand`,
   `while`, `for`, `each`, `every`, `foreach`,

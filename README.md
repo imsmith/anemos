@@ -206,6 +206,22 @@ and which capabilities are reachable.
 
 Events are broadcast freely — contexts self-select what's relevant.
 
+### Guards
+
+Guard modifiers on trigger blocks (`when`, `if`, `at`):
+
+```
+; Skip block if expression is truthy
+when SENSOR_MOTION unless $disabled { ... }
+
+; Fire only until expression becomes true, then stop permanently
+when ALERT until $acknowledged { ... }
+```
+
+`unless` is stateless — evaluated fresh each time. `until` is stateful —
+once the expression becomes true, the block never fires again (persists
+across firings via `set` bindings).
+
 ### Variables
 
 Three sigils, two binding keywords:
@@ -464,7 +480,8 @@ Conditions, capabilities, demand gating, context filtering, variable binding,
 emit re-dispatch, scheduled `at` triggers, triple patterns, full operator
 precedence (14 levels), channel connectors with message envelopes, NLD
 natural language dates, loops (`while`, `for`, `each`, `every`, `foreach`),
-flow control (`return`, `done`, `nextevent`, `nextrule`), Logger integration,
+flow control (`return`, `done`, `nextevent`, `nextrule`),
+guard modifiers (`unless`, `until`), Logger integration,
 `Anemos.Module` macro, and `Anemos.Event` protocol all work end-to-end.
 Module backends are stubs — bring your own implementations.
 

@@ -446,6 +446,10 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :each} | rest]), do: parse_each(rest)
   defp parse_statement([{:keyword, _, :every} | rest]), do: parse_each(rest)
   defp parse_statement([{:keyword, _, :foreach} | rest]), do: parse_foreach(rest)
+  defp parse_statement([{:keyword, _, :return} | rest]), do: parse_return(rest)
+  defp parse_statement([{:keyword, _, :done} | rest]), do: parse_done(rest)
+  defp parse_statement([{:keyword, _, :nextevent} | rest]), do: parse_nextevent(rest)
+  defp parse_statement([{:keyword, _, :nextrule} | rest]), do: parse_nextrule(rest)
 
   defp parse_statement([{type, meta, _} | _]) do
     {:error, "Unexpected token #{type} on line #{meta[:line]}, expected statement"}
@@ -847,6 +851,76 @@ defmodule Anemos.Parser do
       [] ->
         {:error, "Expected 'foreach MODULE::verb' but got end of input"}
     end
+  end
+
+  # --- Return ---
+
+  defp parse_return([{:rbrace, _, _} | _] = tokens) do
+    line = token_line(hd(tokens))
+    {:ok, %AST.Return{value: nil, line: line}, tokens}
+  end
+
+  defp parse_return([{:keyword, _, next_kw} | _] = tokens)
+       when next_kw in [:when, :if, :at, :let, :set, :log, :emit, :demand, :return, :done,
+                        :nextevent, :nextrule, :while, :for, :each, :every, :foreach, :else, :elseif] do
+    line = token_line(hd(tokens))
+    {:ok, %AST.Return{value: nil, line: line}, tokens}
+  end
+
+  defp parse_return(tokens) do
+    line = token_line(hd(tokens))
+
+    case parse_expression(tokens) do
+      {:ok, expr, rest} ->
+        {:ok, %AST.Return{value: expr, line: line}, rest}
+
+      {:error, _} ->
+        {:ok, %AST.Return{value: nil, line: line}, tokens}
+    end
+  end
+
+  # --- Done ---
+
+  defp parse_done(tokens) do
+    line =
+      case tokens do
+        [{_, meta, _} | _] -> meta[:line]
+        [] -> nil
+      end
+
+    {:ok, %AST.Done{line: line}, tokens}
+  end
+
+  # --- NextEvent ---
+
+  defp parse_nextevent([{:module_id, meta, target} | rest]) do
+    {:ok, %AST.NextEvent{target: target, args: nil, line: meta[:line]}, rest}
+  end
+
+  defp parse_nextevent([{:identifier, meta, target} | rest]) do
+    {:ok, %AST.NextEvent{target: target, args: nil, line: meta[:line]}, rest}
+  end
+
+  defp parse_nextevent([{_, meta, _} | _]) do
+    {:error, "Expected event target after 'nextevent' on line #{meta[:line]}"}
+  end
+
+  defp parse_nextevent([]) do
+    {:error, "Expected event target after 'nextevent' but got end of input"}
+  end
+
+  # --- NextRule ---
+
+  defp parse_nextrule([{:identifier, meta, target} | rest]) do
+    {:ok, %AST.NextRule{target: target, args: nil, line: meta[:line]}, rest}
+  end
+
+  defp parse_nextrule([{_, meta, _} | _]) do
+    {:error, "Expected rule name after 'nextrule' on line #{meta[:line]}"}
+  end
+
+  defp parse_nextrule([]) do
+    {:error, "Expected rule name after 'nextrule' but got end of input"}
   end
 
   # --- Command statement (top-level command as statement) ---

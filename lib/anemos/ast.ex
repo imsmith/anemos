@@ -173,4 +173,46 @@ defmodule Anemos.AST do
     @type t :: %__MODULE__{pairs: list(), line: non_neg_integer() | nil}
     defstruct [:pairs, :line]
   end
+
+  defmodule While do
+    @moduledoc "A `while` loop: repeats body while condition is truthy."
+    @enforce_keys []
+    @type t :: %__MODULE__{condition: term(), body: list(), line: non_neg_integer() | nil}
+    defstruct [:condition, :body, :line]
+  end
+
+  defmodule For do
+    @moduledoc "A `for` loop: iterates `var` over `iterable`, executing body each time. Covers `for`, `each`, `every`, `foreach`."
+    @enforce_keys []
+    @type t :: %__MODULE__{var: String.t() | nil, iterable: term(), body: list(), keyword: atom() | nil, line: non_neg_integer() | nil}
+    defstruct [:var, :iterable, :body, :keyword, :line]
+  end
+
+  defmodule Return do
+    @moduledoc "A `return` statement: exits the current handler, optionally with a value."
+    @enforce_keys []
+    @type t :: %__MODULE__{value: term(), line: non_neg_integer() | nil}
+    defstruct [:value, :line]
+  end
+
+  defmodule Done do
+    @moduledoc "A `done` statement: exits the current handler with no value."
+    @enforce_keys []
+    @type t :: %__MODULE__{line: non_neg_integer() | nil}
+    defstruct [:line]
+  end
+
+  defmodule NextEvent do
+    @moduledoc "A `nextevent` statement: transitions to another `when` block within the same rule."
+    @enforce_keys []
+    @type t :: %__MODULE__{target: String.t() | nil, args: map() | nil, line: non_neg_integer() | nil}
+    defstruct [:target, :args, :line]
+  end
+
+  defmodule NextRule do
+    @moduledoc "A `nextrule` statement: dispatches to a different rule's pipeline."
+    @enforce_keys []
+    @type t :: %__MODULE__{target: String.t() | nil, args: map() | nil, line: non_neg_integer() | nil}
+    defstruct [:target, :args, :line]
+  end
 end

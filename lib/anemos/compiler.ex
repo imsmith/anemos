@@ -226,9 +226,9 @@ defmodule Anemos.Compiler do
 
   # --- Compile a single at block into {schedule, rule} ---
 
-  defp compile_at_block(%AST.At{time_spec: time_spec, body: body}, compiled_meta) do
+  defp compile_at_block(%AST.At{time_spec: time_spec, body: body, guard: guard}, compiled_meta) do
     {event_name, parsed_spec, recurrence} = at_spec_to_event(time_spec)
-    handler = build_handler(body)
+    handler = build_guarded_handler(body, guard)
     context_path = Map.get(compiled_meta, :context_path)
 
     schedule = %Anemos.CompiledSchedule{
@@ -464,59 +464,42 @@ defmodule Anemos.Compiler do
     eval_while(condition, body, context, bindings, [], 0)
   end
 
-  defp eval_while(_condition, _body, _context, bindings, ops_acc, iteration)
-       when iteration >= @while_limit do
-    {ops_acc, bindings}
-  end
-
-  defp eval_while(condition, body, context, bindings, ops_acc, iteration) do
-    if eval_condition(condition, context, bindings) do
-      # Process dict: include while-loop accumulated ops so throw captures them
-      outer = Process.get(:anemos_accumulated_ops, []) # Process dict: save outer
-      Process.put(:anemos_accumulated_ops, outer ++ ops_acc) # Process dict: set loop ops
-      {new_ops, new_bindings} = eval_body(body, context, bindings)
-      # Process dict: restore to pre-while-iteration state
-      Process.put(:anemos_accumulated_ops, outer)
-      eval_while(condition, body, context, new_bindings, ops_acc ++ new_ops, iteration + 1)
-    else
-      {ops_acc, bindings}
-    end
-  end
-
+  # Process dict: snapshot ops before each for-loop iteration so throw/catch
+  # early exit (return/done) captures results from prior iterations.
   defp eval_statement(%AST.For{var: var, iterable: iterable, body: body}, context, bindings) do
     collection = resolve_iterable(iterable, context, bindings)
+    # Process dict: save outer accumulated ops for restore after iteration
     outer_ops = Process.get(:anemos_accumulated_ops, [])
 
     Enum.reduce(collection, {[], bindings}, fn item, {ops_acc, bindings_acc} ->
+      # Process dict: include prior iteration ops so throw captures them
       Process.put(:anemos_accumulated_ops, outer_ops ++ ops_acc)
       iter_bindings = Map.put(bindings_acc, {:let, var}, item)
       {new_ops, new_bindings} = eval_body(body, context, iter_bindings)
+      # Process dict: restore to pre-iteration state
       Process.put(:anemos_accumulated_ops, outer_ops)
       cleaned = Map.delete(new_bindings, {:let, var})
       {ops_acc ++ new_ops, cleaned}
     end)
   end
 
-  defp resolve_iterable(nil, _context, _bindings), do: []
-
-  defp resolve_iterable(expr, context, bindings) do
-    result = resolve_expr(expr, context, bindings)
-    List.wrap(result)
-  end
-
+  # Flow control throws: each captures the accumulated ops snapshot from the
+  # process dict so build_handler's catch clause can return them. See the
+  # comment on eval_body for why the process dict is used here.
   defp eval_statement(%AST.Return{}, _context, bindings) do
-    # Process dict: retrieve accumulated ops snapshot for throw
+    # Process dict: snapshot ops accumulated so far for early exit
     ops = Process.get(:anemos_accumulated_ops, [])
     throw({:anemos_return, ops, bindings})
   end
 
   defp eval_statement(%AST.Done{}, _context, bindings) do
-    # Process dict: retrieve accumulated ops snapshot for throw
+    # Process dict: snapshot ops accumulated so far for early exit
     ops = Process.get(:anemos_accumulated_ops, [])
     throw({:anemos_done, ops, bindings})
   end
 
   defp eval_statement(%AST.NextEvent{target: target}, _context, bindings) do
+    # Process dict: snapshot ops accumulated so far for early exit
     ops = Process.get(:anemos_accumulated_ops, [])
     throw({:anemos_nextevent, target, ops, bindings})
   end
@@ -527,12 +510,45 @@ defmodule Anemos.Compiler do
         Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
       _ -> nil
     end
+    # Process dict: snapshot ops accumulated so far for early exit
     ops = Process.get(:anemos_accumulated_ops, [])
     throw({:anemos_nextrule, target, resolved_args, ops, bindings})
   end
 
   defp eval_statement(_other, _context, bindings) do
     {[], bindings}
+  end
+
+  # --- While loop helpers ---
+
+  defp eval_while(_condition, _body, _context, bindings, ops_acc, iteration)
+       when iteration >= @while_limit do
+    {ops_acc, bindings}
+  end
+
+  # Process dict: snapshot loop-accumulated ops before each iteration so
+  # throw/catch early exit (return/done) captures results from prior iterations.
+  defp eval_while(condition, body, context, bindings, ops_acc, iteration) do
+    if eval_condition(condition, context, bindings) do
+      # Process dict: save outer state, set loop ops for throw capture
+      outer = Process.get(:anemos_accumulated_ops, [])
+      Process.put(:anemos_accumulated_ops, outer ++ ops_acc)
+      {new_ops, new_bindings} = eval_body(body, context, bindings)
+      # Process dict: restore to pre-iteration state
+      Process.put(:anemos_accumulated_ops, outer)
+      eval_while(condition, body, context, new_bindings, ops_acc ++ new_ops, iteration + 1)
+    else
+      {ops_acc, bindings}
+    end
+  end
+
+  # --- For loop helpers ---
+
+  defp resolve_iterable(nil, _context, _bindings), do: []
+
+  defp resolve_iterable(expr, context, bindings) do
+    result = resolve_expr(expr, context, bindings)
+    List.wrap(result)
   end
 
   # --- Expression resolution ---

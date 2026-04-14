@@ -368,6 +368,25 @@ defmodule Anemos.Runtime.Dispatcher do
     {:ok, %{type: :triple_result, query: op, results: results}}
   end
 
+  defp execute_op(%{type: :nextevent, target: target}, context, state) do
+    {results, _state} = dispatch_to_rules(target, context, state)
+    results
+  end
+
+  defp execute_op(%{type: :nextrule, target: target}, context, state) do
+    matching = Enum.filter(state.rules, fn rule -> rule.name == target end)
+
+    Enum.flat_map(matching, fn rule ->
+      persistent = Map.get(state.rule_bindings, rule.name, %{})
+      case safe_handle(rule, "nextrule:#{target}", context, persistent) do
+        {:ok, ops, _new_persistent} ->
+          Enum.flat_map(ops, fn op -> List.wrap(execute_op(op, context, state)) end)
+        {:error, reason} ->
+          [{:error, {:handler_crash, rule.name, reason}}]
+      end
+    end)
+  end
+
   defp triple_query_pattern({:var, _} = var), do: var
   defp triple_query_pattern(literal), do: literal
 end

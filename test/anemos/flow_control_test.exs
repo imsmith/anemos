@@ -181,6 +181,74 @@ defmodule Anemos.FlowControlTest do
     assert log_values == [1]
   end
 
+  # --- Dispatcher integration tests ---
+
+  test "nextevent re-enters same rule at different when block" do
+    input = """
+    rule multi {
+      when START {
+        log "start"
+        nextevent STEP_TWO
+      }
+
+      when STEP_TWO {
+        log "step two"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "START")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert "start" in log_values
+    assert "step two" in log_values
+  end
+
+  test "nextrule dispatches to another rule by name" do
+    input = """
+    rule first {
+      when EV {
+        log "first"
+        nextrule second
+      }
+    }
+
+    rule second {
+      when OTHER {
+        log "second"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "EV")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert "first" in log_values
+    assert "second" in log_values
+  end
+
+  test "nextrule stops executing current handler" do
+    input = """
+    rule first {
+      when EV {
+        log "before"
+        nextrule second
+        log "after-nextrule"
+      }
+    }
+
+    rule second {
+      when OTHER {
+        log "second"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "EV")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert "before" in log_values
+    assert "second" in log_values
+    refute "after-nextrule" in log_values
+  end
+
   test "parses nextrule with target" do
     input = """
     rule r {

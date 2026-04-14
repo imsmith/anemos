@@ -461,6 +461,21 @@ defmodule Anemos.Compiler do
     throw({:anemos_done, ops, bindings})
   end
 
+  defp eval_statement(%AST.NextEvent{target: target}, _context, bindings) do
+    ops = Process.get(:anemos_accumulated_ops, [])
+    throw({:anemos_nextevent, target, ops, bindings})
+  end
+
+  defp eval_statement(%AST.NextRule{target: target, args: args}, context, bindings) do
+    resolved_args = case args do
+      %AST.BlockArgs{pairs: pairs} ->
+        Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
+      _ -> nil
+    end
+    ops = Process.get(:anemos_accumulated_ops, [])
+    throw({:anemos_nextrule, target, resolved_args, ops, bindings})
+  end
+
   defp eval_statement(_other, _context, bindings) do
     {[], bindings}
   end

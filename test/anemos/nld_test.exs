@@ -12,20 +12,20 @@ defmodule Anemos.NLDTest do
 
   test "resolves today" do
     {:ok, dt} = NLD.resolve("today")
-    today = Date.utc_today()
+    today = NaiveDateTime.local_now() |> NaiveDateTime.to_date()
     assert NaiveDateTime.to_date(dt) == today
     assert dt.hour == 0 and dt.minute == 0 and dt.second == 1
   end
 
   test "resolves tomorrow" do
     {:ok, dt} = NLD.resolve("tomorrow")
-    tomorrow = Date.add(Date.utc_today(), 1)
+    tomorrow = NaiveDateTime.local_now() |> NaiveDateTime.to_date() |> Date.add(1)
     assert NaiveDateTime.to_date(dt) == tomorrow
   end
 
   test "resolves yesterday" do
     {:ok, dt} = NLD.resolve("yesterday")
-    yesterday = Date.add(Date.utc_today(), -1)
+    yesterday = NaiveDateTime.local_now() |> NaiveDateTime.to_date() |> Date.add(-1)
     assert NaiveDateTime.to_date(dt) == yesterday
   end
 

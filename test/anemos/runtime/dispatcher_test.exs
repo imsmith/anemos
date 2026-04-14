@@ -175,7 +175,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, dispatcher} = Dispatcher.start_link(rules: [crash_rule], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "CRASH_EVENT")
-    assert [{:error, {:handler_crash, "crash-rule", _}}] = results
+    assert [{:error, %Comn.Errors.ErrorStruct{code: "anemos.runtime/handler_crash"}}] = results
 
     # Dispatcher still alive
     assert Process.alive?(dispatcher)

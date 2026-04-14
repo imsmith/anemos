@@ -303,7 +303,9 @@ defmodule Anemos.Runtime.Dispatcher do
           {results_acc ++ normal_results ++ emit_results, new_st}
 
         {:error, reason} ->
-          {results_acc ++ [{:error, {:handler_crash, rule.name, reason}}], st}
+          err = Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
+            message: "Rule #{rule.name} raised: #{inspect(reason)}")
+          {results_acc ++ [{:error, err}], st}
       end
     end)
   end
@@ -358,7 +360,9 @@ defmodule Anemos.Runtime.Dispatcher do
   defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state) do
     case ModuleRegistry.lookup(state.registry, mod_name) do
       {:ok, mod} -> mod.handle_verb(verb, args, context)
-      :error -> {:error, {:unknown_module, mod_name}}
+      :error ->
+        {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
+          message: "Module #{mod_name} not found in registry")}
     end
   end
 

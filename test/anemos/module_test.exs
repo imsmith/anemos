@@ -28,7 +28,7 @@ defmodule Anemos.ModuleTest do
   end
 
   test "unknown verb returns error" do
-    assert {:error, {:unknown_verb, "SECRET", "nonexistent"}} =
+    assert {:error, %Comn.Errors.ErrorStruct{code: "anemos.runtime/unknown_verb"}} =
              TestSecret.handle_verb("nonexistent", [], %{})
   end
 

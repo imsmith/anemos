@@ -76,7 +76,7 @@ defmodule Anemos.RuntimeTest do
 
     # Before registering module, command fails
     {:ok, results} = Anemos.Runtime.dispatch(:test_dynmod, "EV")
-    assert [{:error, {:unknown_module, "DEVICE"}}] = results
+    assert [{:error, %Comn.Errors.ErrorStruct{code: "anemos.runtime/unknown_module"}}] = results
 
     # Register module, now it works
     Anemos.Runtime.register(:test_dynmod, "DEVICE", Anemos.Runtime.Modules.Device)

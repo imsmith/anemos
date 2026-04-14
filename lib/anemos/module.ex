@@ -85,7 +85,8 @@ defmodule Anemos.Module do
 
       @impl Anemos.Runtime.Module
       def handle_verb(verb, _args, _context) do
-        {:error, {:unknown_verb, unquote(name), verb}}
+        {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_verb",
+          message: "Verb #{verb} not found on module #{unquote(name)}")}
       end
 
       @impl Comn

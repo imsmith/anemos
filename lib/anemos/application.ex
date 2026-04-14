@@ -7,13 +7,13 @@ defmodule Anemos.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # Starts a worker by calling: Anemos.Worker.start_link(arg)
-      # {Anemos.Worker, arg}
-    ]
+    # Re-discover Comn registries now that Anemos modules are loaded
+    Code.ensure_loaded!(Anemos.Runtime.Errors)
+    Comn.Errors.Registry.discover()
+    Comn.Discovery.discover()
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
+    children = []
+
     opts = [strategy: :one_for_one, name: Anemos.Supervisor]
     Supervisor.start_link(children, opts)
   end

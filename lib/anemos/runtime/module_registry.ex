@@ -6,6 +6,8 @@ defmodule Anemos.Runtime.ModuleRegistry do
 
   use Agent
 
+  @behaviour Comn
+
   @doc """
   Starts a module registry.
 
@@ -45,4 +47,26 @@ defmodule Anemos.Runtime.ModuleRegistry do
       mod -> {:ok, mod}
     end
   end
+
+  # --- Comn callbacks ---
+
+  @impl Comn
+  def look, do: "ModuleRegistry — maps DSL module names to Elixir modules"
+
+  @impl Comn
+  def recon do
+    %{
+      type: :implementation,
+      api: [:register, :lookup]
+    }
+  end
+
+  @impl Comn
+  def choices do
+    %{actions: ["register", "lookup"]}
+  end
+
+  @impl Comn
+  def act(%{action: :lookup, registry: reg, name: name}), do: {:ok, lookup(reg, name)}
+  def act(_input), do: {:error, :unknown_action}
 end

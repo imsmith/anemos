@@ -31,6 +31,8 @@ defmodule Anemos.Runtime do
 
   use Supervisor
 
+  @behaviour Comn
+
   alias Anemos.Runtime.{ContextStore, Dispatcher, ModuleRegistry, Scheduler}
 
   @doc """
@@ -180,6 +182,31 @@ defmodule Anemos.Runtime do
 
     Supervisor.init(children, strategy: :one_for_one)
   end
+
+  # --- Comn callbacks ---
+
+  @impl Comn
+  def look, do: "Runtime — supervisable event-driven policy interpreter"
+
+  @impl Comn
+  def recon do
+    %{
+      type: :facade,
+      children: [:dispatcher, :module_registry, :context_store, :scheduler],
+      api: [:load, :register, :dispatch, :connect, :put_context, :condition_state]
+    }
+  end
+
+  @impl Comn
+  def choices do
+    %{actions: ["load", "register", "dispatch", "connect"]}
+  end
+
+  @impl Comn
+  def act(%{action: :dispatch, name: name, event: event, context: ctx}), do: dispatch(name, event, ctx)
+  def act(%{action: :dispatch, name: name, event: event}), do: dispatch(name, event)
+  def act(%{action: :load, name: name, source: source}), do: {:ok, load(name, source)}
+  def act(_input), do: {:error, :unknown_action}
 
   # --- Name helpers ---
 

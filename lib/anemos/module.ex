@@ -37,6 +37,7 @@ defmodule Anemos.Module do
 
     quote do
       @behaviour Anemos.Runtime.Module
+      @behaviour Comn
 
       Module.register_attribute(__MODULE__, :anemos_verb_names, accumulate: true)
       @anemos_name unquote(name)
@@ -69,6 +70,7 @@ defmodule Anemos.Module do
   defmacro __before_compile__(env) do
     name = Module.get_attribute(env.module, :anemos_name)
     verb_names = Module.get_attribute(env.module, :anemos_verb_names) |> Enum.reverse()
+    verb_strings = Enum.map(verb_names, &Atom.to_string/1)
 
     quote do
       @doc """
@@ -85,6 +87,28 @@ defmodule Anemos.Module do
       def handle_verb(verb, _args, _context) do
         {:error, {:unknown_verb, unquote(name), verb}}
       end
+
+      @impl Comn
+      def look, do: unquote(name) <> " — Anemos verb handler module"
+
+      @impl Comn
+      def recon do
+        %{
+          type: :implementation,
+          anemos_name: unquote(name),
+          verbs: unquote(verb_names)
+        }
+      end
+
+      @impl Comn
+      def choices do
+        %{verbs: unquote(verb_strings)}
+      end
+
+      @impl Comn
+      def act(%{verb: verb, args: args, context: ctx}), do: handle_verb(verb, args, ctx)
+      def act(%{verb: verb, args: args}), do: handle_verb(verb, args, %{})
+      def act(_input), do: {:error, :unknown_action}
     end
   end
 end

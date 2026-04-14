@@ -13,6 +13,8 @@ defmodule Anemos.Runtime.Dispatcher do
   use GenServer
   require Logger
 
+  @behaviour Comn
+
   alias Anemos.Runtime.{CapabilityServer, ConditionServer, ModuleRegistry, TripleStore}
 
   # --- Client API ---
@@ -216,6 +218,29 @@ defmodule Anemos.Runtime.Dispatcher do
     # any that arrive outside a dispatch cycle are silently ignored.
     {:noreply, state}
   end
+
+  # --- Comn callbacks ---
+
+  @impl Comn
+  def look, do: "Dispatcher — routes events to matching rules and executes operations"
+
+  @impl Comn
+  def recon do
+    %{
+      type: :implementation,
+      operations: [:command, :log, :emit, :demand, :assert_triple, :triple_query, :nextevent, :nextrule]
+    }
+  end
+
+  @impl Comn
+  def choices do
+    %{actions: ["dispatch", "load", "condition_state"]}
+  end
+
+  @impl Comn
+  def act(%{action: :dispatch, pid: pid, event: event, context: ctx}), do: {:ok, dispatch(pid, event, ctx)}
+  def act(%{action: :dispatch, pid: pid, event: event}), do: {:ok, dispatch(pid, event)}
+  def act(_input), do: {:error, :unknown_action}
 
   # --- Private ---
 

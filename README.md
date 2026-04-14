@@ -219,6 +219,51 @@ Three sigils, two binding keywords:
 The keyword determines the kind: `let fqdn = ?fqdn` creates `@fqdn`.
 The sigil is how you read it back.
 
+### Loops
+
+Iterate over collections or repeat while a condition holds.
+
+```
+; Iterate a list
+for item in ?items {
+  log @item
+}
+
+; Repeat while condition is true (safety limit: 10,000 iterations)
+while $count > 0 {
+  log $count
+  set count = $count - 1
+}
+
+; each/every are aliases for for-in, foreach iterates module results
+each record { log @record }
+foreach FILE::list { log @item }
+```
+
+Loop variables are bound as `@var` (immutable, ephemeral). `$set` bindings
+inside loops persist across iterations.
+
+### Flow Control
+
+Control execution flow within and across rules.
+
+```
+; Early exit — stops the current handler
+return
+done
+
+; Transition to another when block in the same rule
+nextevent STEP_TWO
+
+; Dispatch to a different rule by name
+nextrule other-rule
+```
+
+`return` and `done` stop execution immediately — statements after them
+are not reached. `nextevent` re-dispatches within the same rule's when
+blocks. `nextrule` invokes another rule directly, bypassing event
+subscription matching.
+
 ### Scheduled Triggers
 
 `at` blocks are clock-driven event sources. They fire at specific times,
@@ -418,9 +463,10 @@ transition. `set` bindings persist across event firings.
 Conditions, capabilities, demand gating, context filtering, variable binding,
 emit re-dispatch, scheduled `at` triggers, triple patterns, full operator
 precedence (14 levels), channel connectors with message envelopes, NLD
-natural language dates, Logger integration, `Anemos.Module` macro, and
-`Anemos.Event` protocol all work end-to-end. Module backends are stubs —
-bring your own implementations.
+natural language dates, loops (`while`, `for`, `each`, `every`, `foreach`),
+flow control (`return`, `done`, `nextevent`, `nextrule`), Logger integration,
+`Anemos.Module` macro, and `Anemos.Event` protocol all work end-to-end.
+Module backends are stubs — bring your own implementations.
 
 ## Docs
 

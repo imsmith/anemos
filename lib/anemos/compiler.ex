@@ -53,6 +53,10 @@ defmodule Anemos.Compiler do
   returns `{:ok, [operation], updated_persistent_bindings}`.
   Persistent bindings hold `set` values that survive across firings.
 
+  Supported statement types: `let`, `set`, `log`, `emit`, `demand`, `if`,
+  `while`, `for`/`each`/`every`/`foreach`, `return`, `done`, `nextevent`,
+  `nextrule`, `context`, commands (`[MODULE::verb ...]`), and triple patterns.
+
   ## Examples
 
       iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { log \\"hi\\" } }")
@@ -62,6 +66,10 @@ defmodule Anemos.Compiler do
       iex> compiled.subscriptions
       ["EV"]
       iex> {:ok, [%{type: :log, value: "hi"}], %{}} = compiled.handler.("EV", %{}, %{})
+
+      iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { set i = 0 while $i < 3 { set i = $i + 1 } log $i } }")
+      iex> {:ok, %{rules: [compiled]}} = Anemos.Compiler.compile(ast)
+      iex> {:ok, [%{type: :log, value: 3}], _} = compiled.handler.("EV", %{}, %{})
   """
   # TODO: Add {:error, String.t()} return when the compiler needs to reject invalid AST.
   # For v0.1.0, the catch-all clauses silently drop unknown nodes.

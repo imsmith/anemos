@@ -4,7 +4,10 @@ defmodule Anemos.Runtime.Dispatcher do
 
   Dispatches events to matching rules, executes resulting operations
   via the ModuleRegistry. Also manages ConditionServer instances and
-  routes synthetic CONDITION_<name> events when conditions transition.
+  routes synthetic `CONDITION_<name>` events when conditions transition.
+
+  Handled operation types: `:command`, `:log`, `:emit`, `:demand`,
+  `:assert_triple`, `:triple_query`, `:nextevent`, `:nextrule`.
   """
 
   use GenServer

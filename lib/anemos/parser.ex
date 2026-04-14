@@ -4,6 +4,15 @@ defmodule Anemos.Parser do
 
   Consumes the token stream from `Anemos.Lexer.tokenize/1` and produces
   an `Anemos.AST.Program` struct.
+
+  Supported declarations: `rule`, `condition`, `capability`.
+
+  Supported trigger blocks: `when`, `if`, `at`, `context`.
+
+  Supported statements: `let`, `set`, `log`, `emit`, `demand`,
+  `while`, `for`, `each`, `every`, `foreach`,
+  `return`, `done`, `nextevent`, `nextrule`,
+  and `[MODULE::verb ...]` command expressions.
   """
 
   alias Anemos.AST

@@ -393,6 +393,72 @@ for expr <- ~w(today tomorrow next.wednesday next.week end.of.month next.year) d
 end
 ```
 
+## Loops and Flow Control
+
+Iterate over collections, repeat while conditions hold, and control execution flow.
+
+```elixir
+# for-in loop with early exit via return
+loop_source = """
+rule scan {
+  when SCAN {
+    for item in ?items {
+      if @item == "stop" {
+        return
+      }
+      log @item
+    }
+  }
+}
+"""
+
+context = %{context_data: %{"items" => ["alpha", "bravo", "stop", "charlie"]}}
+{:ok, results} = Anemos.run(loop_source, event: "SCAN", context: context)
+IO.puts("for-in with early return:")
+for %{type: :log, value: v} <- results, do: IO.puts("  #{v}")
+```
+
+```elixir
+# while loop accumulating state
+while_source = """
+rule accumulate {
+  when TICK {
+    set total = 0
+    set i = 1
+    while $i <= 5 {
+      set total = $total + $i
+      set i = $i + 1
+    }
+    log $total
+  }
+}
+"""
+
+{:ok, results} = Anemos.run(while_source, event: "TICK")
+IO.puts("while loop sum 1..5:")
+for %{type: :log, value: v} <- results, do: IO.puts("  #{v}")
+```
+
+```elixir
+# nextevent chains within the same rule
+chain_source = """
+rule pipeline {
+  when START {
+    log "phase-1"
+    nextevent PHASE_TWO
+  }
+
+  when PHASE_TWO {
+    log "phase-2"
+  }
+}
+"""
+
+{:ok, results} = Anemos.run(chain_source, event: "START")
+IO.puts("nextevent chain:")
+for %{type: :log, value: v} <- results, do: IO.puts("  #{v}")
+```
+
 ## Sandbox
 
 Write your own policy below and experiment.

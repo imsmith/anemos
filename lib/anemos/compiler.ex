@@ -279,7 +279,17 @@ defmodule Anemos.Compiler do
 
   defp build_handler(body) do
     fn _event_name, context, persistent_bindings ->
-      {ops, final_bindings} = eval_body(body, context, persistent_bindings)
+      {ops, final_bindings} =
+        try do
+          eval_body(body, context, persistent_bindings)
+        catch
+          {:anemos_return, ops, bindings} -> {ops, bindings}
+          {:anemos_done, ops, bindings} -> {ops, bindings}
+          {:anemos_nextevent, target, ops, bindings} ->
+            {ops ++ [%{type: :nextevent, target: target}], bindings}
+          {:anemos_nextrule, target, args, ops, bindings} ->
+            {ops ++ [%{type: :nextrule, target: target, args: args}], bindings}
+        end
 
       # Extract set bindings to persist across firings
       updated_persistent =
@@ -293,13 +303,25 @@ defmodule Anemos.Compiler do
 
   # --- Body evaluation ---
 
+  # Process dictionary (:anemos_accumulated_ops) is used intentionally here.
+  # When return/done throws to abort Enum.reduce, the in-flight accumulator
+  # is lost. The process dictionary lets the throw clause capture ops built
+  # so far. The key is saved/restored around each eval_body call so nested
+  # bodies (if/while) compose correctly.
   defp eval_body(statements, context, bindings) do
+    # Process dict: save previous ops for nested eval_body restore
+    prev_ops = Process.get(:anemos_accumulated_ops, [])
+
     {ops_rev, final_bindings} =
       Enum.reduce(statements, {[], bindings}, fn stmt, {ops_acc, bindings_acc} ->
+        # Process dict: snapshot current ops so throw can capture them
+        Process.put(:anemos_accumulated_ops, prev_ops ++ Enum.reverse(ops_acc))
         {new_ops, new_bindings} = eval_statement(stmt, context, bindings_acc)
         {Enum.reverse(new_ops) ++ ops_acc, new_bindings}
       end)
 
+    # Process dict: restore previous ops after body completes normally
+    Process.put(:anemos_accumulated_ops, prev_ops)
     {Enum.reverse(ops_rev), final_bindings}
   end
 
@@ -394,7 +416,12 @@ defmodule Anemos.Compiler do
 
   defp eval_while(condition, body, context, bindings, ops_acc, iteration) do
     if eval_condition(condition, context, bindings) do
+      # Process dict: include while-loop accumulated ops so throw captures them
+      outer = Process.get(:anemos_accumulated_ops, []) # Process dict: save outer
+      Process.put(:anemos_accumulated_ops, outer ++ ops_acc) # Process dict: set loop ops
       {new_ops, new_bindings} = eval_body(body, context, bindings)
+      # Process dict: restore to pre-while-iteration state
+      Process.put(:anemos_accumulated_ops, outer)
       eval_while(condition, body, context, new_bindings, ops_acc ++ new_ops, iteration + 1)
     else
       {ops_acc, bindings}
@@ -417,6 +444,18 @@ defmodule Anemos.Compiler do
   defp resolve_iterable(expr, context, bindings) do
     result = resolve_expr(expr, context, bindings)
     List.wrap(result)
+  end
+
+  defp eval_statement(%AST.Return{}, _context, bindings) do
+    # Process dict: retrieve accumulated ops snapshot for throw
+    ops = Process.get(:anemos_accumulated_ops, [])
+    throw({:anemos_return, ops, bindings})
+  end
+
+  defp eval_statement(%AST.Done{}, _context, bindings) do
+    # Process dict: retrieve accumulated ops snapshot for throw
+    ops = Process.get(:anemos_accumulated_ops, [])
+    throw({:anemos_done, ops, bindings})
   end
 
   defp eval_statement(_other, _context, bindings) do

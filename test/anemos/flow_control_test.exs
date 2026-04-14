@@ -87,6 +87,80 @@ defmodule Anemos.FlowControlTest do
     assert ne.target == "OTHER_HANDLER"
   end
 
+  # --- Compiler tests ---
+
+  test "return stops execution and discards subsequent ops" do
+    input = """
+    rule r {
+      when EV {
+        log "before"
+        return
+        log "after"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "EV")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == ["before"]
+  end
+
+  test "done stops execution" do
+    input = """
+    rule r {
+      when EV {
+        log "before"
+        done
+        log "after"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "EV")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == ["before"]
+  end
+
+  test "return inside if block exits the handler" do
+    input = """
+    rule r {
+      when EV {
+        if true {
+          log "in-if"
+          return
+        }
+        log "after-if"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "EV")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == ["in-if"]
+  end
+
+  test "return inside while loop exits the handler" do
+    input = """
+    rule r {
+      when EV {
+        set i = 0
+        while true {
+          set i = $i + 1
+          if $i == 3 {
+            return
+          }
+          log $i
+        }
+        log "unreachable"
+      }
+    }
+    """
+
+    {:ok, results} = Anemos.run(input, event: "EV")
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert log_values == [1, 2]
+  end
+
   test "parses nextrule with target" do
     input = """
     rule r {

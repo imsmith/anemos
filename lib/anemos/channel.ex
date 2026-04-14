@@ -4,21 +4,23 @@ defmodule Anemos.Channel do
   operations and the host app's messaging infrastructure.
 
   Implement this behaviour to route emitted messages through your
-  system's PubSub, event bus, NATS, or any other messaging layer.
+  system's event bus, NATS, AMQP, or any other messaging layer.
+
+  ## Built-in connectors
+
+    * `Anemos.Channel.ComnBus` — publishes via `Comn.EventBus` (Registry-based pub/sub)
+    * `Anemos.Channel.Logger` — logs emits via `Logger.info/1` (default)
 
   ## Usage
 
-      # In your app:
-      @behaviour Anemos.Channel
+      # Use the built-in Comn.EventBus connector:
+      Anemos.Runtime.connect(:anemos, Anemos.Channel.ComnBus)
 
-      @impl true
-      def publish(channel, envelope) do
-        Phoenix.PubSub.broadcast(MyApp.PubSub, channel, {:anemos, envelope})
-      end
-
-  Register with the runtime:
-
-      Anemos.Runtime.connect(:anemos, MyApp.PubSubChannel)
+      # Or implement your own (see Anemos.Channel.Logger for a minimal example):
+      # @behaviour Anemos.Channel
+      # @impl true
+      # def publish(channel, envelope), do: ...
+      Anemos.Runtime.connect(:anemos, MyApp.NatsChannel)
 
   ## Default
 

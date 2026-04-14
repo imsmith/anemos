@@ -414,21 +414,32 @@ String dispatch still works for simple cases.
 
 Emits that target a channel publish through a pluggable connector.
 The connector bridges Anemos to your messaging infrastructure —
-Phoenix.PubSub, NATS, AMQP, or anything else.
+Comn.EventBus, NATS, AMQP, or anything else.
 
 ```elixir
-# Implement the behaviour
-defmodule MyApp.PubSubChannel do
+# Built-in: Comn.EventBus connector
+Anemos.Runtime.connect(:anemos, Anemos.Channel.ComnBus)
+
+# Subscribe in any process:
+Comn.EventBus.subscribe("sensors/temperature")
+receive do
+  {:event, _topic, %Anemos.Envelope{} = env} -> handle(env)
+end
+```
+
+Custom connectors implement `Anemos.Channel`:
+
+```elixir
+defmodule MyApp.NatsChannel do
   @behaviour Anemos.Channel
 
   @impl true
   def publish(channel, envelope) do
-    Phoenix.PubSub.broadcast(MyApp.PubSub, channel, {:anemos, envelope})
+    Gnat.pub(:gnat, channel, :erlang.term_to_binary(envelope))
   end
 end
 
-# Connect it
-Anemos.Runtime.connect(:anemos, MyApp.PubSubChannel)
+Anemos.Runtime.connect(:anemos, MyApp.NatsChannel)
 ```
 
 Default connector: `Anemos.Channel.Logger` — logs all emits so they're

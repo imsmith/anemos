@@ -17,6 +17,18 @@ defmodule Anemos.CompiledRule do
         }
 end
 
+defmodule Anemos.CompiledData do
+  @moduledoc "A compiled data block."
+  @enforce_keys [:name]
+  defstruct [:name, :scope, :dataset, :format, :raw, :source, :transclude, :dynamic]
+end
+
+defmodule Anemos.CompiledQuery do
+  @moduledoc "A compiled query block."
+  @enforce_keys [:name]
+  defstruct [:name, :scope, :expect, :engine, :body, :return, :handler]
+end
+
 defmodule Anemos.CompilationResult do
   @moduledoc """
   Result of compiling an Anemos program.
@@ -24,13 +36,15 @@ defmodule Anemos.CompilationResult do
   All fields default to empty lists — no fields are required at construction.
   """
   @enforce_keys []
-  defstruct rules: [], conditions: [], capabilities: [], schedules: []
+  defstruct rules: [], conditions: [], capabilities: [], schedules: [], data_blocks: [], query_blocks: []
 
   @type t :: %__MODULE__{
           rules: [Anemos.CompiledRule.t()],
           conditions: [Anemos.CompiledCondition.t()],
           capabilities: [Anemos.CompiledCapability.t()],
-          schedules: [Anemos.CompiledSchedule.t()]
+          schedules: [Anemos.CompiledSchedule.t()],
+          data_blocks: [Anemos.CompiledData.t()],
+          query_blocks: [Anemos.CompiledQuery.t()]
         }
 end
 
@@ -84,6 +98,8 @@ defmodule Anemos.Compiler do
           {:condition, cond, schedules} ->
             %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
           {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
+          {:data, compiled_data} -> %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
+          {:query, compiled_query} -> %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
           :skip -> acc
         end
       end)
@@ -105,6 +121,14 @@ defmodule Anemos.Compiler do
 
   defp compile_declaration(%AST.Capability{} = cap) do
     {:capability, compile_capability(cap)}
+  end
+
+  defp compile_declaration(%AST.DataDecl{} = data) do
+    {:data, compile_data(data)}
+  end
+
+  defp compile_declaration(%AST.QueryDecl{} = query) do
+    {:query, compile_query(query)}
   end
 
   defp compile_declaration(_other), do: :skip
@@ -166,6 +190,58 @@ defmodule Anemos.Compiler do
     %Anemos.CompiledCapability{
       name: name,
       context: context,
+      handler: handler
+    }
+  end
+
+  # --- Data compilation ---
+
+  defp compile_data(%AST.DataDecl{name: name, source: source, content: content, transclude: transclude, scope: scope}) do
+    case content do
+      {:simple_list, values} ->
+        %Anemos.CompiledData{
+          name: name,
+          scope: scope,
+          dataset: MapSet.new(values),
+          source: source,
+          transclude: transclude
+        }
+
+      {:format_block, keyword, raw} ->
+        %Anemos.CompiledData{
+          name: name,
+          scope: scope,
+          format: keyword,
+          raw: raw,
+          source: source,
+          transclude: transclude
+        }
+
+      {:dynamic, subscribe, periodic} ->
+        %Anemos.CompiledData{
+          name: name,
+          scope: scope,
+          dynamic: {subscribe, periodic},
+          source: source,
+          transclude: transclude
+        }
+    end
+  end
+
+  # --- Query compilation ---
+
+  defp compile_query(%AST.QueryDecl{name: name, expect: expect, engine: engine, body: body, return: ret, scope: scope}) do
+    handler = fn bindings, context ->
+      {:ok, %{engine: engine, body: body, bindings: bindings, context: context}}
+    end
+
+    %Anemos.CompiledQuery{
+      name: name,
+      scope: scope,
+      expect: expect,
+      engine: engine,
+      body: body,
+      return: ret,
       handler: handler
     }
   end
@@ -514,6 +590,18 @@ defmodule Anemos.Compiler do
     # Process dict: snapshot ops accumulated so far for early exit
     ops = Process.get(:anemos_accumulated_ops, [])
     throw({:anemos_nextrule, target, resolved_args, ops, bindings})
+  end
+
+  defp eval_statement(%AST.DataDecl{} = data, _context, bindings) do
+    compiled = compile_data(data)
+    op = %{type: :register_data, data: compiled}
+    {[op], bindings}
+  end
+
+  defp eval_statement(%AST.QueryDecl{} = query, _context, bindings) do
+    compiled = compile_query(query)
+    op = %{type: :register_query, query: compiled}
+    {[op], bindings}
   end
 
   defp eval_statement(_other, _context, bindings) do

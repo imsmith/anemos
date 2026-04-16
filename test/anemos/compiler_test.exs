@@ -548,4 +548,84 @@ defmodule Anemos.CompilerTest do
     assert length(compiled.rules) == 2
     assert length(compiled.schedules) == 1
   end
+
+  # --- Data and Query block compilation ---
+
+  test "compiles simple data block" do
+    input = """
+    data test-list {
+      alpha
+      bravo
+      charlie
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, result} = Compiler.compile(ast)
+
+    assert [data] = result.data_blocks
+    assert data.name == "test-list"
+    assert data.scope == :global
+    assert MapSet.member?(data.dataset, "alpha")
+    assert MapSet.member?(data.dataset, "bravo")
+    assert MapSet.member?(data.dataset, "charlie")
+  end
+
+  test "compiles data block with format block" do
+    input = ~s|data stuff { edn { {:key "value"} } }|
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, result} = Compiler.compile(ast)
+
+    assert [data] = result.data_blocks
+    assert data.name == "stuff"
+    assert data.format == "edn"
+    assert is_binary(data.raw)
+  end
+
+  test "compiles query block" do
+    input = """
+    query find-user {
+      expect :name
+      users {
+        lookup ?name
+      }
+      return ?user
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, result} = Compiler.compile(ast)
+
+    assert [query] = result.query_blocks
+    assert query.name == "find-user"
+    assert query.expect == [:name]
+    assert query.engine == "users"
+    assert query.return == "user"
+    assert is_function(query.handler, 2)
+  end
+
+  test "compiles data and query alongside rules" do
+    input = """
+    data users {
+      alice
+      bob
+    }
+    query find {
+      expect :name
+      db { select ?name }
+      return ?user
+    }
+    rule check {
+      when EV { log "ok" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, result} = Compiler.compile(ast)
+
+    assert length(result.data_blocks) == 1
+    assert length(result.query_blocks) == 1
+    assert length(result.rules) == 1
+  end
 end

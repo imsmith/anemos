@@ -628,4 +628,31 @@ defmodule Anemos.CompilerTest do
     assert length(result.query_blocks) == 1
     assert length(result.rules) == 1
   end
+
+  test "warns on dynamic inline data block" do
+    import ExUnit.CaptureLog
+
+    input = """
+    rule check {
+      data live-feed {
+        dynamic {
+          subscribe webhook "https://example.com/feed"
+        }
+      }
+      when EVENT {
+        log "ok"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+
+    log =
+      capture_log(fn ->
+        {:ok, _result} = Compiler.compile(ast)
+      end)
+
+    assert log =~ "dynamic"
+    assert log =~ "live-feed"
+  end
 end

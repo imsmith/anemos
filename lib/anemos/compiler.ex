@@ -76,6 +76,8 @@ defmodule Anemos.Compiler do
   executable closures. No code generation, no Module.create.
   """
 
+  require Logger
+
   alias Anemos.AST
   alias Anemos.CompiledRule
 
@@ -270,6 +272,21 @@ defmodule Anemos.Compiler do
   # --- Rule compilation ---
 
   defp compile_rule(%AST.Rule{name: name, body: body, meta: rule_meta}) do
+    Enum.each(body, fn
+      %AST.DataDecl{} = data ->
+        compiled = compile_data(data)
+
+        if compiled.dynamic && compiled.scope == :local do
+          Logger.warning(
+            "data block '#{compiled.name}' is dynamic and inline-scoped — " <>
+              "subscription lifecycle is tied to rule process (will reconnect on rule restart)"
+          )
+        end
+
+      _ ->
+        :ok
+    end)
+
     context_path = extract_context_path(body)
     when_blocks = extract_when_blocks(body)
     at_blocks = extract_at_blocks(body)

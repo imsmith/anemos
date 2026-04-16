@@ -765,4 +765,20 @@ defmodule Anemos.ParserTest do
     if_stmt = hd(when_block.body)
     assert %AST.BinaryOp{op: :memberof} = if_stmt.condition
   end
+
+  test "parses data block with IP addresses" do
+    input = """
+    data reserved-ips {
+      10.0.0.0/8
+      192.168.0.0/16
+      172.16.0.0/12
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [decl]}} = Parser.parse(input)
+    assert {:simple_list, values} = decl.content
+    assert "10.0.0.0/8" in values
+    assert "192.168.0.0/16" in values
+    assert "172.16.0.0/12" in values
+  end
 end

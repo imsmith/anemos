@@ -128,4 +128,77 @@ defmodule Anemos.LexerTest do
     assert :memberof in keywords
     assert :global in keywords
   end
+
+  # --- IPv4 / IPv6 ---
+
+  test "tokenizes IPv4 address with CIDR" do
+    assert {:ok, tokens} = Lexer.tokenize("10.0.0.0/8")
+    assert [{:ip_addr, _, "10.0.0.0/8"}] = tokens
+  end
+
+  test "tokenizes IPv4 address without CIDR" do
+    assert {:ok, tokens} = Lexer.tokenize("192.168.1.1")
+    assert [{:ip_addr, _, "192.168.1.1"}] = tokens
+  end
+
+  test "tokenizes IPv4 max address" do
+    assert {:ok, tokens} = Lexer.tokenize("255.255.255.255/32")
+    assert [{:ip_addr, _, "255.255.255.255/32"}] = tokens
+  end
+
+  test "tokenizes IPv4 default route" do
+    assert {:ok, tokens} = Lexer.tokenize("0.0.0.0/0")
+    assert [{:ip_addr, _, "0.0.0.0/0"}] = tokens
+  end
+
+  test "tokenizes IPv6 link-local with CIDR" do
+    assert {:ok, tokens} = Lexer.tokenize("fe80::/10")
+    assert [{:ip_addr, _, "fe80::/10"}] = tokens
+  end
+
+  test "tokenizes IPv6 loopback with CIDR" do
+    assert {:ok, tokens} = Lexer.tokenize("::1/128")
+    assert [{:ip_addr, _, "::1/128"}] = tokens
+  end
+
+  test "tokenizes IPv6 unspecified with CIDR" do
+    assert {:ok, tokens} = Lexer.tokenize("::/128")
+    assert [{:ip_addr, _, "::/128"}] = tokens
+  end
+
+  test "tokenizes IPv6 full form" do
+    assert {:ok, tokens} = Lexer.tokenize("2001:db8::1")
+    assert [{:ip_addr, _, "2001:db8::1"}] = tokens
+  end
+
+  test "tokenizes IPv6 full expanded form" do
+    assert {:ok, tokens} = Lexer.tokenize("2001:0db8:0000:0000:0000:0000:0000:0001")
+    assert [{:ip_addr, _, "2001:0db8:0000:0000:0000:0000:0000:0001"}] = tokens
+  end
+
+  test "tokenizes IPv6 ULA with CIDR" do
+    assert {:ok, tokens} = Lexer.tokenize("fc00::/7")
+    assert [{:ip_addr, _, "fc00::/7"}] = tokens
+  end
+
+  test "does not confuse module::verb with IPv6" do
+    assert {:ok, tokens} = Lexer.tokenize("DEVICE::set")
+    assert [{:module_id, _, "DEVICE"}, {:double_colon, _, _}, {:keyword, _, :set}] = tokens
+  end
+
+  test "tokenizes data block with IP addresses" do
+    input = """
+    data reserved-ips {
+      10.0.0.0/8
+      192.168.0.0/16
+      fe80::/10
+    }
+    """
+
+    assert {:ok, tokens} = Lexer.tokenize(input)
+    ip_tokens = for {:ip_addr, _, val} <- tokens, do: val
+    assert "10.0.0.0/8" in ip_tokens
+    assert "192.168.0.0/16" in ip_tokens
+    assert "fe80::/10" in ip_tokens
+  end
 end

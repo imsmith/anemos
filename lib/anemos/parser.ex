@@ -1756,6 +1756,10 @@ defmodule Anemos.Parser do
     collect_simple_list(rest, [value | acc])
   end
 
+  defp collect_simple_list([{:ip_addr, _, value} | rest], acc) do
+    collect_simple_list(rest, [value | acc])
+  end
+
   defp collect_simple_list([{:integer, _, value} | rest], acc) do
     collect_simple_list(rest, [to_string(value) | acc])
   end

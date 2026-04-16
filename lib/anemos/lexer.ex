@@ -116,6 +116,85 @@ defmodule Anemos.Lexer do
     |> tag(:time_literal_raw)
     |> label("time literal")
 
+  # IPv4 address: d{1,3}.d{1,3}.d{1,3}.d{1,3} with optional /d{1,2} CIDR prefix
+  ipv4_octet = ascii_string([?0..?9], min: 1, max: 3)
+
+  ipv4_address =
+    ipv4_octet
+    |> string(".")
+    |> concat(ipv4_octet)
+    |> string(".")
+    |> concat(ipv4_octet)
+    |> string(".")
+    |> concat(ipv4_octet)
+    |> optional(string("/") |> concat(ascii_string([?0..?9], min: 1, max: 2)))
+    |> reduce({Enum, :join, [""]})
+    |> tag(:ipv4_raw)
+    |> label("IPv4 address")
+
+  # IPv6 address: hex groups separated by colons, with :: compression, optional /prefix
+  # Disambiguation: IPv6 starts with lowercase hex or ':', module_id starts with uppercase.
+  # We match several distinct forms:
+  #   1. :: alone or ::digits or ::hex (starts with ::)
+  #   2. hex_group: followed by more hex:hex groups (starts with [0-9a-f])
+
+  ipv6_hex_group = ascii_string([?0..?9, ?a..?f, ?A..?F], min: 1, max: 4)
+  ipv6_cidr = string("/") |> concat(ascii_string([?0..?9], min: 1, max: 3))
+
+  # Word boundary: IPv6 token must not be followed by identifier-continuation chars.
+  # This prevents "::extension" from matching as IPv6 "::e" + identifier "xtension".
+  ipv6_boundary = lookahead_not(ascii_char([?a..?z, ?A..?Z, ?0..?9, ?_, ?-]))
+
+  # Form 1: starts with :: (compressed from the left)
+  # ::1  or  ::1/128  or  ::ffff:0:0/96  or  ::/0
+  # Bare :: without hex digits or CIDR is NOT matched (that's the operator)
+  ipv6_double_colon_start =
+    string("::")
+    |> choice([
+      # :: followed by hex digits (e.g., ::1, ::ffff:0:0)
+      ipv6_hex_group
+      |> repeat(string(":") |> lookahead_not(string(":")) |> concat(ipv6_hex_group))
+      |> optional(ipv6_cidr),
+      # :: followed by CIDR only (e.g., ::/128, ::/0)
+      ipv6_cidr
+    ])
+    |> concat(ipv6_boundary)
+    |> reduce({Enum, :join, [""]})
+    |> tag(:ipv6_raw)
+    |> label("IPv6 address (:: start)")
+
+  # Form 2: starts with hex group, then colon(s)
+  # e.g. 2001:db8::1, fe80::/10, 2001:0db8:0000:...:0001
+  # Must have at least one : after first hex group to distinguish from bare hex identifiers
+  ipv6_hex_start =
+    ascii_string([?0..?9, ?a..?f], min: 1, max: 4)
+    |> repeat(ascii_char([?0..?9, ?a..?f, ?A..?F]))
+    |> reduce({List, :to_string, []})
+    |> string(":")
+    |> choice([
+      # :: compression after first group(s)
+      string(":")
+      |> optional(
+        ipv6_hex_group
+        |> repeat(string(":") |> lookahead_not(string(":")) |> concat(ipv6_hex_group))
+      ),
+      # regular continuation: hex_group (:hex_group)*
+      ipv6_hex_group
+      |> repeat(string(":") |> lookahead_not(string(":")) |> concat(ipv6_hex_group))
+      |> optional(string("::") |> optional(ipv6_hex_group))
+    ])
+    |> optional(ipv6_cidr)
+    |> concat(ipv6_boundary)
+    |> reduce({Enum, :join, [""]})
+    |> tag(:ipv6_raw)
+    |> label("IPv6 address (hex start)")
+
+  ipv6_address =
+    choice([
+      ipv6_double_colon_start,
+      ipv6_hex_start
+    ])
+
   # Module ID / Event ID: starts with uppercase, all-caps body with optional lowercase tail.
   # Matches: DEVICE, SENSOR_MOTION_DETECTED, CONDITION_networkchanged
   #
@@ -277,8 +356,10 @@ defmodule Anemos.Lexer do
       nld_prefix,
       day_prefix,
       time_literal,
+      ipv4_address,
       duration,
       float_literal,
+      ipv6_address,
       module_id,
       integer_literal,
       demand_flag,
@@ -389,6 +470,16 @@ defmodule Anemos.Lexer do
   # DAY_weekday prefixed day
   defp build_tokens([{:day_prefix_raw, [_, day_name]} | rest], line, acc) do
     build_tokens(rest, line, [{:day_literal, [line: line], String.to_atom(day_name)} | acc])
+  end
+
+  # IPv4 address
+  defp build_tokens([{:ipv4_raw, [value]} | rest], line, acc) do
+    build_tokens(rest, line, [{:ip_addr, [line: line], value} | acc])
+  end
+
+  # IPv6 address
+  defp build_tokens([{:ipv6_raw, [value]} | rest], line, acc) do
+    build_tokens(rest, line, [{:ip_addr, [line: line], value} | acc])
   end
 
   # Integer

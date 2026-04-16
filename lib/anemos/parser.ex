@@ -109,6 +109,10 @@ defmodule Anemos.Parser do
     parse_capability(rest)
   end
 
+  defp parse_declaration([{:keyword, _, :data} | rest]) do
+    parse_data(rest)
+  end
+
   defp parse_declaration([{type, meta, _} | _]) do
     {:error, "Expected declaration (rule, condition, ...) but got #{type} on line #{meta[:line]}"}
   end
@@ -1277,6 +1281,89 @@ defmodule Anemos.Parser do
   defp parse_atom_expression([]) do
     {:error, "Unexpected end of input, expected expression"}
   end
+
+  # --- Data declaration ---
+
+  # data global <name> { ... } — explicit global scope
+  defp parse_data([{:keyword, meta, :global}, {name_type, _, name} | rest])
+       when name_type in [:identifier, :keyword] do
+    name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, source, content, transclude, rest} <- parse_data_body(rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.DataDecl{
+         name: name_str,
+         source: source,
+         content: content,
+         transclude: transclude,
+         scope: :global,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  # data <name> { ... } — implicit global scope
+  defp parse_data([{:identifier, meta, name} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, source, content, transclude, rest} <- parse_data_body(rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.DataDecl{
+         name: name,
+         source: source,
+         content: content,
+         transclude: transclude,
+         scope: :global,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  # Allow keywords as data names
+  defp parse_data([{:keyword, meta, kw} | rest]) do
+    parse_data([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
+
+  defp parse_data([{_, meta, _} | _]) do
+    {:error, "Expected data block name on line #{meta[:line]}"}
+  end
+
+  defp parse_data([]) do
+    {:error, "Expected data block name but got end of input"}
+  end
+
+  # parse_data_body: consumes tokens up to (but not including) the closing rbrace
+  # Returns {:ok, source, content, transclude, rest}
+  defp parse_data_body(tokens) do
+    # Check for optional `source <dotted-identifier>`
+    {source, tokens} =
+      case tokens do
+        [{:keyword, _, :source}, {:identifier, _, path} | rest] -> {path, rest}
+        _ -> {nil, tokens}
+      end
+
+    # For now: only simple_list content (Tasks 4+ handle format/dynamic)
+    {values, tokens} = collect_simple_list(tokens, [])
+
+    # TODO Task 3+: parse optional transclude clause
+    {:ok, source, {:simple_list, Enum.reverse(values)}, nil, tokens}
+  end
+
+  # Collect identifier tokens as list values until rbrace or transclude keyword
+  defp collect_simple_list([{:rbrace, _, _} | _] = tokens, acc), do: {acc, tokens}
+  defp collect_simple_list([{:keyword, _, :transclude} | _] = tokens, acc), do: {acc, tokens}
+
+  defp collect_simple_list([{:identifier, _, value} | rest], acc) do
+    collect_simple_list(rest, [value | acc])
+  end
+
+  # Skip keyword tokens that are not structural (e.g., bare keyword values in list)
+  defp collect_simple_list([{:keyword, _, kw} | rest], acc) do
+    collect_simple_list(rest, [Atom.to_string(kw) | acc])
+  end
+
+  defp collect_simple_list([], acc), do: {acc, []}
 
   # --- Capability declaration ---
 

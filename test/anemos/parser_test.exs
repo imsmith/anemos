@@ -528,4 +528,61 @@ defmodule Anemos.ParserTest do
     [demand | _rest] = when_block2.body
     assert %AST.Demand{capability: "katachora-ddns-key"} = demand
   end
+
+  # --- Data block tests ---
+
+  test "parses simple data block with identifiers" do
+    input = """
+    data historical-tlds {
+      su
+      yu
+      cs
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [decl]}} = Parser.parse(input)
+    assert %AST.DataDecl{} = decl
+    assert decl.name == "historical-tlds"
+    assert {:simple_list, values} = decl.content
+    assert "su" in values
+    assert "yu" in values
+    assert "cs" in values
+    assert decl.scope == :global
+  end
+
+  test "parses simple data block with source" do
+    input = """
+    data movies {
+      source ghost.ian.homebrew.movies
+      matrix
+      inception
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [decl]}} = Parser.parse(input)
+    assert %AST.DataDecl{} = decl
+    assert decl.name == "movies"
+    assert decl.source == "ghost.ian.homebrew.movies"
+    assert {:simple_list, values} = decl.content
+    assert "matrix" in values
+    assert "inception" in values
+    assert decl.scope == :global
+  end
+
+  test "parses data block with explicit global scope" do
+    input = """
+    data global reserved-names {
+      alice
+      bob
+    }
+    """
+
+    assert {:ok, %AST.Program{declarations: [decl]}} = Parser.parse(input)
+    assert %AST.DataDecl{} = decl
+    assert decl.name == "reserved-names"
+    assert {:simple_list, values} = decl.content
+    assert "alice" in values
+    assert "bob" in values
+    assert decl.scope == :global
+  end
 end

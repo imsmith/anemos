@@ -113,6 +113,10 @@ defmodule Anemos.Parser do
     parse_data(rest)
   end
 
+  defp parse_declaration([{:keyword, _, :query} | rest]) do
+    parse_query(rest)
+  end
+
   defp parse_declaration([{type, meta, _} | _]) do
     {:error, "Expected declaration (rule, condition, ...) but got #{type} on line #{meta[:line]}"}
   end
@@ -1285,6 +1289,127 @@ defmodule Anemos.Parser do
   # --- Data declaration ---
 
   # data global <name> { ... } — explicit global scope
+  # --- Query ---
+
+  # query global <name> { ... }
+  defp parse_query([{:keyword, meta, :global}, {name_type, _, name} | rest])
+       when name_type in [:identifier, :keyword] do
+    name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name_str, :global, meta[:line], rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.QueryDecl{
+         name: name_str,
+         expect: expect_list,
+         engine: engine,
+         body: body,
+         return: return_var,
+         scope: :global,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  # query <name> { ... } — implicit global scope
+  defp parse_query([{:identifier, meta, name} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name, :global, meta[:line], rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.QueryDecl{
+         name: name,
+         expect: expect_list,
+         engine: engine,
+         body: body,
+         return: return_var,
+         scope: :global,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  # Allow keywords as query names
+  defp parse_query([{:keyword, meta, kw} | rest]) do
+    parse_query([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
+
+  defp parse_query([{_, meta, _} | _]) do
+    {:error, "Expected query block name on line #{meta[:line]}"}
+  end
+
+  defp parse_query([]) do
+    {:error, "Expected query block name but got end of input"}
+  end
+
+  # parse_query_body — consumes tokens up to (but not including) the closing rbrace
+  # Returns {:ok, expect_list, engine, body, return_var, rest}
+  defp parse_query_body(_name, _scope, _line, tokens) do
+    {expect_list, tokens} = parse_optional_expect(tokens)
+
+    case parse_engine_block(tokens) do
+      {:ok, engine, body, tokens} ->
+        case parse_return_stmt(tokens) do
+          {:ok, return_var, tokens} ->
+            {:ok, expect_list, engine, body, return_var, tokens}
+
+          {:error, _} = err ->
+            err
+        end
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  # parse_optional_expect — consume `expect :atom1, :atom2, ...` if present
+  defp parse_optional_expect([{:keyword, _, :expect} | rest]) do
+    collect_atom_list(rest)
+  end
+
+  defp parse_optional_expect(tokens), do: {[], tokens}
+
+  # collect_atom_list — gather comma-separated atoms
+  defp collect_atom_list([{:atom, _, val} | rest]) do
+    atom = String.to_atom(val)
+    case rest do
+      [{:comma, _, _} | rest2] ->
+        {more, rest2} = collect_atom_list(rest2)
+        {[atom | more], rest2}
+      _ ->
+        {[atom], rest}
+    end
+  end
+
+  defp collect_atom_list(tokens), do: {[], tokens}
+
+  # parse_engine_block — identifier `{` raw-content `}`
+  defp parse_engine_block([{:identifier, _, engine_name}, {:lbrace, _, _} | rest]) do
+    {raw, rest} = collect_raw_content(rest, 1, [])
+    {:ok, engine_name, raw, rest}
+  end
+
+  defp parse_engine_block([{_, meta, _} | _]) do
+    {:error, "Expected engine identifier in query block on line #{meta[:line]}"}
+  end
+
+  defp parse_engine_block([]) do
+    {:error, "Expected engine block but got end of input"}
+  end
+
+  # parse_return_stmt — `return ?var`
+  defp parse_return_stmt([{:keyword, _, :return}, {:query_var, _, var_name} | rest]) do
+    {:ok, var_name, rest}
+  end
+
+  defp parse_return_stmt([{_, meta, _} | _]) do
+    {:error, "Expected 'return ?var' in query block on line #{meta[:line]}"}
+  end
+
+  defp parse_return_stmt([]) do
+    {:error, "Expected 'return ?var' but got end of input"}
+  end
+
   defp parse_data([{:keyword, meta, :global}, {name_type, _, name} | rest])
        when name_type in [:identifier, :keyword] do
     name_str = if name_type == :keyword, do: Atom.to_string(name), else: name

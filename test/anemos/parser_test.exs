@@ -644,4 +644,44 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
     assert {:dynamic, {:subscribe, "git", _}, "daily"} = decl.content
   end
+
+  # --- Query block tests ---
+
+  test "parses query block" do
+    input = """
+    query wd-city {
+      expect :city, :state
+      wikidata {
+        SELECT ?city WHERE { ?city :locatedIn ?state }
+      }
+      return ?city
+    }
+    """
+
+    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
+    assert %AST.QueryDecl{} = decl
+    assert decl.name == "wd-city"
+    assert decl.expect == [:city, :state]
+    assert decl.engine == "wikidata"
+    assert is_binary(decl.body)
+    assert decl.return == "city"
+    assert decl.scope == :global
+  end
+
+  test "parses query block without expect" do
+    input = """
+    query all-movies {
+      movies {
+        lookup all
+      }
+      return ?movie
+    }
+    """
+
+    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
+    assert %AST.QueryDecl{} = decl
+    assert decl.expect == []
+    assert decl.engine == "movies"
+    assert decl.return == "movie"
+  end
 end

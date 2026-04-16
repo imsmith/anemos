@@ -585,4 +585,63 @@ defmodule Anemos.ParserTest do
     assert "bob" in values
     assert decl.scope == :global
   end
+
+  # --- Task 4: Format blocks and dynamic blocks ---
+
+  test "parses data block with format block" do
+    input = ~s|data stuff { edn { {:key "value"} } }|
+
+    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
+    assert %AST.DataDecl{} = decl
+    assert decl.name == "stuff"
+    assert {:format_block, "edn", raw} = decl.content
+    assert is_binary(raw)
+    assert String.contains?(raw, "key")
+  end
+
+  test "parses data block with source and transclude" do
+    input = """
+    data movie-inventory {
+      source ghost.ian.homebrew
+      edn {
+        {:title "The Matrix"}
+      }
+      transclude to shape(resource.schema.knowledge) with resource.transducer.edn as fact
+    }
+    """
+
+    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
+    assert decl.source == "ghost.ian.homebrew"
+    assert {:format_block, "edn", _raw} = decl.content
+    assert {:transclude, "resource.schema.knowledge", "resource.transducer.edn", "fact"} = decl.transclude
+  end
+
+  test "parses dynamic data block" do
+    input = """
+    data botnet-ips {
+      dynamic {
+        subscribe webhook "https://hooks.example.com/feed"
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
+    assert decl.name == "botnet-ips"
+    assert {:dynamic, {:subscribe, "webhook", uri}, nil} = decl.content
+    assert String.contains?(uri, "hooks.example.com")
+  end
+
+  test "parses dynamic data block with periodic" do
+    input = """
+    data gtld-servers {
+      dynamic {
+        subscribe git "git://example.com/gtld.git"
+        periodic daily
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
+    assert {:dynamic, {:subscribe, "git", _}, "daily"} = decl.content
+  end
 end

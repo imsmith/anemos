@@ -1343,12 +1343,170 @@ defmodule Anemos.Parser do
         _ -> {nil, tokens}
       end
 
-    # For now: only simple_list content (Tasks 4+ handle format/dynamic)
-    {values, tokens} = collect_simple_list(tokens, [])
+    # Detect content type
+    {content, tokens} =
+      case tokens do
+        # dynamic block
+        [{:keyword, _, :dynamic} | rest] ->
+          case parse_dynamic_block(rest) do
+            {:ok, dynamic, rest} -> {dynamic, rest}
+            {:error, _} = err -> throw(err)
+          end
 
-    # TODO Task 3+: parse optional transclude clause
-    {:ok, source, {:simple_list, Enum.reverse(values)}, nil, tokens}
+        # format block: identifier followed by lbrace
+        [{:identifier, _, _fmt_kw}, {:lbrace, _, _} | _] ->
+          case parse_format_block(tokens) do
+            {:ok, fmt, rest} -> {fmt, rest}
+            {:error, _} = err -> throw(err)
+          end
+
+        # fallback: simple list
+        _ ->
+          {values, tokens} = collect_simple_list(tokens, [])
+          {{:simple_list, Enum.reverse(values)}, tokens}
+      end
+
+    # Optional transclude clause
+    {transclude, tokens} = parse_optional_transclude(tokens)
+
+    {:ok, source, content, transclude, tokens}
+  catch
+    {:error, _} = err -> err
   end
+
+  # --- Format block ---
+
+  defp parse_format_block([{:identifier, _, fmt_kw}, {:lbrace, _, _} | rest]) do
+    {raw, rest} = collect_raw_content(rest, 1, [])
+    {:ok, {:format_block, fmt_kw, raw}, rest}
+  end
+
+  defp parse_format_block([{_, meta, _} | _]) do
+    {:error, "Expected format block identifier on line #{meta[:line]}"}
+  end
+
+  # Brace-depth counting raw content collector.
+  # Depth starts at 1 (opening brace already consumed).
+  defp collect_raw_content([], _depth, acc) do
+    {acc |> Enum.reverse() |> Enum.join(), []}
+  end
+
+  defp collect_raw_content([{:rbrace, _, _} | rest], 1, acc) do
+    # Depth returns to 0 — done, do NOT include this closing brace
+    {acc |> Enum.reverse() |> Enum.join(), rest}
+  end
+
+  defp collect_raw_content([{:rbrace, _, _} = tok | rest], depth, acc) do
+    collect_raw_content(rest, depth - 1, [token_to_string(tok) | acc])
+  end
+
+  defp collect_raw_content([{:lbrace, _, _} = tok | rest], depth, acc) do
+    collect_raw_content(rest, depth + 1, [token_to_string(tok) | acc])
+  end
+
+  defp collect_raw_content([tok | rest], depth, acc) do
+    collect_raw_content(rest, depth, [token_to_string(tok) | acc])
+  end
+
+  defp token_to_string({:string, _, val}), do: ~s("#{val}")
+  defp token_to_string({:identifier, _, val}), do: " #{val}"
+  defp token_to_string({:keyword, _, val}), do: " #{val}"
+  defp token_to_string({:integer, _, val}), do: " #{val}"
+  defp token_to_string({:float, _, val}), do: " #{val}"
+  defp token_to_string({:atom, _, val}), do: ":#{val}"
+  defp token_to_string({:lbrace, _, _}), do: " {"
+  defp token_to_string({:rbrace, _, _}), do: " }"
+  defp token_to_string({:lparen, _, _}), do: "("
+  defp token_to_string({:rparen, _, _}), do: ")"
+  defp token_to_string({:lbracket, _, _}), do: "["
+  defp token_to_string({:rbracket, _, _}), do: "]"
+  defp token_to_string({:comma, _, _}), do: ","
+  defp token_to_string({:operator, _, op}), do: " #{op}"
+  defp token_to_string({:mutable_ref, _, val}), do: "$#{val}"
+  defp token_to_string({:immutable_ref, _, val}), do: "@#{val}"
+  defp token_to_string({:module_id, _, val}), do: " #{val}"
+  defp token_to_string({type, _, val}), do: " #{inspect({type, val})}"
+
+  # --- Dynamic block ---
+
+  defp parse_dynamic_block([{:lbrace, _, _} | rest]) do
+    with {:ok, subscribe, rest} <- parse_subscribe(rest),
+         {periodic, rest} <- parse_optional_periodic(rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, {:dynamic, subscribe, periodic}, rest}
+    end
+  end
+
+  defp parse_dynamic_block([{_, meta, _} | _]) do
+    {:error, "Expected '{' after dynamic on line #{meta[:line]}"}
+  end
+
+  defp parse_dynamic_block([]) do
+    {:error, "Expected '{' after dynamic but got end of input"}
+  end
+
+  defp parse_subscribe([{:keyword, _, :subscribe}, {:identifier, _, protocol} | rest]) do
+    {uri, rest} = collect_uri(rest)
+    {:ok, {:subscribe, protocol, uri}, rest}
+  end
+
+  defp parse_subscribe([{_, meta, _} | _]) do
+    {:error, "Expected 'subscribe' in dynamic block on line #{meta[:line]}"}
+  end
+
+  # Collect URI tokens: a string literal is the URI directly.
+  # Identifiers/other tokens are joined until keyword or rbrace.
+  defp collect_uri([{:string, _, val} | rest]), do: {val, rest}
+
+  defp collect_uri(tokens) do
+    {parts, rest} = collect_uri_tokens(tokens, [])
+    {Enum.join(parts), rest}
+  end
+
+  defp collect_uri_tokens([{:keyword, _, _} | _] = tokens, acc), do: {Enum.reverse(acc), tokens}
+  defp collect_uri_tokens([{:rbrace, _, _} | _] = tokens, acc), do: {Enum.reverse(acc), tokens}
+  defp collect_uri_tokens([], acc), do: {Enum.reverse(acc), []}
+
+  defp collect_uri_tokens([tok | rest], acc) do
+    collect_uri_tokens(rest, [token_to_string(tok) |> String.trim() | acc])
+  end
+
+  defp parse_optional_periodic([{:keyword, _, :periodic}, {:identifier, _, interval} | rest]) do
+    {interval, rest}
+  end
+
+  defp parse_optional_periodic(tokens), do: {nil, tokens}
+
+  # --- Transclude clause ---
+
+  # transclude to shape(<dotted-id>) with <dotted-id> as <identifier>
+  defp parse_optional_transclude([
+    {:keyword, _, :transclude},
+    {:keyword, _, :to},
+    {:identifier, _, "shape"},
+    {:lparen, _, _} | rest
+  ]) do
+    with {shape, [{:rparen, _, _} | rest]} <- collect_dotted_identifier(rest),
+         {:ok, rest} <- expect(rest, :keyword, :with),
+         {transducer, rest} <- collect_dotted_identifier(rest),
+         {:ok, rest} <- expect(rest, :keyword, :as),
+         {bind_as, rest} <- collect_identifier(rest) do
+      {{:transclude, shape, transducer, bind_as}, rest}
+    else
+      _ -> {nil, [{:keyword, [], :transclude}]}
+    end
+  end
+
+  defp parse_optional_transclude(tokens), do: {nil, tokens}
+
+  # Collect a dotted identifier (foo.bar.baz) — already tokenized as a single identifier token
+  defp collect_dotted_identifier([{:identifier, _, val} | rest]), do: {val, rest}
+  defp collect_dotted_identifier([{:keyword, _, val} | rest]), do: {Atom.to_string(val), rest}
+  defp collect_dotted_identifier(tokens), do: {"", tokens}
+
+  defp collect_identifier([{:identifier, _, val} | rest]), do: {val, rest}
+  defp collect_identifier([{:keyword, _, val} | rest]), do: {Atom.to_string(val), rest}
+  defp collect_identifier(tokens), do: {"", tokens}
 
   # Collect identifier tokens as list values until rbrace or transclude keyword
   defp collect_simple_list([{:rbrace, _, _} | _] = tokens, acc), do: {acc, tokens}

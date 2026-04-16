@@ -129,6 +129,11 @@ defmodule Anemos.Parser do
     end
   end
 
+  # Allow keywords used as rule names (e.g. "rule global { }", "rule query { }")
+  defp parse_rule([{:keyword, meta, kw} | rest]) do
+    parse_rule([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
+
   defp parse_rule([{type, meta, _} | _]) do
     {:error, "Expected rule name (identifier) but got #{type} on line #{meta[:line]}"}
   end
@@ -153,6 +158,12 @@ defmodule Anemos.Parser do
   defp parse_rule_metadata([{:keyword, _, :scope}, {:identifier, _, scope} | rest], acc)
        when scope in ["local", "global", "mesh"] do
     parse_rule_metadata(rest, Map.put(acc, :scope, String.to_atom(scope)))
+  end
+
+  # "global" is now a keyword token; accept keyword in scope position too
+  defp parse_rule_metadata([{:keyword, _, :scope}, {:keyword, _, scope} | rest], acc)
+       when scope in [:local, :global, :mesh] do
+    parse_rule_metadata(rest, Map.put(acc, :scope, scope))
   end
 
   defp parse_rule_metadata(tokens, acc), do: {acc, tokens}
@@ -1269,6 +1280,11 @@ defmodule Anemos.Parser do
 
   # --- Capability declaration ---
 
+  # Allow keywords used as capability names
+  defp parse_capability([{:keyword, meta, kw} | rest]) do
+    parse_capability([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
+
   defp parse_capability([{:identifier, meta, name} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace) do
       # Parse optional context (standalone, no braces)
@@ -1302,6 +1318,11 @@ defmodule Anemos.Parser do
   end
 
   # --- Condition declaration ---
+
+  # Allow keywords used as condition names
+  defp parse_condition_decl([{:keyword, meta, kw} | rest]) do
+    parse_condition_decl([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
 
   defp parse_condition_decl([{:identifier, meta, name} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace),

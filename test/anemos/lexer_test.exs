@@ -105,4 +105,27 @@ defmodule Anemos.LexerTest do
     assert {:ok, tokens} = Anemos.Lexer.tokenize("interval(5min)")
     assert [{:keyword, _, :interval}, {:lparen, _, _}, {:duration, _, {5, :min}}, {:rparen, _, _}] = tokens
   end
+
+  test "tokenizes data keyword" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("data reserved-ips { }")
+    assert [{:keyword, _, :data}, {:identifier, _, "reserved-ips"}, {:lbrace, _, _}, {:rbrace, _, _}] = tokens
+  end
+
+  test "tokenizes query keyword" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("query movie { }")
+    assert [{:keyword, _, :query}, {:identifier, _, "movie"}, {:lbrace, _, _}, {:rbrace, _, _}] = tokens
+  end
+
+  test "tokenizes data block keywords" do
+    assert {:ok, tokens} = Anemos.Lexer.tokenize("source expect transclude dynamic subscribe periodic memberof global")
+    keywords = for {:keyword, _, k} <- tokens, do: k
+    assert :source in keywords
+    assert :expect in keywords
+    assert :transclude in keywords
+    assert :dynamic in keywords
+    assert :subscribe in keywords
+    assert :periodic in keywords
+    assert :memberof in keywords
+    assert :global in keywords
+  end
 end

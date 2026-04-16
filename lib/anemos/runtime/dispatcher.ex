@@ -15,7 +15,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @behaviour Comn
 
-  alias Anemos.Runtime.{CapabilityServer, ConditionServer, DataStore, ModuleRegistry, TripleStore}
+  alias Anemos.Runtime.{CapabilityServer, ConditionServer, DataStore, ModuleRegistry, SubscribableRegistry, TripleStore}
 
   # --- Client API ---
 
@@ -28,6 +28,7 @@ defmodule Anemos.Runtime.Dispatcher do
     * `:registry` — pid of a `ModuleRegistry` (required)
     * `:conditions` — list of `%Anemos.CompiledCondition{}` structs (optional)
     * `:capabilities` — list of `%Anemos.CompiledCapability{}` structs (optional)
+    * `:subscribable_registry` — pid of a `SubscribableRegistry` (optional, created if omitted)
     * `:name` — process registration name (optional)
   """
   def start_link(opts) do
@@ -36,8 +37,9 @@ defmodule Anemos.Runtime.Dispatcher do
     conditions = Keyword.get(opts, :conditions, [])
     capabilities = Keyword.get(opts, :capabilities, [])
     channel_connector = Keyword.get(opts, :channel_connector, Anemos.Channel.Logger)
+    subscribable_registry = Keyword.get(opts, :subscribable_registry)
     name = Keyword.get(opts, :name)
-    GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities, channel_connector}, name: name)
+    GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities, channel_connector, subscribable_registry}, name: name)
   end
 
   @doc """
@@ -76,10 +78,18 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.call(dispatcher, {:data_member?, name, value})
   end
 
+  @doc """
+  Registers a `Subscribable` handler module for the given protocol string.
+  """
+  @spec register_subscribable(pid() | atom(), String.t(), module()) :: :ok
+  def register_subscribable(dispatcher, protocol, handler_module) do
+    GenServer.call(dispatcher, {:register_subscribable, protocol, handler_module})
+  end
+
   # --- Server callbacks ---
 
   @impl true
-  def init({rules, registry, compiled_conditions, compiled_capabilities, channel_connector}) do
+  def init({rules, registry, compiled_conditions, compiled_capabilities, channel_connector, subscribable_registry}) do
     index = build_index(rules)
     dispatcher_pid = self()
 
@@ -115,6 +125,9 @@ defmodule Anemos.Runtime.Dispatcher do
     {:ok, triple_store} = TripleStore.start_link()
     {:ok, data_store} = DataStore.start_link()
 
+    subscribable_registry =
+      subscribable_registry || elem(SubscribableRegistry.start_link(), 1)
+
     {:ok,
      %{
        rules: rules,
@@ -125,6 +138,7 @@ defmodule Anemos.Runtime.Dispatcher do
        triple_store: triple_store,
        data_store: data_store,
        channel_connector: channel_connector,
+       subscribable_registry: subscribable_registry,
        rule_bindings: %{}
      }}
   end
@@ -200,11 +214,36 @@ defmodule Anemos.Runtime.Dispatcher do
         {cap.name, pid}
       end)
 
-    # Register data blocks
+    # Register data blocks (static and dynamic)
     Enum.each(Map.get(compiled, :data_blocks, []), fn data ->
       if data.dataset do
         DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
           source: data.source)
+      end
+
+      case data.dynamic do
+        {{:subscribe, protocol, uri}, _periodic} ->
+          case SubscribableRegistry.lookup(state.subscribable_registry, protocol) do
+            {:ok, handler} ->
+              scope = data.scope || :global
+              DataStore.register(state.data_store, data.name, scope, MapSet.new())
+
+              callback = fn new_data ->
+                dataset = if is_list(new_data), do: MapSet.new(new_data), else: new_data
+                DataStore.update(state.data_store, data.name, scope, dataset)
+              end
+
+              case handler.subscribe(protocol, uri, callback) do
+                {:ok, _ref} ->
+                  Logger.debug("Started subscription for data block '#{data.name}' via #{protocol}")
+                {:error, reason} ->
+                  Logger.warning("Failed to subscribe data block '#{data.name}': #{inspect(reason)}")
+              end
+
+            :error ->
+              Logger.warning("No subscribable handler registered for protocol '#{protocol}' (data block '#{data.name}')")
+          end
+        _ -> :ok
       end
     end)
 
@@ -241,6 +280,12 @@ defmodule Anemos.Runtime.Dispatcher do
   @impl true
   def handle_call({:set_connector, connector}, _from, state) do
     {:reply, :ok, %{state | channel_connector: connector}}
+  end
+
+  @impl true
+  def handle_call({:register_subscribable, protocol, handler_module}, _from, state) do
+    :ok = SubscribableRegistry.register(state.subscribable_registry, protocol, handler_module)
+    {:reply, :ok, state}
   end
 
   @impl true

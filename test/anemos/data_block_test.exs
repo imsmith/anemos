@@ -1,9 +1,39 @@
+defmodule Anemos.TestSubscribable do
+  @moduledoc false
+  @behaviour Anemos.Subscribable
+
+  def start_link do
+    Agent.start_link(fn -> %{} end, name: __MODULE__)
+  end
+
+  @impl true
+  def subscribe(_protocol, uri, callback) do
+    Agent.update(__MODULE__, &Map.put(&1, uri, callback))
+    {:ok, make_ref()}
+  end
+
+  @impl true
+  def unsubscribe(_ref), do: :ok
+
+  @impl true
+  def periodic?, do: false
+
+  @impl true
+  def interval(_spec), do: 60_000
+
+  @doc "Simulate incoming data push"
+  def push(uri, data) do
+    callback = Agent.get(__MODULE__, &Map.get(&1, uri))
+    if callback, do: callback.(data)
+  end
+end
+
 defmodule Anemos.DataBlockTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
   alias Anemos.{Parser, Compiler}
-  alias Anemos.Runtime.{Dispatcher, ModuleRegistry}
+  alias Anemos.Runtime.{Dispatcher, ModuleRegistry, SubscribableRegistry}
 
   test "memberof() checks membership in data block" do
     input = """
@@ -161,6 +191,112 @@ defmodule Anemos.DataBlockTest do
     results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "CONN", %{context_data: %{"ip" => "goodhost"}})
     ops = for {:ok, op} <- List.flatten(results), do: op
     assert Enum.any?(ops, &(&1.type == :log && &1.value == "allowed"))
+  end
+
+  test "dynamic data block subscribes and updates on push" do
+    {:ok, _} = Anemos.TestSubscribable.start_link()
+
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, sub_registry} = SubscribableRegistry.start_link()
+    :ok = SubscribableRegistry.register(sub_registry, "test-proto", Anemos.TestSubscribable)
+
+    input = """
+    data live-feed {
+      dynamic {
+        subscribe test-proto "test://feed"
+      }
+    }
+    rule r {
+      when EV { log "ok" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: compiled.rules,
+        registry: registry,
+        subscribable_registry: sub_registry
+      )
+
+    :ok = Dispatcher.load(dispatcher, compiled)
+
+    # Initially empty
+    refute Dispatcher.data_member?(dispatcher, "live-feed", "new-threat")
+
+    # Push data through the subscription
+    Anemos.TestSubscribable.push("test://feed", ["new-threat", "bad-actor"])
+
+    # Now it should be there
+    assert Dispatcher.data_member?(dispatcher, "live-feed", "new-threat")
+    assert Dispatcher.data_member?(dispatcher, "live-feed", "bad-actor")
+  end
+
+  test "dynamic data block with no handler logs warning and does not crash" do
+    {:ok, registry} = ModuleRegistry.start_link([])
+    {:ok, sub_registry} = SubscribableRegistry.start_link()
+
+    input = """
+    data missing-handler {
+      dynamic {
+        subscribe unknown-proto "test://nowhere"
+      }
+    }
+    rule r {
+      when EV { log "ok" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: compiled.rules,
+        registry: registry,
+        subscribable_registry: sub_registry
+      )
+
+    # Should not crash even though no handler is registered
+    :ok = Dispatcher.load(dispatcher, compiled)
+
+    # Data block exists but is empty
+    refute Dispatcher.data_member?(dispatcher, "missing-handler", "anything")
+  end
+
+  test "register_subscribable via dispatcher client API" do
+    {:ok, _} = Anemos.TestSubscribable.start_link()
+    {:ok, registry} = ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Dispatcher.start_link(
+        rules: [],
+        registry: registry
+      )
+
+    :ok = Dispatcher.register_subscribable(dispatcher, "test-proto", Anemos.TestSubscribable)
+
+    input = """
+    data api-feed {
+      dynamic {
+        subscribe test-proto "test://api"
+      }
+    }
+    rule r {
+      when EV { log "ok" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, compiled} = Compiler.compile(ast)
+    :ok = Dispatcher.load(dispatcher, compiled)
+
+    refute Dispatcher.data_member?(dispatcher, "api-feed", "item-1")
+
+    Anemos.TestSubscribable.push("test://api", ["item-1"])
+    assert Dispatcher.data_member?(dispatcher, "api-feed", "item-1")
   end
 
   test "multiple data blocks with memberof union" do

@@ -514,6 +514,8 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :done} | rest]), do: parse_done(rest)
   defp parse_statement([{:keyword, _, :nextevent} | rest]), do: parse_nextevent(rest)
   defp parse_statement([{:keyword, _, :nextrule} | rest]), do: parse_nextrule(rest)
+  defp parse_statement([{:keyword, _, :data} | rest]), do: parse_inline_data(rest)
+  defp parse_statement([{:keyword, _, :query} | rest]), do: parse_inline_query(rest)
 
   defp parse_statement([{type, meta, _} | _]) do
     {:error, "Unexpected token #{type} on line #{meta[:line]}, expected statement"}
@@ -521,6 +523,102 @@ defmodule Anemos.Parser do
 
   defp parse_statement([]) do
     {:error, "Unexpected end of input, expected statement"}
+  end
+
+  # --- Inline data/query (inside rule bodies, default scope :local) ---
+
+  defp parse_inline_data([{:keyword, _, :global}, {name_type, meta, name} | rest])
+       when name_type in [:identifier, :keyword] do
+    name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, source, content, transclude, rest} <- parse_data_body(rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.DataDecl{
+         name: name_str,
+         source: source,
+         content: content,
+         transclude: transclude,
+         scope: :global,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  defp parse_inline_data([{:identifier, meta, name} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, source, content, transclude, rest} <- parse_data_body(rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.DataDecl{
+         name: name,
+         source: source,
+         content: content,
+         transclude: transclude,
+         scope: :local,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  defp parse_inline_data([{:keyword, meta, kw} | rest]) do
+    parse_inline_data([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
+
+  defp parse_inline_data([{_, meta, _} | _]) do
+    {:error, "Expected data block name on line #{meta[:line]}"}
+  end
+
+  defp parse_inline_data([]) do
+    {:error, "Expected data block name but got end of input"}
+  end
+
+  defp parse_inline_query([{:keyword, _, :global}, {name_type, meta, name} | rest])
+       when name_type in [:identifier, :keyword] do
+    name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name_str, :global, meta[:line], rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.QueryDecl{
+         name: name_str,
+         expect: expect_list,
+         engine: engine,
+         body: body,
+         return: return_var,
+         scope: :global,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  defp parse_inline_query([{:identifier, meta, name} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name, :local, meta[:line], rest),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.QueryDecl{
+         name: name,
+         expect: expect_list,
+         engine: engine,
+         body: body,
+         return: return_var,
+         scope: :local,
+         line: meta[:line]
+       }, rest}
+    end
+  end
+
+  defp parse_inline_query([{:keyword, meta, kw} | rest]) do
+    parse_inline_query([{:identifier, meta, Atom.to_string(kw)} | rest])
+  end
+
+  defp parse_inline_query([{_, meta, _} | _]) do
+    {:error, "Expected query block name on line #{meta[:line]}"}
+  end
+
+  defp parse_inline_query([]) do
+    {:error, "Expected query block name but got end of input"}
   end
 
   # --- Let ---

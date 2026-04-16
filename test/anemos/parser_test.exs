@@ -684,4 +684,68 @@ defmodule Anemos.ParserTest do
     assert decl.engine == "movies"
     assert decl.return == "movie"
   end
+
+  test "parses inline data block inside rule" do
+    input = """
+    rule check-ips {
+      data bad-ips {
+        alpha
+        bravo
+      }
+      when CONNECTION_INIT {
+        log "checking"
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Parser.parse(input)
+    assert %AST.Rule{} = rule
+    data_blocks = Enum.filter(rule.body, &match?(%AST.DataDecl{}, &1))
+    assert [data] = data_blocks
+    assert data.name == "bad-ips"
+    assert data.scope == :local
+  end
+
+  test "parses inline data block with global escape" do
+    input = """
+    rule setup {
+      data global shared-list {
+        a
+        b
+        c
+      }
+      when INIT {
+        log "done"
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Parser.parse(input)
+    data_blocks = Enum.filter(rule.body, &match?(%AST.DataDecl{}, &1))
+    assert [data] = data_blocks
+    assert data.scope == :global
+  end
+
+  test "parses inline query block inside rule" do
+    input = """
+    rule lookup {
+      query find-user {
+        expect :name
+        users {
+          lookup ?name
+        }
+        return ?user
+      }
+      when SEARCH {
+        log "searching"
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Parser.parse(input)
+    query_blocks = Enum.filter(rule.body, &match?(%AST.QueryDecl{}, &1))
+    assert [query] = query_blocks
+    assert query.name == "find-user"
+    assert query.scope == :local
+  end
 end

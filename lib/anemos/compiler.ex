@@ -116,8 +116,13 @@ defmodule Anemos.Compiler do
     result =
       Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
         case compile_declaration(decl) do
-          {:rule, rules, schedules} ->
-            %{acc | rules: acc.rules ++ rules, schedules: acc.schedules ++ schedules}
+          {:rule, rules, schedules, inline_data, inline_queries} ->
+            %{acc |
+              rules: acc.rules ++ rules,
+              schedules: acc.schedules ++ schedules,
+              data_blocks: acc.data_blocks ++ inline_data,
+              query_blocks: acc.query_blocks ++ inline_queries
+            }
           {:condition, cond, schedules} ->
             %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
           {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
@@ -133,8 +138,8 @@ defmodule Anemos.Compiler do
   # --- Declaration dispatch ---
 
   defp compile_declaration(%AST.Rule{} = rule) do
-    {rules, schedules} = compile_rule(rule)
-    {:rule, rules, schedules}
+    {rules, schedules, inline_data, inline_queries} = compile_rule(rule)
+    {:rule, rules, schedules, inline_data, inline_queries}
   end
 
   defp compile_declaration(%AST.Condition{} = cond_decl) do
@@ -291,6 +296,12 @@ defmodule Anemos.Compiler do
     when_blocks = extract_when_blocks(body)
     at_blocks = extract_at_blocks(body)
 
+    # Extract inline data/query declarations from the rule body and compile
+    # them at load time (not as runtime ops) so they're in the DataStore
+    # before any rule handler fires.
+    inline_data = extract_inline_data(body, name)
+    inline_queries = extract_inline_queries(body)
+
     compiled_meta = Map.merge(rule_meta || %{}, %{context_path: context_path})
 
     when_rules =
@@ -309,13 +320,35 @@ defmodule Anemos.Compiler do
         |> Enum.unzip()
       end
 
-    {when_rules ++ at_rules, at_schedules}
+    {when_rules ++ at_rules, at_schedules, inline_data, inline_queries}
   end
 
   defp extract_context_path(body) do
     Enum.find_value(body, nil, fn
       %AST.Context{path: path} -> path
       _ -> nil
+    end)
+  end
+
+  # --- Extract inline data/query declarations from rule body ---
+
+  defp extract_inline_data(body, rule_name) do
+    Enum.flat_map(body, fn
+      %AST.DataDecl{} = data ->
+        compiled = compile_data(data)
+        # For local scope, use rule name as discriminator
+        scope = if compiled.scope == :local, do: {:local, rule_name}, else: compiled.scope
+        [%{compiled | scope: scope}]
+      %AST.Context{body: ctx_body} -> extract_inline_data(ctx_body, rule_name)
+      _other -> []
+    end)
+  end
+
+  defp extract_inline_queries(body) do
+    Enum.flat_map(body, fn
+      %AST.QueryDecl{} = query -> [compile_query(query)]
+      %AST.Context{body: ctx_body} -> extract_inline_queries(ctx_body)
+      _other -> []
     end)
   end
 
@@ -630,17 +663,10 @@ defmodule Anemos.Compiler do
     throw({:anemos_nextrule, target, resolved_args, ops, bindings})
   end
 
-  defp eval_statement(%AST.DataDecl{} = data, _context, bindings) do
-    compiled = compile_data(data)
-    op = %{type: :register_data, data: compiled}
-    {[op], bindings}
-  end
-
-  defp eval_statement(%AST.QueryDecl{} = query, _context, bindings) do
-    compiled = compile_query(query)
-    op = %{type: :register_query, query: compiled}
-    {[op], bindings}
-  end
+  # Inline data/query declarations are extracted and registered at compile/load
+  # time (see extract_inline_data/2), not at runtime. Skip them here.
+  defp eval_statement(%AST.DataDecl{}, _context, bindings), do: {[], bindings}
+  defp eval_statement(%AST.QueryDecl{}, _context, bindings), do: {[], bindings}
 
   defp eval_statement(_other, _context, bindings) do
     {[], bindings}
@@ -767,7 +793,9 @@ defmodule Anemos.Compiler do
         names = if is_list(r), do: r, else: [r]
         data_store = Map.get(context, :data_store)
         if data_store do
-          Anemos.Runtime.DataStore.member_any?(data_store, names, l)
+          rule_name = Map.get(context, :_rule_name)
+          opts = if rule_name, do: [scope_hint: rule_name], else: []
+          Anemos.Runtime.DataStore.member_any?(data_store, names, l, opts)
         else
           false
         end

@@ -73,20 +73,25 @@ defmodule Anemos.Runtime.DataStore do
   @doc """
   Returns true if `value` is a member of the named dataset.
 
-  Checks `{name, {:local, self()}}` first, then `{name, :global}`.
+  Checks local scope first (by `scope_hint` if provided, otherwise `self()`),
+  then global.
+
+  The optional `scope_hint` allows callers to specify a scope discriminator
+  other than their pid — for example, a rule name string for per-rule scoping.
   """
-  @spec member?(GenServer.server(), String.t(), term()) :: boolean()
-  def member?(store, name, value) do
-    GenServer.call(store, {:member?, name, self(), value})
+  @spec member?(GenServer.server(), String.t(), term(), keyword()) :: boolean()
+  def member?(store, name, value, opts \\ []) do
+    scope_hint = Keyword.get(opts, :scope_hint, self())
+    GenServer.call(store, {:member?, name, scope_hint, value})
   end
 
   @doc """
   Returns true if `value` is a member of any of the named datasets.
   """
-  @spec member_any?(GenServer.server(), [String.t()], term()) :: boolean()
-  def member_any?(store, names, value) do
-    caller = self()
-    GenServer.call(store, {:member_any?, names, caller, value})
+  @spec member_any?(GenServer.server(), [String.t()], term(), keyword()) :: boolean()
+  def member_any?(store, names, value, opts \\ []) do
+    scope_hint = Keyword.get(opts, :scope_hint, self())
+    GenServer.call(store, {:member_any?, names, scope_hint, value})
   end
 
   @doc """
@@ -197,7 +202,8 @@ defmodule Anemos.Runtime.DataStore do
   # ---------------------------------------------------------------------------
 
   # Monitor a pid for local scope entries (once per pid).
-  defp maybe_monitor({:local, pid}, monitors) do
+  # Non-pid scope discriminators (e.g., rule name strings) are not monitored.
+  defp maybe_monitor({:local, pid}, monitors) when is_pid(pid) do
     if Map.has_key?(monitors, pid) do
       monitors
     else
@@ -206,6 +212,7 @@ defmodule Anemos.Runtime.DataStore do
     end
   end
 
+  defp maybe_monitor({:local, _name}, monitors), do: monitors
   defp maybe_monitor(:global, monitors), do: monitors
 
   # Resolve by checking local scope first, then global.

@@ -345,4 +345,60 @@ defmodule Anemos.DataBlockTest do
     ops = for {:ok, op} <- List.flatten(results), do: op
     assert Enum.any?(ops, &(&1.type == :log && &1.value == "blocked-region"))
   end
+
+  test "inline data blocks are scoped per-rule via rule name" do
+    input = """
+    rule rule-a {
+      data my-set {
+        alpha
+      }
+      when EV {
+        if ?val memberof(my-set) {
+          log "rule-a-hit"
+        } else {
+          log "rule-a-miss"
+        }
+      }
+    }
+
+    rule rule-b {
+      data my-set {
+        bravo
+      }
+      when EV {
+        if ?val memberof(my-set) {
+          log "rule-b-hit"
+        } else {
+          log "rule-b-miss"
+        }
+      }
+    }
+    """
+
+    {:ok, ast} = Anemos.Parser.parse(input)
+    {:ok, compiled} = Anemos.Compiler.compile(ast)
+    {:ok, registry} = Anemos.Runtime.ModuleRegistry.start_link([])
+
+    {:ok, dispatcher} =
+      Anemos.Runtime.Dispatcher.start_link(
+        rules: compiled.rules,
+        registry: registry
+      )
+
+    :ok = Anemos.Runtime.Dispatcher.load(dispatcher, compiled)
+
+    # "alpha" is in rule-a's my-set but not rule-b's
+    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"val" => "alpha"}})
+    ops = for {:ok, op} <- List.flatten(results), do: op
+    log_values = for %{type: :log, value: v} <- ops, do: v
+    assert "rule-a-hit" in log_values
+    assert "rule-b-miss" in log_values
+
+    # "bravo" is in rule-b's my-set but not rule-a's
+    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"val" => "bravo"}})
+    ops = for {:ok, op} <- List.flatten(results), do: op
+    log_values = for %{type: :log, value: v} <- ops, do: v
+    assert "rule-a-miss" in log_values
+    assert "rule-b-hit" in log_values
+  end
 end

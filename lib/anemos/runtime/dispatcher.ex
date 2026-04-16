@@ -346,8 +346,12 @@ defmodule Anemos.Runtime.Dispatcher do
     |> Enum.reduce({[], state}, fn rule, {results_acc, st} ->
       persistent = Map.get(st.rule_bindings, rule.name, %{})
 
-      # Pass DataStore pid through context so compiled closures can resolve memberof()
-      enriched_context = Map.put(context, :data_store, st.data_store)
+      # Pass DataStore pid and rule name through context so compiled closures
+      # can resolve memberof() with per-rule scope
+      enriched_context =
+        context
+        |> Map.put(:data_store, st.data_store)
+        |> Map.put(:_rule_name, rule.name)
 
       case safe_handle(rule, event_name, enriched_context, persistent) do
         {:ok, ops, new_persistent} ->
@@ -515,15 +519,22 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
-  # NOTE: Inline data blocks with :local scope are registered as :global because
-  # rules don't run as separate processes — self() is the dispatcher pid, so
-  # {:local, self()} would make all inline blocks share one scope. True per-rule
-  # scoping requires either process-per-rule or a rule-name-based scope discriminator
-  # threaded through both registration and lookup. For now, inline local data blocks
-  # are promoted to global scope.
-  defp execute_op(%{type: :register_data, data: data}, _context, state) do
+  defp execute_op(%{type: :register_data, data: data}, context, state) do
     if data.dataset do
-      DataStore.register(state.data_store, data.name, :global, data.dataset)
+      scope = case data.scope do
+        :local ->
+          # Use rule name as scope discriminator — rules don't run as separate
+          # processes, so pid-based scoping would collapse all inline blocks
+          # into one scope (the dispatcher's pid).
+          rule_name = case context[:_rule_source] do
+            {name, _} -> name
+            _ -> "unknown"
+          end
+          {:local, rule_name}
+        _ ->
+          data.scope || :global
+      end
+      DataStore.register(state.data_store, data.name, scope, data.dataset)
     end
     {:ok, %{type: :register_data, name: data.name}}
   end

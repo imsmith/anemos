@@ -1752,6 +1752,18 @@ defmodule Anemos.Parser do
     collect_simple_list(rest, [value | acc])
   end
 
+  defp collect_simple_list([{:string, _, value} | rest], acc) do
+    collect_simple_list(rest, [value | acc])
+  end
+
+  defp collect_simple_list([{:integer, _, value} | rest], acc) do
+    collect_simple_list(rest, [to_string(value) | acc])
+  end
+
+  defp collect_simple_list([{:float, _, value} | rest], acc) do
+    collect_simple_list(rest, [to_string(value) | acc])
+  end
+
   # Skip keyword tokens that are not structural (e.g., bare keyword values in list)
   defp collect_simple_list([{:keyword, _, kw} | rest], acc) do
     collect_simple_list(rest, [Atom.to_string(kw) | acc])

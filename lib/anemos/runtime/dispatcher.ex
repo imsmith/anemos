@@ -470,9 +470,15 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
+  # NOTE: Inline data blocks with :local scope are registered as :global because
+  # rules don't run as separate processes — self() is the dispatcher pid, so
+  # {:local, self()} would make all inline blocks share one scope. True per-rule
+  # scoping requires either process-per-rule or a rule-name-based scope discriminator
+  # threaded through both registration and lookup. For now, inline local data blocks
+  # are promoted to global scope.
   defp execute_op(%{type: :register_data, data: data}, _context, state) do
     if data.dataset do
-      DataStore.register(state.data_store, data.name, {:local, self()}, data.dataset)
+      DataStore.register(state.data_store, data.name, :global, data.dataset)
     end
     {:ok, %{type: :register_data, name: data.name}}
   end

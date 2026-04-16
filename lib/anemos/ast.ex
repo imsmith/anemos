@@ -230,6 +230,17 @@ defmodule Anemos.AST do
     defstruct [:name, :source, :content, :transclude, :scope, :line]
   end
 
+  defmodule BuiltinCall do
+    @moduledoc "A built-in function call (filter, map, reduce, emit)."
+    @enforce_keys []
+    @type t :: %__MODULE__{
+      name: :filter | :map | :reduce | :emit,
+      args: list(),
+      line: non_neg_integer() | nil
+    }
+    defstruct [:name, :args, :line]
+  end
+
   defmodule QueryDecl do
     @moduledoc "A named query declaration with expect/engine/body/return, scope, and source line."
     @enforce_keys []

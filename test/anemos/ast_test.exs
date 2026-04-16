@@ -56,4 +56,15 @@ defmodule Anemos.ASTTest do
     assert node.engine == "wikidata"
     assert node.return == "?city"
   end
+
+  test "BuiltinCall struct has all fields" do
+    node = %Anemos.AST.BuiltinCall{
+      name: :filter,
+      args: ["x", %Anemos.AST.BinaryOp{op: :>, left: nil, right: nil}],
+      line: 1
+    }
+
+    assert node.name == :filter
+    assert length(node.args) == 2
+  end
 end

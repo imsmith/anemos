@@ -1324,6 +1324,49 @@ defmodule Anemos.Parser do
     {:ok, %AST.Literal{type: :identifier, value: name, line: meta[:line]}, rest}
   end
 
+  # --- Built-in pipeline functions ---
+
+  defp parse_atom_expression([{:keyword, meta, :filter}, {:query_var, _, var_name} | rest]) do
+    case parse_atom_expression(rest) do
+      {:ok, predicate, rest} ->
+        {:ok, %AST.BuiltinCall{name: :filter, args: [var_name, predicate], line: meta[:line]}, rest}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_atom_expression([{:keyword, meta, :map}, {:query_var, _, var_name} | rest]) do
+    case parse_atom_expression(rest) do
+      {:ok, transform, rest} ->
+        {:ok, %AST.BuiltinCall{name: :map, args: [var_name, transform], line: meta[:line]}, rest}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_atom_expression([{:keyword, meta, :reduce}, {:identifier, _, acc_name} | rest]) do
+    case parse_atom_expression(rest) do
+      {:ok, initial, [{:query_var, _, var_name} | rest2]} ->
+        case parse_atom_expression(rest2) do
+          {:ok, body, rest3} ->
+            {:ok, %AST.BuiltinCall{
+              name: :reduce,
+              args: [acc_name, initial, var_name, body],
+              line: meta[:line]
+            }, rest3}
+          {:error, _} = err -> err
+        end
+      {:ok, _, _} -> {:error, "Expected query variable after reduce initial value on line #{meta[:line]}"}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_atom_expression([{:keyword, meta, :emit} | rest]) do
+    case parse_atom_expression(rest) do
+      {:ok, command, rest} ->
+        {:ok, %AST.BuiltinCall{name: :emit, args: [command], line: meta[:line]}, rest}
+      {:error, _} = err -> err
+    end
+  end
+
   defp parse_atom_expression([{:keyword, meta, kw} | rest]) do
     {:ok, %AST.Literal{type: :keyword, value: Atom.to_string(kw), line: meta[:line]}, rest}
   end

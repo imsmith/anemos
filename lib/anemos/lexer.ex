@@ -12,7 +12,7 @@ defmodule Anemos.Lexer do
     else elseif while for each every foreach do return done nextevent nextrule
     log show list graph trace explain exists infer assert unless until as with
     by that import export version signed_by scope state effect stream to channel
-    service self interval then filter
+    service self interval then filter map reduce
     data query source expect transclude dynamic subscribe periodic memberof global
   )a
 

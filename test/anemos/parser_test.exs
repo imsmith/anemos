@@ -797,6 +797,87 @@ defmodule Anemos.ParserTest do
     assert %Anemos.AST.BinaryOp{op: :|>} = let_stmt.value
   end
 
+  test "parses filter built-in" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?items |> filter ?x (?x > 10)
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :filter}} = let_stmt.value
+  end
+
+  test "parses map built-in" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?items |> map ?x (?x * 2)
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :map}} = let_stmt.value
+  end
+
+  test "parses reduce built-in" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?items |> reduce total 0 ?x ($total + ?x)
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :reduce}} = let_stmt.value
+    builtin = let_stmt.value.right
+    assert length(builtin.args) == 4
+  end
+
+  test "parses emit built-in" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?items |> emit [LOG::write "done"]
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :emit}} = let_stmt.value
+  end
+
+  test "parses chained pipe with multiple built-ins" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?items |> filter ?x (?x > 0) |> map ?x (?x * 100)
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{
+      op: :|>,
+      left: %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :filter}},
+      right: %Anemos.AST.BuiltinCall{name: :map}
+    } = let_stmt.value
+  end
+
   test "pipe operator has lowest precedence" do
     input = """
     rule r {

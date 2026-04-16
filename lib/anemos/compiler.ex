@@ -765,7 +765,7 @@ defmodule Anemos.Compiler do
       :matches_regex -> String.match?(to_string(l), Regex.compile!(to_string(r)))
       :memberof ->
         names = if is_list(r), do: r, else: [r]
-        data_store = Process.get(:anemos_data_store)
+        data_store = Map.get(context, :data_store)
         if data_store do
           Anemos.Runtime.DataStore.member_any?(data_store, names, l)
         else

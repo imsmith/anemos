@@ -24,4 +24,36 @@ defmodule Anemos.ASTTest do
     assert node.module == "DEVICE"
     assert node.verb == "set"
   end
+
+  test "DataDecl struct has all fields" do
+    node = %Anemos.AST.DataDecl{
+      name: "reserved-ips",
+      source: nil,
+      content: {:simple_list, ["10.0.0.0/8", "192.168.0.0/16"]},
+      transclude: nil,
+      scope: :global,
+      line: 1
+    }
+
+    assert node.name == "reserved-ips"
+    assert node.scope == :global
+    assert {:simple_list, [_ | _]} = node.content
+  end
+
+  test "QueryDecl struct has all fields" do
+    node = %Anemos.AST.QueryDecl{
+      name: "wd-city",
+      expect: [:city, :state],
+      engine: "wikidata",
+      body: "some query body",
+      return: "?city",
+      scope: :global,
+      line: 1
+    }
+
+    assert node.name == "wd-city"
+    assert node.expect == [:city, :state]
+    assert node.engine == "wikidata"
+    assert node.return == "?city"
+  end
 end

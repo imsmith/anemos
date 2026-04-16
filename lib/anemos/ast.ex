@@ -215,4 +215,33 @@ defmodule Anemos.AST do
     @type t :: %__MODULE__{target: String.t() | nil, args: map() | nil, line: non_neg_integer() | nil}
     defstruct [:target, :args, :line]
   end
+
+  defmodule DataDecl do
+    @moduledoc "A named data declaration with content, optional source/transclude, scope, and source line."
+    @enforce_keys []
+    @type t :: %__MODULE__{
+      name: String.t() | nil,
+      source: String.t() | nil,
+      content: {:simple_list, list()} | {:format_block, String.t(), String.t()} | {:dynamic, tuple(), String.t() | nil},
+      transclude: {:transclude, String.t(), String.t(), String.t()} | nil,
+      scope: :local | :global,
+      line: non_neg_integer() | nil
+    }
+    defstruct [:name, :source, :content, :transclude, :scope, :line]
+  end
+
+  defmodule QueryDecl do
+    @moduledoc "A named query declaration with expect/engine/body/return, scope, and source line."
+    @enforce_keys []
+    @type t :: %__MODULE__{
+      name: String.t() | nil,
+      expect: [atom()],
+      engine: String.t() | nil,
+      body: String.t() | nil,
+      return: String.t() | nil,
+      scope: :local | :global,
+      line: non_neg_integer() | nil
+    }
+    defstruct [:name, :expect, :engine, :body, :return, :scope, :line]
+  end
 end

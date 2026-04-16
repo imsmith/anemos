@@ -781,4 +781,34 @@ defmodule Anemos.ParserTest do
     assert "192.168.0.0/16" in values
     assert "172.16.0.0/12" in values
   end
+
+  test "parses pipe operator" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?items |> ?items
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{op: :|>} = let_stmt.value
+  end
+
+  test "pipe operator has lowest precedence" do
+    input = """
+    rule r {
+      when EV {
+        let x = ?a + 1 |> ?b
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
+    let_stmt = hd(when_block.body)
+    assert %Anemos.AST.BinaryOp{op: :|>, left: %Anemos.AST.BinaryOp{op: :+}} = let_stmt.value
+  end
 end

@@ -21,6 +21,7 @@ defmodule Anemos.Parser do
   # Operator precedence table (higher number = tighter binding)
   # From spec section 7.1, inverted so higher = tighter
   @precedence %{
+    |>: 0,
     in: 1, notin: 1, contains: 1, starts_with: 1, ends_with: 1, matches_glob: 1, matches_regex: 1, memberof: 1,
     ||: 2, or: 2,
     &&: 3, and: 3,

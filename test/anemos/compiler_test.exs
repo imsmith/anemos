@@ -629,6 +629,88 @@ defmodule Anemos.CompilerTest do
     assert length(result.rules) == 1
   end
 
+  # --- Pipe operator and built-in function evaluation ---
+
+  test "compiles pipe with filter" do
+    input = """
+    rule r {
+      when EV {
+        let result = ?items |> filter ?x (?x > 2)
+        log @result
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    context = %{context_data: %{"items" => [1, 2, 3, 4, 5]}}
+    {:ok, ops, _} = compiled.handler.("EV", context, %{})
+
+    log_op = Enum.find(ops, &(&1.type == :log))
+    assert log_op.value == [3, 4, 5]
+  end
+
+  test "compiles pipe with map" do
+    input = """
+    rule r {
+      when EV {
+        let result = ?items |> map ?x (?x * 10)
+        log @result
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    context = %{context_data: %{"items" => [1, 2, 3]}}
+    {:ok, ops, _} = compiled.handler.("EV", context, %{})
+
+    log_op = Enum.find(ops, &(&1.type == :log))
+    assert log_op.value == [10, 20, 30]
+  end
+
+  test "compiles pipe with reduce" do
+    input = """
+    rule r {
+      when EV {
+        let result = ?items |> reduce total 0 ?x ($total + ?x)
+        log @result
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    context = %{context_data: %{"items" => [1, 2, 3, 4]}}
+    {:ok, ops, _} = compiled.handler.("EV", context, %{})
+
+    log_op = Enum.find(ops, &(&1.type == :log))
+    assert log_op.value == 10
+  end
+
+  test "compiles chained pipe: filter then map" do
+    input = """
+    rule r {
+      when EV {
+        let result = ?items |> filter ?x (?x > 2) |> map ?x (?x * 100)
+        log @result
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    context = %{context_data: %{"items" => [1, 2, 3, 4, 5]}}
+    {:ok, ops, _} = compiled.handler.("EV", context, %{})
+
+    log_op = Enum.find(ops, &(&1.type == :log))
+    assert log_op.value == [300, 400, 500]
+  end
+
   test "warns on dynamic inline data block" do
     import ExUnit.CaptureLog
 

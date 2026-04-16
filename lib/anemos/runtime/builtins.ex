@@ -7,33 +7,37 @@ defmodule Anemos.Runtime.Builtins do
   """
 
   def filter(collection, var_name, predicate_fn, context, bindings) do
+    context = ensure_context_data(context)
+
     collection
     |> List.wrap()
     |> Enum.filter(fn element ->
-      iter_bindings = Map.put(bindings, {:let, var_name}, element)
-      predicate_fn.(context, iter_bindings)
+      iter_context = put_in(context, [:context_data, var_name], element)
+      predicate_fn.(iter_context, bindings)
     end)
   end
 
   def map(collection, var_name, transform_fn, context, bindings) do
+    context = ensure_context_data(context)
+
     collection
     |> List.wrap()
     |> Enum.map(fn element ->
-      iter_bindings = Map.put(bindings, {:let, var_name}, element)
-      transform_fn.(context, iter_bindings)
+      iter_context = put_in(context, [:context_data, var_name], element)
+      transform_fn.(iter_context, bindings)
     end)
   end
 
   def reduce(collection, acc_name, initial, var_name, body_fn, context, bindings) do
+    context = ensure_context_data(context)
+
     collection
     |> List.wrap()
     |> Enum.reduce(initial, fn element, acc ->
-      iter_bindings =
-        bindings
-        |> Map.put({:let, var_name}, element)
-        |> Map.put({:set, acc_name}, acc)
+      iter_context = put_in(context, [:context_data, var_name], element)
+      iter_bindings = Map.put(bindings, {:set, acc_name}, acc)
 
-      body_fn.(context, iter_bindings)
+      body_fn.(iter_context, iter_bindings)
     end)
   end
 
@@ -46,4 +50,7 @@ defmodule Anemos.Runtime.Builtins do
 
     wrapped
   end
+
+  defp ensure_context_data(%{context_data: _} = context), do: context
+  defp ensure_context_data(context), do: Map.put(context, :context_data, %{})
 end

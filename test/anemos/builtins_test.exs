@@ -6,7 +6,7 @@ defmodule Anemos.Runtime.BuiltinsTest do
 
   test "filter keeps elements where predicate is truthy" do
     collection = [1, 2, 3, 4, 5]
-    predicate_fn = fn _ctx, bindings -> Map.get(bindings, {:let, "x"}) > 3 end
+    predicate_fn = fn ctx, _bindings -> get_in(ctx, [:context_data, "x"]) > 3 end
     result = Builtins.filter(collection, "x", predicate_fn, %{}, %{})
     assert result == [4, 5]
   end
@@ -18,15 +18,15 @@ defmodule Anemos.Runtime.BuiltinsTest do
 
   test "map transforms each element" do
     collection = [1, 2, 3]
-    transform_fn = fn _ctx, bindings -> Map.get(bindings, {:let, "x"}) * 10 end
+    transform_fn = fn ctx, _bindings -> get_in(ctx, [:context_data, "x"]) * 10 end
     result = Builtins.map(collection, "x", transform_fn, %{}, %{})
     assert result == [10, 20, 30]
   end
 
   test "reduce accumulates over collection" do
     collection = [1, 2, 3, 4]
-    body_fn = fn _ctx, bindings ->
-      Map.get(bindings, {:set, "total"}) + Map.get(bindings, {:let, "x"})
+    body_fn = fn ctx, bindings ->
+      Map.get(bindings, {:set, "total"}) + get_in(ctx, [:context_data, "x"])
     end
     result = Builtins.reduce(collection, "total", 0, "x", body_fn, %{}, %{})
     assert result == 10

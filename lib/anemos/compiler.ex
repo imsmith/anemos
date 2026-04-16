@@ -756,6 +756,8 @@ defmodule Anemos.Compiler do
     }
   end
 
+  defp resolve_expr(%AST.BuiltinCall{} = call, _context, _bindings), do: call
+
   defp resolve_expr(other, _context, _bindings), do: other
 
   defp resolve_triple_element(%AST.Literal{value: value}, _context, _bindings), do: value
@@ -764,6 +766,12 @@ defmodule Anemos.Compiler do
   defp resolve_triple_element(other, _context, _bindings), do: other
 
   # --- Condition evaluation ---
+
+  # Pipe operator: resolve left side, keep right side as AST for eval_pipe
+  defp eval_condition(%AST.BinaryOp{op: :|>, left: left, right: right}, context, bindings) do
+    collection = resolve_expr(left, context, bindings)
+    eval_pipe(collection, right, context, bindings)
+  end
 
   defp eval_condition(%AST.BinaryOp{op: op, left: left, right: right}, context, bindings) do
     l = resolve_expr(left, context, bindings)
@@ -827,5 +835,50 @@ defmodule Anemos.Compiler do
 
   defp eval_condition(expr, context, bindings) do
     resolve_expr(expr, context, bindings)
+  end
+
+  # --- Pipe evaluation ---
+
+  defp eval_pipe(collection, %AST.BuiltinCall{name: :filter, args: [var_name, predicate]}, context, bindings) do
+    predicate_fn = fn ctx, bnd -> eval_condition(predicate, ctx, bnd) end
+    Anemos.Runtime.Builtins.filter(collection, var_name, predicate_fn, context, bindings)
+  end
+
+  defp eval_pipe(collection, %AST.BuiltinCall{name: :map, args: [var_name, transform]}, context, bindings) do
+    transform_fn = fn ctx, bnd -> resolve_expr(transform, ctx, bnd) end
+    Anemos.Runtime.Builtins.map(collection, var_name, transform_fn, context, bindings)
+  end
+
+  defp eval_pipe(collection, %AST.BuiltinCall{name: :reduce, args: [acc_name, initial_expr, var_name, body]}, context, bindings) do
+    initial = resolve_expr(initial_expr, context, bindings)
+    body_fn = fn ctx, bnd -> resolve_expr(body, ctx, bnd) end
+    Anemos.Runtime.Builtins.reduce(collection, acc_name, initial, var_name, body_fn, context, bindings)
+  end
+
+  defp eval_pipe(collection, %AST.BuiltinCall{name: :emit, args: [command]}, context, bindings) do
+    command_fn = fn element, ctx, bnd ->
+      case command do
+        %AST.Command{module: mod, verb: verb, args: args} ->
+          resolved_args = [element | Enum.map(args, &resolve_expr(&1, ctx, bnd))]
+          %{type: :command, module: mod, verb: verb, args: resolved_args}
+
+        other ->
+          resolve_expr(other, ctx, bnd)
+      end
+    end
+
+    Anemos.Runtime.Builtins.emit(collection, command_fn, context, bindings)
+  end
+
+  # Pipe with a command: prepend collection to args
+  defp eval_pipe(collection, %AST.Command{module: mod, verb: verb, args: args}, context, bindings) do
+    resolved_args = [collection | Enum.map(args, &resolve_expr(&1, context, bindings))]
+    %{type: :command, module: mod, verb: verb, args: resolved_args}
+  end
+
+  # Pipe with any other expression
+  defp eval_pipe(collection, other, context, bindings) do
+    _ = collection
+    resolve_expr(other, context, bindings)
   end
 end

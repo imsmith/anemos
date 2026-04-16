@@ -763,6 +763,14 @@ defmodule Anemos.Compiler do
       :starts_with -> String.starts_with?(to_string(l), to_string(r))
       :ends_with -> String.ends_with?(to_string(l), to_string(r))
       :matches_regex -> String.match?(to_string(l), Regex.compile!(to_string(r)))
+      :memberof ->
+        names = if is_list(r), do: r, else: [r]
+        data_store = Process.get(:anemos_data_store)
+        if data_store do
+          Anemos.Runtime.DataStore.member_any?(data_store, names, l)
+        else
+          false
+        end
       # Arithmetic
       :+ -> l + r
       :- -> l - r

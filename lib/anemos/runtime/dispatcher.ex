@@ -301,6 +301,9 @@ defmodule Anemos.Runtime.Dispatcher do
     |> Enum.reduce({[], state}, fn rule, {results_acc, st} ->
       persistent = Map.get(st.rule_bindings, rule.name, %{})
 
+      # Process dict: pass DataStore pid to compiled rule closures for memberof() evaluation
+      Process.put(:anemos_data_store, st.data_store)
+
       case safe_handle(rule, event_name, context, persistent) do
         {:ok, ops, new_persistent} ->
           new_st = put_in(st.rule_bindings[rule.name], new_persistent)

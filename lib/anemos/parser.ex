@@ -21,7 +21,7 @@ defmodule Anemos.Parser do
   # Operator precedence table (higher number = tighter binding)
   # From spec section 7.1, inverted so higher = tighter
   @precedence %{
-    in: 1, notin: 1, contains: 1, starts_with: 1, ends_with: 1, matches_glob: 1, matches_regex: 1,
+    in: 1, notin: 1, contains: 1, starts_with: 1, ends_with: 1, matches_glob: 1, matches_regex: 1, memberof: 1,
     ||: 2, or: 2,
     &&: 3, and: 3,
     |: 4,
@@ -1221,6 +1221,15 @@ defmodule Anemos.Parser do
     end
   end
 
+  defp climb(left, [{:keyword, meta, :memberof}, {:lparen, _, _} | rest], min_prec) when 1 >= min_prec do
+    {names, rest} = collect_memberof_names(rest, [])
+    with {:ok, rest} <- expect(rest, :rparen) do
+      right = %AST.Literal{type: :list, value: names, line: meta[:line]}
+      node = %AST.BinaryOp{op: :memberof, left: left, right: right, line: meta[:line]}
+      climb(node, rest, min_prec)
+    end
+  end
+
   defp climb(left, tokens, min_prec) do
     case peek_binary_op(tokens) do
       {:ok, op, prec, rest} when prec >= min_prec ->
@@ -1257,6 +1266,10 @@ defmodule Anemos.Parser do
   defp peek_binary_op([{:module_id, _, "IN"} | rest]), do: {:ok, :in, @precedence[:in], rest}
   defp peek_binary_op([{:module_id, _, "AND"} | rest]), do: {:ok, :and, @precedence[:and], rest}
   defp peek_binary_op([{:module_id, _, "OR"} | rest]), do: {:ok, :or, @precedence[:or], rest}
+
+  defp peek_binary_op([{:keyword, _, :memberof} | _] = tokens) do
+    {:ok, :memberof, 1, tokens}
+  end
 
   defp peek_binary_op(_), do: :not_op
 
@@ -1820,6 +1833,29 @@ defmodule Anemos.Parser do
       {:ok, expr, rest} -> parse_paren_contents(rest, [expr | acc])
       {:error, _} = err -> err
     end
+  end
+
+  # --- memberof name list collector ---
+
+  defp collect_memberof_names([{:rparen, _, _} | _] = tokens, acc) do
+    {Enum.reverse(acc), tokens}
+  end
+
+  defp collect_memberof_names([{:identifier, _, name}, {:comma, _, _} | rest], acc) do
+    collect_memberof_names(rest, [name | acc])
+  end
+
+  defp collect_memberof_names([{:identifier, _, name} | rest], acc) do
+    {Enum.reverse([name | acc]), rest}
+  end
+
+  # Handle keyword-as-name (e.g., memberof(global, source))
+  defp collect_memberof_names([{:keyword, _, kw}, {:comma, _, _} | rest], acc) do
+    collect_memberof_names(rest, [Atom.to_string(kw) | acc])
+  end
+
+  defp collect_memberof_names([{:keyword, _, kw} | rest], acc) do
+    {Enum.reverse([Atom.to_string(kw) | acc]), rest}
   end
 
   defp expect([{expected, _, _} | rest], expected), do: {:ok, rest}

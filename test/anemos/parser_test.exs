@@ -748,4 +748,21 @@ defmodule Anemos.ParserTest do
     assert query.name == "find-user"
     assert query.scope == :local
   end
+
+  test "parses memberof expression" do
+    input = """
+    rule r {
+      when EV {
+        if ?x memberof(my-set) {
+          log "yes"
+        }
+      }
+    }
+    """
+
+    assert {:ok, %{declarations: [rule]}} = Parser.parse(input)
+    when_block = Enum.find(rule.body, &match?(%AST.When{}, &1))
+    if_stmt = hd(when_block.body)
+    assert %AST.BinaryOp{op: :memberof} = if_stmt.condition
+  end
 end

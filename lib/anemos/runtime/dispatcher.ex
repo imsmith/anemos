@@ -15,7 +15,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @behaviour Comn
 
-  alias Anemos.Runtime.{CapabilityServer, ConditionServer, ModuleRegistry, TripleStore}
+  alias Anemos.Runtime.{CapabilityServer, ConditionServer, DataStore, ModuleRegistry, TripleStore}
 
   # --- Client API ---
 
@@ -68,6 +68,14 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.call(dispatcher, {:condition_state, condition_name})
   end
 
+  @doc """
+  Returns true if `value` is a member of the named data block dataset.
+  """
+  @spec data_member?(pid() | atom(), String.t(), term()) :: boolean()
+  def data_member?(dispatcher, name, value) do
+    GenServer.call(dispatcher, {:data_member?, name, value})
+  end
+
   # --- Server callbacks ---
 
   @impl true
@@ -105,6 +113,7 @@ defmodule Anemos.Runtime.Dispatcher do
       end)
 
     {:ok, triple_store} = TripleStore.start_link()
+    {:ok, data_store} = DataStore.start_link()
 
     {:ok,
      %{
@@ -114,6 +123,7 @@ defmodule Anemos.Runtime.Dispatcher do
        condition_servers: condition_servers,
        capability_servers: capability_servers,
        triple_store: triple_store,
+       data_store: data_store,
        channel_connector: channel_connector,
        rule_bindings: %{}
      }}
@@ -190,6 +200,14 @@ defmodule Anemos.Runtime.Dispatcher do
         {cap.name, pid}
       end)
 
+    # Register data blocks
+    Enum.each(Map.get(compiled, :data_blocks, []), fn data ->
+      if data.dataset do
+        DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
+          source: data.source)
+      end
+    end)
+
     # Merge into existing state
     merged_rules = state.rules ++ compiled.rules
     merged_conditions = Map.merge(state.condition_servers, new_condition_servers)
@@ -212,6 +230,12 @@ defmodule Anemos.Runtime.Dispatcher do
       %{pid: pid} -> {:reply, ConditionServer.get_state(pid), state}
       nil -> {:reply, nil, state}
     end
+  end
+
+  @impl true
+  def handle_call({:data_member?, name, value}, _from, state) do
+    result = DataStore.member?(state.data_store, name, value)
+    {:reply, result, state}
   end
 
   @impl true
@@ -441,6 +465,17 @@ defmodule Anemos.Runtime.Dispatcher do
           [{:error, {:handler_crash, rule.name, reason}}]
       end
     end)
+  end
+
+  defp execute_op(%{type: :register_data, data: data}, _context, state) do
+    if data.dataset do
+      DataStore.register(state.data_store, data.name, {:local, self()}, data.dataset)
+    end
+    {:ok, %{type: :register_data, name: data.name}}
+  end
+
+  defp execute_op(%{type: :register_query, query: query}, _context, _state) do
+    {:ok, %{type: :register_query, name: query.name}}
   end
 
   defp triple_query_pattern({:var, _} = var), do: var

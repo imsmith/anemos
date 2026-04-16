@@ -503,4 +503,37 @@ defmodule Anemos.Runtime.DispatcherTest do
     results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
     assert [{:ok, %{type: :emit}}] = results
   end
+
+  # --- DataStore integration ---
+
+  test "dispatcher registers data blocks and supports data_member?" do
+    {:ok, registry} = Anemos.Runtime.ModuleRegistry.start_link([])
+
+    input = """
+    data test-set {
+      alpha
+      bravo
+    }
+    rule r {
+      when EV {
+        log "ok"
+      }
+    }
+    """
+
+    {:ok, ast} = Anemos.Parser.parse(input)
+    {:ok, compiled} = Anemos.Compiler.compile(ast)
+
+    {:ok, dispatcher} =
+      Anemos.Runtime.Dispatcher.start_link(
+        rules: compiled.rules,
+        registry: registry
+      )
+
+    :ok = Anemos.Runtime.Dispatcher.load(dispatcher, compiled)
+
+    assert Anemos.Runtime.Dispatcher.data_member?(dispatcher, "test-set", "alpha")
+    assert Anemos.Runtime.Dispatcher.data_member?(dispatcher, "test-set", "bravo")
+    refute Anemos.Runtime.Dispatcher.data_member?(dispatcher, "test-set", "unknown")
+  end
 end

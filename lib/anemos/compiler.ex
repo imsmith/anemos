@@ -21,12 +21,33 @@ defmodule Anemos.CompiledData do
   @moduledoc "A compiled data block."
   @enforce_keys [:name]
   defstruct [:name, :scope, :dataset, :format, :raw, :source, :transclude, :dynamic]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          scope: :local | :global | nil,
+          dataset: MapSet.t() | nil,
+          format: String.t() | nil,
+          raw: String.t() | nil,
+          source: String.t() | nil,
+          transclude: tuple() | nil,
+          dynamic: tuple() | nil
+        }
 end
 
 defmodule Anemos.CompiledQuery do
   @moduledoc "A compiled query block."
   @enforce_keys [:name]
   defstruct [:name, :scope, :expect, :engine, :body, :return, :handler]
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          scope: :local | :global | nil,
+          expect: [atom()] | nil,
+          engine: String.t() | nil,
+          body: String.t() | nil,
+          return: String.t() | nil,
+          handler: fun() | nil
+        }
 end
 
 defmodule Anemos.CompilationResult do

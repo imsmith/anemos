@@ -289,6 +289,49 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @impl true
+  def handle_info({:dwell_fire, rule_name, event_name}, state) do
+    rule_state = Map.get(state.rule_bindings, rule_name, %{})
+    dwell_key = {:dwell, event_name}
+
+    case Map.get(rule_state, dwell_key) do
+      %{state: :armed, last_context: context} when context != nil ->
+        rule = Enum.find(state.rules, fn r -> r.name == rule_name and event_name in r.subscriptions end)
+
+        new_state =
+          if rule do
+            {_results, st_after_run} = dispatch_immediate(rule, event_name, context, [], state)
+
+            # dispatch_immediate writes handler persistent bindings back to
+            # rule_bindings[rule_name], which may wipe dwell entries for other
+            # events on the same rule. Merge: take the post-run handler state,
+            # then layer back all dwell entries from the pre-run snapshot except
+            # the one we just fired (reset that to :listening).
+            pre_run_dwell_entries =
+              rule_state
+              |> Enum.filter(fn {k, _} -> match?({:dwell, _}, k) end)
+              |> Map.new()
+
+            handler_state = Map.get(st_after_run.rule_bindings, rule_name, %{})
+
+            updated_rule_state =
+              handler_state
+              |> Map.merge(pre_run_dwell_entries)
+              |> Map.put(dwell_key, %{state: :listening, timer_ref: nil, last_context: nil})
+
+            put_in(st_after_run.rule_bindings[rule_name], updated_rule_state)
+          else
+            state
+          end
+
+        {:noreply, new_state}
+
+      _ ->
+        # Stale fire — rule was cancelled or already fired. Drop silently.
+        {:noreply, state}
+    end
+  end
+
+  @impl true
   def handle_info({:condition_transition, _name}, state) do
     # Transition messages are drained synchronously during dispatch;
     # any that arrive outside a dispatch cycle are silently ignored.
@@ -344,46 +387,57 @@ defmodule Anemos.Runtime.Dispatcher do
     matching
     |> Enum.filter(&context_matches?(&1, event_context))
     |> Enum.reduce({[], state}, fn rule, {results_acc, st} ->
-      persistent = Map.get(st.rule_bindings, rule.name, %{})
+      case Map.get(rule, :dwell_duration_ms) do
+        nil ->
+          dispatch_immediate(rule, event_name, context, results_acc, st)
 
-      # Pass DataStore pid and rule name through context so compiled closures
-      # can resolve memberof() with per-rule scope
-      enriched_context =
-        context
-        |> Map.put(:data_store, st.data_store)
-        |> Map.put(:_rule_name, rule.name)
-
-      case safe_handle(rule, event_name, enriched_context, persistent) do
-        {:ok, ops, new_persistent} ->
-          new_st = put_in(st.rule_bindings[rule.name], new_persistent)
-          rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
-          exec_context = Map.put(context, :_rule_source, {rule.name, rule_context})
-
-          all_results =
-            Enum.flat_map(ops, fn op ->
-              List.wrap(execute_op(op, exec_context, new_st))
-            end)
-
-          {normal_results, emit_events} =
-            Enum.split_with(all_results, fn
-              {:emit_event, _, _} -> false
-              _ -> true
-            end)
-
-          {emit_results, new_st} =
-            Enum.reduce(emit_events, {[], new_st}, fn {:emit_event, label, op}, {acc, s} ->
-              {sub_results, s} = dispatch_to_rules(label, context, s)
-              {acc ++ [{:ok, op} | sub_results], s}
-            end)
-
-          {results_acc ++ normal_results ++ emit_results, new_st}
-
-        {:error, reason} ->
-          err = Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
-            message: "Rule #{rule.name} raised: #{inspect(reason)}")
-          {results_acc ++ [{:error, err}], st}
+        ms when is_integer(ms) ->
+          new_st = handle_dwell_event(rule, event_name, context, ms, st)
+          {results_acc, new_st}
       end
     end)
+  end
+
+  defp dispatch_immediate(rule, event_name, context, results_acc, st) do
+    persistent = Map.get(st.rule_bindings, rule.name, %{})
+
+    # Pass DataStore pid and rule name through context so compiled closures
+    # can resolve memberof() with per-rule scope
+    enriched_context =
+      context
+      |> Map.put(:data_store, st.data_store)
+      |> Map.put(:_rule_name, rule.name)
+
+    case safe_handle(rule, event_name, enriched_context, persistent) do
+      {:ok, ops, new_persistent} ->
+        new_st = put_in(st.rule_bindings[rule.name], new_persistent)
+        rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
+        exec_context = Map.put(context, :_rule_source, {rule.name, rule_context})
+
+        all_results =
+          Enum.flat_map(ops, fn op ->
+            List.wrap(execute_op(op, exec_context, new_st))
+          end)
+
+        {normal_results, emit_events} =
+          Enum.split_with(all_results, fn
+            {:emit_event, _, _} -> false
+            _ -> true
+          end)
+
+        {emit_results, new_st} =
+          Enum.reduce(emit_events, {[], new_st}, fn {:emit_event, label, op}, {acc, s} ->
+            {sub_results, s} = dispatch_to_rules(label, context, s)
+            {acc ++ [{:ok, op} | sub_results], s}
+          end)
+
+        {results_acc ++ normal_results ++ emit_results, new_st}
+
+      {:error, reason} ->
+        err = Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
+          message: "Rule #{rule.name} raised: #{inspect(reason)}")
+        {results_acc ++ [{:error, err}], st}
+    end
   end
 
   defp context_matches?(_rule, nil), do: true
@@ -542,6 +596,61 @@ defmodule Anemos.Runtime.Dispatcher do
   defp execute_op(%{type: :register_query, query: query}, _context, _state) do
     {:ok, %{type: :register_query, name: query.name}}
   end
+
+  # --- Dwell timer state machine ---
+  #
+  # State per (rule_name, event_name) is stored in rule_bindings under the key
+  # {:dwell, event_name} as %{state: :listening | :armed, timer_ref: ref | nil,
+  # last_context: context | nil}.
+  #
+  # Transitions:
+  #   :listening + truthy  -> :armed  (arm timer)
+  #   :listening + falsy   -> :listening (no-op)
+  #   :armed     + truthy  -> :armed  (no restart, update last_context)
+  #   :armed     + falsy   -> :listening (cancel timer)
+  #   timer fires          -> run body, return to :listening
+
+  defp handle_dwell_event(rule, event_name, context, ms, st) do
+    truthy? = dwell_signal_truthy?(context)
+    rule_state = Map.get(st.rule_bindings, rule.name, %{})
+    dwell_key = {:dwell, event_name}
+    current = Map.get(rule_state, dwell_key, %{state: :listening, timer_ref: nil, last_context: nil})
+
+    new_dwell =
+      case {current.state, truthy?} do
+        {:listening, true} ->
+          ref = Process.send_after(self(), {:dwell_fire, rule.name, event_name}, ms)
+          %{state: :armed, timer_ref: ref, last_context: context}
+
+        {:listening, false} ->
+          current
+
+        {:armed, true} ->
+          # No restart — keep existing timer, update last_context.
+          %{current | last_context: context}
+
+        {:armed, false} ->
+          if current.timer_ref, do: Process.cancel_timer(current.timer_ref)
+          %{state: :listening, timer_ref: nil, last_context: nil}
+      end
+
+    new_rule_state = Map.put(rule_state, dwell_key, new_dwell)
+    put_in(st.rule_bindings[rule.name], new_rule_state)
+  end
+
+  defp dwell_signal_truthy?(context) do
+    payload = Map.get(context, :context_data) || %{}
+
+    cond do
+      Map.has_key?(payload, "state") -> truthy?(Map.get(payload, "state"))
+      Map.has_key?(payload, :state) -> truthy?(Map.get(payload, :state))
+      true -> true
+    end
+  end
+
+  defp truthy?(nil), do: false
+  defp truthy?(false), do: false
+  defp truthy?(_), do: true
 
   defp triple_query_pattern({:var, _} = var), do: var
   defp triple_query_pattern(literal), do: literal

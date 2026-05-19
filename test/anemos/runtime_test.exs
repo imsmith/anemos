@@ -215,4 +215,46 @@ defmodule Anemos.RuntimeTest do
     # Verify scheduler process is running
     assert Process.alive?(Process.whereis(:"test_at_rt.scheduler"))
   end
+
+  test "for duration fires body after sustained truthy signal" do
+    import ExUnit.CaptureLog
+
+    start_supervised!({Anemos.Runtime, name: :test_dwell_e2e})
+
+    Anemos.Runtime.load(:test_dwell_e2e, """
+    rule r {
+      when EV for 80ms { log "dwell fired" }
+    }
+    """)
+
+    log =
+      capture_log(fn ->
+        Anemos.Runtime.dispatch(:test_dwell_e2e, "EV")
+        Process.sleep(150)
+      end)
+
+    assert log =~ "dwell fired"
+  end
+
+  test "for duration cancels on falsy signal mid-window" do
+    import ExUnit.CaptureLog
+
+    start_supervised!({Anemos.Runtime, name: :test_dwell_cancel})
+
+    Anemos.Runtime.load(:test_dwell_cancel, """
+    rule r {
+      when EV for 100ms { log "should not fire" }
+    }
+    """)
+
+    log =
+      capture_log(fn ->
+        Anemos.Runtime.dispatch(:test_dwell_cancel, "EV")
+        Process.sleep(30)
+        Anemos.Runtime.dispatch(:test_dwell_cancel, "EV", %{context_data: %{"state" => false}})
+        Process.sleep(150)
+      end)
+
+    refute log =~ "should not fire"
+  end
 end

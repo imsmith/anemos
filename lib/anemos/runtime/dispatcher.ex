@@ -601,7 +601,12 @@ defmodule Anemos.Runtime.Dispatcher do
   #
   # State per (rule_name, event_name) is stored in rule_bindings under the key
   # {:dwell, event_name} as %{state: :listening | :armed, timer_ref: ref | nil,
-  # last_context: context | nil}.
+  # last_context: map() | nil}.
+  #
+  # The spec's `:activated` state is collapsed here: the body runs synchronously
+  # inside handle_info({:dwell_fire, ...}), which IS the activated phase. We
+  # never persist `:activated` — the state transitions directly from `:armed`
+  # back to `:listening` after the body completes.
   #
   # Transitions:
   #   :listening + truthy  -> :armed  (arm timer)
@@ -609,6 +614,8 @@ defmodule Anemos.Runtime.Dispatcher do
   #   :armed     + truthy  -> :armed  (no restart, update last_context)
   #   :armed     + falsy   -> :listening (cancel timer)
   #   timer fires          -> run body, return to :listening
+  #
+  # See docs/superpowers/specs/2026-05-18-elseif-and-dwell-timer-design.md.
 
   defp handle_dwell_event(rule, event_name, context, ms, st) do
     truthy? = dwell_signal_truthy?(context)

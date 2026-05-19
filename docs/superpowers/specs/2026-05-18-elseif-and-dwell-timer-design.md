@@ -102,7 +102,7 @@ The dwell-timer path lives in `Dispatcher` because it already owns per-rule pers
   - If `nil` (no `for`) → existing immediate-fire path (unchanged).
   - If set → route to a new `handle_dwell/4` that runs the state machine.
 - `handle_dwell/4`:
-  - Resolve signal truthiness from `context[:payload][:state]` (or top-level `:state`).
+  - Resolve signal truthiness from `context[:context_data]["state"]` or `context[:context_data][:state]` (consistent with how Anemos.Event.payload/1 populates `context_data`).
   - Look up current `{:dwell, event_name}` state in `rule_bindings`.
   - Apply the transition table above. On `listening → armed`, call `Process.send_after(self(), {:dwell_fire, rule_name, event_name}, ms)` and stash the context. On `armed → listening`, call `Process.cancel_timer(ref)`.
 - New `handle_info({:dwell_fire, rule_name, event_name}, state)` clause on the Dispatcher:

@@ -95,6 +95,28 @@ defmodule Anemos.DwellTimerTest do
     refute log =~ "fired"
   end
 
+  test "falsy atom-key payload also cancels the timer" do
+    import ExUnit.CaptureLog
+
+    src = """
+    rule r {
+      when EV for 100ms { log "fired" }
+    }
+    """
+    dispatcher = setup_runtime(src)
+
+    log =
+      capture_log(fn ->
+        _ = Dispatcher.dispatch(dispatcher, "EV", %{})
+        Process.sleep(30)
+        # Atom key (not string key) — verifies dwell_signal_truthy? handles both.
+        _ = Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{state: false}})
+        Process.sleep(150)
+      end)
+
+    refute log =~ "fired"
+  end
+
   test "falsy-payload arrival in listening state is a no-op (no timer started)" do
     import ExUnit.CaptureLog
 

@@ -737,4 +737,73 @@ defmodule Anemos.CompilerTest do
     assert log =~ "dynamic"
     assert log =~ "live-feed"
   end
+
+  # --- for <duration> compilation ---
+
+  test "when without 'for' has nil dwell_duration_ms" do
+    input = """
+    rule r {
+      when EV { log "go" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    assert compiled.dwell_duration_ms == nil
+  end
+
+  test "when EV for 10min compiles dwell_duration_ms to 600_000" do
+    input = """
+    rule r {
+      when EV for 10min { log "go" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    assert compiled.dwell_duration_ms == 600_000
+  end
+
+  test "when EV for 500ms compiles dwell_duration_ms to 500" do
+    input = """
+    rule r {
+      when EV for 500ms { log "go" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    assert compiled.dwell_duration_ms == 500
+  end
+
+  test "for 0s is rejected at compile time" do
+    input = """
+    rule r {
+      when EV for 0s { log "go" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    assert {:error, msg} = Compiler.compile(ast)
+    assert msg =~ "zero"
+  end
+
+  test "multiple when blocks, mixed for/no-for" do
+    input = """
+    rule r {
+      when EV1 { log "a" }
+      when EV2 for 5min { log "b" }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: rules}} = Compiler.compile(ast)
+
+    assert length(rules) == 2
+    ev1_rule = Enum.find(rules, &("EV1" in &1.subscriptions))
+    ev2_rule = Enum.find(rules, &("EV2" in &1.subscriptions))
+
+    assert ev1_rule.dwell_duration_ms == nil
+    assert ev2_rule.dwell_duration_ms == 300_000
+  end
 end

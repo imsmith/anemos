@@ -1,19 +1,24 @@
 defmodule Anemos.CompiledRule do
   @moduledoc """
-  A compiled rule: name, event subscriptions, and a handler closure.
+  A compiled rule: name, event subscriptions, handler closure, and optional dwell duration.
 
   The handler takes `(event_name, context, persistent_bindings)` and returns
   `{:ok, [operation], updated_persistent_bindings}`. Persistent bindings hold
   `set` values that survive across firings.
+
+  When `dwell_duration_ms` is non-nil, the rule is dispatched through the
+  Dispatcher's dwell-timer state machine instead of being fired immediately.
+  See `Anemos.Runtime.Dispatcher` for the state-machine semantics.
   """
   @enforce_keys [:name, :subscriptions, :handler]
-  defstruct [:name, :subscriptions, :handler, :meta]
+  defstruct [:name, :subscriptions, :handler, :meta, :dwell_duration_ms]
 
   @type t :: %__MODULE__{
           name: String.t(),
           subscriptions: [String.t()],
           handler: (String.t(), map(), map() -> {:ok, [map()], map()}),
-          meta: map() | nil
+          meta: map() | nil,
+          dwell_duration_ms: non_neg_integer() | nil
         }
 end
 
@@ -109,30 +114,32 @@ defmodule Anemos.Compiler do
       iex> {:ok, %{rules: [compiled]}} = Anemos.Compiler.compile(ast)
       iex> {:ok, [%{type: :log, value: 3}], _} = compiled.handler.("EV", %{}, %{})
   """
-  # TODO: Add {:error, String.t()} return when the compiler needs to reject invalid AST.
-  # For v0.1.0, the catch-all clauses silently drop unknown nodes.
-  @spec compile(AST.Program.t()) :: {:ok, Anemos.CompilationResult.t()}
+  @spec compile(AST.Program.t()) :: {:ok, Anemos.CompilationResult.t()} | {:error, String.t()}
   def compile(%AST.Program{declarations: declarations}) do
-    result =
-      Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
-        case compile_declaration(decl) do
-          {:rule, rules, schedules, inline_data, inline_queries} ->
-            %{acc |
-              rules: acc.rules ++ rules,
-              schedules: acc.schedules ++ schedules,
-              data_blocks: acc.data_blocks ++ inline_data,
-              query_blocks: acc.query_blocks ++ inline_queries
-            }
-          {:condition, cond, schedules} ->
-            %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
-          {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
-          {:data, compiled_data} -> %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
-          {:query, compiled_query} -> %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
-          :skip -> acc
-        end
-      end)
+    try do
+      result =
+        Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
+          case compile_declaration(decl) do
+            {:rule, rules, schedules, inline_data, inline_queries} ->
+              %{acc |
+                rules: acc.rules ++ rules,
+                schedules: acc.schedules ++ schedules,
+                data_blocks: acc.data_blocks ++ inline_data,
+                query_blocks: acc.query_blocks ++ inline_queries
+              }
+            {:condition, cond, schedules} ->
+              %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
+            {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
+            {:data, compiled_data} -> %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
+            {:query, compiled_query} -> %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
+            :skip -> acc
+          end
+        end)
 
-    {:ok, result}
+      {:ok, result}
+    catch
+      {:compile_error, msg} -> {:error, msg}
+    end
   end
 
   # --- Declaration dispatch ---
@@ -305,10 +312,18 @@ defmodule Anemos.Compiler do
     compiled_meta = Map.merge(rule_meta || %{}, %{context_path: context_path})
 
     when_rules =
-      Enum.map(when_blocks, fn %AST.When{event: event, body: when_body, guard: guard} ->
+      Enum.map(when_blocks, fn %AST.When{event: event, body: when_body, guard: guard, duration: duration} ->
         subscriptions = event_to_subscriptions(event)
         handler = build_guarded_handler(when_body, guard)
-        %CompiledRule{name: name, subscriptions: subscriptions, handler: handler, meta: compiled_meta}
+        dwell_ms = duration_to_dwell_ms(duration)
+
+        %CompiledRule{
+          name: name,
+          subscriptions: subscriptions,
+          handler: handler,
+          meta: compiled_meta,
+          dwell_duration_ms: dwell_ms
+        }
       end)
 
     {at_schedules, at_rules} =
@@ -424,6 +439,18 @@ defmodule Anemos.Compiler do
   defp at_spec_to_event({:nld, text}) do
     safe_name = text |> String.replace(".", "_")
     {"AT_NLD_#{safe_name}", {:nld, text}, nil}
+  end
+
+  # --- Dwell duration ---
+
+  defp duration_to_dwell_ms(nil), do: nil
+
+  defp duration_to_dwell_ms({0, _unit}) do
+    throw({:compile_error, "for <duration>: zero duration not allowed"})
+  end
+
+  defp duration_to_dwell_ms({amount, _unit} = dur) when amount > 0 do
+    Anemos.Runtime.Duration.to_ms(dur)
   end
 
   # --- Event to subscriptions ---

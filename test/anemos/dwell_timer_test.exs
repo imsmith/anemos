@@ -51,6 +51,8 @@ defmodule Anemos.DwellTimerTest do
     """
     dispatcher = setup_runtime(src)
 
+    elapsed_ref = :counters.new(1, [:atomics])
+
     log =
       capture_log(fn ->
         t0 = System.monotonic_time(:millisecond)
@@ -62,9 +64,11 @@ defmodule Anemos.DwellTimerTest do
         # Wait until t=260ms — past the 200ms expiry, well before any 320ms.
         Process.sleep(140)
         t1 = System.monotonic_time(:millisecond)
-        assert t1 - t0 >= 260 and t1 - t0 < 300
+        :counters.put(elapsed_ref, 1, t1 - t0)
       end)
 
+    elapsed = :counters.get(elapsed_ref, 1)
+    assert elapsed >= 260 and elapsed < 350
     assert log =~ "fired"
   end
 

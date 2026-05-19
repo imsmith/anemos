@@ -630,7 +630,7 @@ defmodule Anemos.Runtime.Dispatcher do
           %{current | last_context: context}
 
         {:armed, false} ->
-          if current.timer_ref, do: Process.cancel_timer(current.timer_ref)
+          if current.timer_ref, do: Process.cancel_timer(current.timer_ref, info: false)
           %{state: :listening, timer_ref: nil, last_context: nil}
       end
 

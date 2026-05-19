@@ -18,7 +18,7 @@ defmodule Anemos.CompiledRule do
           subscriptions: [String.t()],
           handler: (String.t(), map(), map() -> {:ok, [map()], map()}),
           meta: map() | nil,
-          dwell_duration_ms: non_neg_integer() | nil
+          dwell_duration_ms: pos_integer() | nil
         }
 end
 

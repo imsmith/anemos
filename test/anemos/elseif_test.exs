@@ -63,7 +63,14 @@ defmodule Anemos.ElseifTest do
     }
     """
 
-    {:ok, _ast} = Parser.parse(input)
+    {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
+    [%AST.When{body: [arm1]}] = rule.body
+    assert %AST.If{body: [%AST.Log{expression: %AST.Literal{value: "1"}}]} = arm1
+    assert [arm2] = arm1.else_body
+    assert %AST.If{body: [%AST.Log{expression: %AST.Literal{value: "2"}}]} = arm2
+    assert [arm3] = arm2.else_body
+    assert %AST.If{body: [%AST.Log{expression: %AST.Literal{value: "3"}}]} = arm3
+    assert [%AST.Log{expression: %AST.Literal{value: "4"}}] = arm3.else_body
   end
 
   test "parses two-token 'else if' form equivalently" do
@@ -81,7 +88,7 @@ defmodule Anemos.ElseifTest do
 
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [%AST.When{body: [%AST.If{} = outer]}] = rule.body
-    assert [%AST.If{}] = outer.else_body
+    assert [%AST.If{body: [%AST.Log{expression: %AST.Literal{value: "second"}}]}] = outer.else_body
   end
 
   # --- End-to-end execution tests ---

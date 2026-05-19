@@ -126,15 +126,7 @@ defmodule Anemos.Runtime.Scheduler do
 
   # --- Time calculations ---
 
-  defp duration_to_ms({amount, :ms}), do: amount
-  defp duration_to_ms({amount, :s}), do: amount * 1_000
-  defp duration_to_ms({amount, :seconds}), do: amount * 1_000
-  defp duration_to_ms({amount, :min}), do: amount * 60_000
-  defp duration_to_ms({amount, :minutes}), do: amount * 60_000
-  defp duration_to_ms({amount, :h}), do: amount * 3_600_000
-  defp duration_to_ms({amount, :hours}), do: amount * 3_600_000
-  defp duration_to_ms({amount, :d}), do: amount * 86_400_000
-  defp duration_to_ms({amount, :days}), do: amount * 86_400_000
+  defp duration_to_ms(dur), do: Anemos.Runtime.Duration.to_ms(dur)
 
   defp ms_until_time(hour, minute) do
     now = NaiveDateTime.local_now()

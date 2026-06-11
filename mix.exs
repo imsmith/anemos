@@ -7,6 +7,7 @@ defmodule Anemos.MixProject do
       app: :anemos,
       version: "0.1.0",
       elixir: "~> 1.19",
+      package: package(),
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :test,
@@ -16,6 +17,13 @@ defmodule Anemos.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  defp package do
+    [
+      licenses: ["AGPL-3.0-or-later"],
+      files: ~w(lib mix.exs LICENSE README* CLAUDE.md)
+    ]
+  end
 
   # Run "mix help compile.app" to learn about applications.
   def application do

@@ -55,17 +55,18 @@ than removed.
 | A-37 | LOW | `compiler.ex:453` type confusion latent in dwell duration | Open |
 | A-38 | LOW | DST exposure is wider than `scheduler.ex` — `nld.ex` too | Open |
 | A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | **Fixed** — `dispatch_rules/5` is now the only path into a handler |
-| A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | Open |
+| A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | **Fixed** — syntax is `nextrule t with { k: v }`; needed a lexer fix too |
+| A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | Open — decision needed |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | Open |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | Open |
-| A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | Open |
+| A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
 | A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
 | A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
 | A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | Open |
 | A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; the class is unaudited |
 | A-45 | LOW | Lexer post-processing errors report column 1, violating the stated contract | Open |
-| A-46 | HIGH | The language has no boolean literals; `== true` is inverted from intent | Open |
+| A-46 | HIGH | The language has no boolean literals; `== true` is inverted from intent | **Fixed** — `{:boolean, _, true\|false}` token; mismatch warns, no coercion |
 | A-47 | MEDIUM | Compound `AND` event triggers behave as `OR` | Open |
 | A-48 | MEDIUM | `until` on a condition trigger cannot latch | Open |
 | A-49 | MEDIUM | Multiple trigger blocks in one condition run each other's side effects | Open |
@@ -1435,6 +1436,45 @@ Every `== true`, `== false`, `!= true` and `unless ... == true` construct in eve
 is affected. This compounds A-25: the language's failure mode for this mistake is a
 successful run with silently wrong output.
 
+**Correction to this entry's own wording:** the example above was written as if `unless`
+were a statement modifier. It is not — `unless` is a **block guard**, written
+`when EV unless ?x == true { ... }`. The postfix form does not parse
+(`Unexpected token keyword ... expected statement`). Any README text derived from this
+entry must not copy the postfix shape.
+
+### Resolution, 2026-08-06
+
+`true` and `false` are now lexer tokens producing `{:boolean, _, true | false}`, via a
+compile-time map keyed by binary — the same discipline A-08 established, with no
+`String.to_atom` anywhere near source text. They are deliberately **not** in `@keywords`: a
+keyword token names a construct, whereas these are values and must reach the parser already
+typed.
+
+**Comparison does not coerce, and `?var == "true"` keeps working.** Coercion was rejected
+because operand types are not knowable at compile time — context data arrives from arbitrary
+host payloads, so a rule making `"true" == true` answer true would also owe an answer for
+`"1"`, `"yes"` and `"TRUE"`, and whichever it picked would be invisible to the policy
+author. Making it a compile error fails for the same reason: the parser sees a literal on
+one side and an unresolved `?var` on the other. It would also break every policy written
+against a string-valued host, a shape this entry itself calls plausible.
+
+So the comparison answers honestly and warns at evaluation time:
+
+```text
+[anemos] boolean/string mismatch in ==: true and "true" are different types and
+can never be equal. Boolean literals are `true`/`false`; the quoted forms are strings.
+```
+
+The warning fires in both directions and is deliberately narrow — `?name == "alpha"`
+against `"beta"` says nothing, with a test pinning that, so the warning does not become
+noise people learn to ignore.
+
+**Nothing regressed.** No `.rule` file in `priv/examples/` contains the bare words `true` or
+`false`. The four uses in test DSL sources are all bare-truthiness (`while true`, `if true`,
+`if true unless $skip`), never comparison; `true` was previously the truthy string
+`"true"` and is now the boolean `true`, which is truthy either way. All four pass
+unmodified. A-46 was, as filed, entirely un-exercised.
+
 ### Why it was not caught
 
 Nothing in the test suite or the examples uses a boolean literal. It was found only because
@@ -1581,8 +1621,48 @@ layer too low. The compiler resolves nothing because the parser never gives it a
 code reachable only from a hand-built AST — which also explains the audit's Appendix B
 observation that `AST.BlockArgs` is defined, documented, and never constructed.
 
-`nextrule foo { a: 1 }` does not parse into args at all; the brace block is consumed
-elsewhere.
+### Correction, 2026-08-06 — the syntax in this entry was wrong
+
+`nextrule foo { a: 1 }` is **not** the syntax and never was. The argument block belongs to
+`with`:
+
+```text
+nextrule normalize-metadata with { file: [FILE::path] }
+```
+
+Three independent sources agree: `docs/design-notes/future-features.md:69`, the original
+implementation plan `docs/superpowers/plans/2026-04-13-loops-and-flow-control.md:464` —
+which specifies `parse_optional_with/1` and a test asserting `%AST.BlockArgs{}`, written and
+then never implemented — and the language sketches in the Obsidian vault. A bare brace block
+after `nextrule` is not an argument list.
+
+### This was a lexer defect as well as a parser one
+
+`key: value` **did not lex at all**. The language had no bare-colon token:
+
+```text
+Anemos.Lexer.tokenize(~s|nextrule foo with { key: "value" }|)
+=> {:error, "expected end of string near \": \\\"value\\\" ...\"", 1, 23}
+```
+
+Fixing `parse_nextrule/1` alone would have produced code unreachable from source text. This
+entry's original diagnosis — "dropped in the parser, not the compiler" — was itself one
+layer too high.
+
+### Resolution
+
+`:colon` added to the lexer's delimiter choice, safe by construction: every other colon-led
+form (`:atom`, `:{interp}`, `::`, `HH:MM`, IPv6) is matched earlier in the token choice, so
+the bare colon fires only where none of them do. `parse_optional_with/1` and
+`parse_block_args/2` accept identifier, keyword or module_id keys with optional comma
+separators, so both the comma and newline-per-pair styles parse. Keys stay **binaries** — a
+keyword key converts via `Atom.to_string/1` on an already-existing atom, and there is a
+regression test asserting that 2,000 unique `with` keys grow the atom table by fewer than
+200.
+
+No compiler change was needed: `eval_statement/3` on `%AST.NextRule{}` was already correct
+and is now reachable, and the dispatcher's merge into `:context_data` was already correct.
+Both are covered end to end.
 
 ### Status
 
@@ -1688,6 +1768,42 @@ This is the third instance of the same shape:
 A struct field that nothing populates is indistinguishable, at the consumer, from one whose
 value happens to be absent. Worth a Dialyzer pass or a compile-time assertion once A-27's
 static analysis lands.
+
+---
+
+## A-55 — `AST.NextEvent.args` has no producer and no consumer
+
+**Filed:** 2026-08-06 · **Severity:** LOW · **decision needed, not a bug report**
+
+`lib/anemos/ast.ex:208-209` declares `args` on `%AST.NextEvent{}`. Both parser clauses
+hardcode it to `nil` (`parser.ex:1080`, `:1084`), and — unlike the other four instances of
+this pattern — it has **no consumer either**. `compiler.ex`'s `eval_statement/3` on
+`%AST.NextEvent{}` does not destructure `args` at all; it throws
+`{:anemos_nextevent, target, [], bindings}`.
+
+A field with no producer *and* no reader is a decision, not a defect. Two options:
+
+1. **Wire it**, symmetrically with the `nextrule ... with { ... }` support added for A-51.
+   The parser helpers (`parse_optional_with/1`, `parse_block_args/2`) already exist, so this
+   is roughly a two-line change plus tests.
+2. **Delete the field.**
+
+Flagged rather than actioned, per the standing rule about orphan-looking code.
+
+### The pattern, now complete
+
+A sweep of every `defstruct` in `lib/` closes this family out:
+
+| Field | Producer | Consumer | Status |
+| --- | --- | --- | --- |
+| `NextRule.args` | missing | present | **fixed** (A-51) |
+| `CompiledCondition.context` | missing | present | **fixed** (A-54) |
+| `Envelope.signature` | missing | missing | A-05, design decided |
+| `NextEvent.args` | missing | missing | this entry |
+
+`CompiledData.raw` / `.format` / `.dynamic`, `Envelope.channel` / `.timestamp`, and
+`CompiledRule.dwell_duration_ms` were all checked and have real producers. Beyond the four
+above, `lib/` is clean of this shape.
 
 ---
 

@@ -1096,7 +1096,13 @@ defmodule Anemos.Parser do
   # --- NextRule ---
 
   defp parse_nextrule([{:identifier, meta, target} | rest]) do
-    {:ok, %AST.NextRule{target: target, args: nil, line: meta[:line]}, rest}
+    case parse_optional_with(rest) do
+      {:ok, args, rest} ->
+        {:ok, %AST.NextRule{target: target, args: args, line: meta[:line]}, rest}
+
+      {:error, _} = err ->
+        err
+    end
   end
 
   defp parse_nextrule([{_, meta, _} | _]) do
@@ -1105,6 +1111,58 @@ defmodule Anemos.Parser do
 
   defp parse_nextrule([]) do
     {:error, "Expected rule name after 'nextrule' but got end of input"}
+  end
+
+  # `with { key: expr, ... }` — the argument block a `nextrule` carries to its
+  # target. The dispatcher merges the resolved pairs into the target's
+  # `:context_data`, so the target reads them as `?key`.
+  #
+  # Absent `with`, args stay nil and the target sees only the originating
+  # event's context. A brace block with no `with` is not an argument list; it
+  # belongs to whatever construct follows.
+  defp parse_optional_with([{:keyword, _, :with}, {:lbrace, meta, _} | rest]) do
+    case parse_block_args(rest, []) do
+      {:ok, pairs, rest} ->
+        with {:ok, rest} <- expect(rest, :rbrace) do
+          {:ok, %AST.BlockArgs{pairs: pairs, line: meta[:line]}, rest}
+        end
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  defp parse_optional_with([{:keyword, meta, :with} | _]) do
+    {:error, "Expected '{' after 'with' on line #{meta[:line]}"}
+  end
+
+  defp parse_optional_with(tokens), do: {:ok, nil, tokens}
+
+  # Pairs are `identifier: expression`, separated by an optional comma. A
+  # keyword is accepted as a key so a pair named after a construct (`state:`,
+  # `to:`) is not a parse error; the key is kept as a binary, never interned.
+  defp parse_block_args([{:rbrace, _, _} | _] = tokens, acc) do
+    {:ok, Enum.reverse(acc), tokens}
+  end
+
+  defp parse_block_args([{:comma, _, _} | rest], acc), do: parse_block_args(rest, acc)
+
+  defp parse_block_args([{key_type, meta, key}, {:colon, _, _} | rest], acc)
+       when key_type in [:identifier, :keyword, :module_id] do
+    key_string = if is_atom(key), do: Atom.to_string(key), else: key
+
+    case parse_expression(rest) do
+      {:ok, value, rest} -> parse_block_args(rest, [{key_string, value} | acc])
+      {:error, _} -> {:error, "Expected a value after '#{key_string}:' on line #{meta[:line]}"}
+    end
+  end
+
+  defp parse_block_args([{_, meta, _} | _], _acc) do
+    {:error, "Expected 'key: value' or '}' in a with block on line #{meta[:line]}"}
+  end
+
+  defp parse_block_args([], _acc) do
+    {:error, "Unterminated with block: expected '}' but got end of input"}
   end
 
   # --- Command statement (top-level command as statement) ---
@@ -1302,6 +1360,10 @@ defmodule Anemos.Parser do
 
   defp parse_atom_expression([{:float, meta, value} | rest]) do
     {:ok, %AST.Literal{type: :float, value: value, line: meta[:line]}, rest}
+  end
+
+  defp parse_atom_expression([{:boolean, meta, value} | rest]) do
+    {:ok, %AST.Literal{type: :boolean, value: value, line: meta[:line]}, rest}
   end
 
   defp parse_atom_expression([{:mutable_ref, meta, name} | rest]) do

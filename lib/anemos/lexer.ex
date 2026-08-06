@@ -3,6 +3,11 @@ defmodule Anemos.Lexer do
   NimbleParsec-based tokenizer for the Anemos DSL.
 
   Produces a flat list of `{type, metadata, value}` tuples.
+
+  `true` and `false` produce `:boolean` tokens carrying real booleans, not
+  identifiers. `Anemos.Compiler`'s moduledoc records what that means for
+  `?var == "true"` — the short version is that comparison does not coerce and a
+  boolean/boolean-string mismatch warns at evaluation time.
   """
 
   import NimbleParsec
@@ -28,6 +33,13 @@ defmodule Anemos.Lexer do
   @weekdays ~w(monday tuesday wednesday thursday friday saturday sunday)
 
   @demand_flags ~w(required optional sufficient requisite)
+
+  # Boolean literals. These are not keywords: a keyword token carries an atom
+  # naming a construct, whereas `true` and `false` are *values* and must reach
+  # the parser already typed. Lexing them as identifiers is A-46 — the parser
+  # then built `%AST.Literal{type: :identifier, value: "true"}`, a binary, so
+  # `?flag == true` silently compared against the string "true".
+  @boolean_literals %{"true" => true, "false" => false}
 
   # Source text is untrusted: `Anemos.Runtime.load/2` is called at runtime with
   # arbitrary policy. Atoms are never garbage collected, and exhausting the atom
@@ -350,7 +362,11 @@ defmodule Anemos.Lexer do
       ascii_char([?]]) |> replace(:rbracket),
       ascii_char([?(]) |> replace(:lparen),
       ascii_char([?)]) |> replace(:rparen),
-      ascii_char([?,]) |> replace(:comma)
+      ascii_char([?,]) |> replace(:comma),
+      # A bare colon. Every other colon-led form — `:atom`, `:{interp}`, `::`,
+      # `HH:MM`, IPv6 — is matched earlier in the `token` choice, so this only
+      # fires where none of them do: the `key: value` pairs of a `with` block.
+      ascii_char([?:]) |> replace(:colon)
     ])
     |> tag(:delimiter_raw)
     |> label("delimiter")
@@ -542,14 +558,20 @@ defmodule Anemos.Lexer do
   # nothing stays a binary and never reaches the atom table.
   defp build_tokens([{:identifier_raw, [value]} | rest], line, acc) do
     token =
-      case Map.fetch(@keyword_atoms, value) do
-        {:ok, keyword} ->
-          {:keyword, [line: line], keyword}
+      case Map.fetch(@boolean_literals, value) do
+        {:ok, bool} ->
+          {:boolean, [line: line], bool}
 
         :error ->
-          case Map.fetch(@word_operator_atoms, value) do
-            {:ok, operator} -> {:word_operator, [line: line], operator}
-            :error -> {:identifier, [line: line], value}
+          case Map.fetch(@keyword_atoms, value) do
+            {:ok, keyword} ->
+              {:keyword, [line: line], keyword}
+
+            :error ->
+              case Map.fetch(@word_operator_atoms, value) do
+                {:ok, operator} -> {:word_operator, [line: line], operator}
+                :error -> {:identifier, [line: line], value}
+              end
           end
       end
 

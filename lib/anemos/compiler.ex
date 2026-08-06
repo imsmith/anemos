@@ -85,6 +85,31 @@ defmodule Anemos.Compiler do
   Walks the AST produced by `Anemos.Parser` and produces `%Anemos.CompiledRule{}`,
   `%Anemos.CompiledCondition{}`, and `%Anemos.CompiledCapability{}` structs with
   executable closures. No code generation, no Module.create.
+
+  ## Boolean comparison (A-46)
+
+  `true` and `false` are boolean literals. `?flag == true` compares against the
+  boolean `true`, not the string `"true"`.
+
+  **Comparison does not coerce.** `?flag == "true"` still means *the string*
+  `"true"` and keeps working for a host whose payload is string-valued; it does
+  not match a payload carrying the boolean. The two are different values and
+  `==` says so.
+
+  Coercion was rejected because the operand types are not knowable at compile
+  time. Context data arrives from arbitrary host payloads, so a rule making
+  `"true" == true` answer `true` would also have to make `"1"`, `"yes"` and
+  `"TRUE"` answer something, and the choice would be invisible to the policy
+  author. Making the mismatch a *compile* error was rejected for the same
+  reason: the parser sees a literal on one side and an unresolved `?var` on the
+  other, and cannot know what the host will send.
+
+  What is not acceptable is the silent wrong answer that A-46 reported. So a
+  comparison in which one side is a boolean and the other is the string
+  `"true"` or `"false"` logs a warning at the moment it is evaluated, naming
+  both operands, and then answers as the values dictate — `==` false, `!=`
+  true. The author gets told the shapes disagree rather than reading a guard
+  that never fires.
   """
 
   require Logger
@@ -215,7 +240,13 @@ defmodule Anemos.Compiler do
       subscriptions: subscriptions ++ at_subscriptions,
       evaluator: evaluator,
       side_effects: all_bodies,
-      side_effect_handler: side_effect_handler
+      side_effect_handler: side_effect_handler,
+      # A-54. A condition's body runs operations of its own, so it is a
+      # demanding party like any rule and must present the context it declared.
+      # Left unfilled, every condition presented `nil` and the fail-closed
+      # boundary denied it — the right answer for the wrong reason, and no way
+      # for a condition to legitimately reach a scoped capability.
+      context: extract_context_path(body)
     }
 
     {condition, at_schedules}
@@ -884,8 +915,14 @@ defmodule Anemos.Compiler do
 
     case op do
       # Comparison
-      op when op in [:eq, :==] -> l == r
-      op when op in [:ne, :!=] -> l != r
+      op when op in [:eq, :==] ->
+        warn_boolean_mismatch(op, l, r)
+        l == r
+
+      op when op in [:ne, :!=] ->
+        warn_boolean_mismatch(op, l, r)
+        l != r
+
       :=== -> l === r
       :!== -> l !== r
       op when op in [:gt, :>] -> l > r
@@ -941,6 +978,29 @@ defmodule Anemos.Compiler do
   defp eval_condition(expr, context, bindings) do
     resolve_expr(expr, context, bindings)
   end
+
+  # A-46. Equality does not coerce, so a boolean on one side and a
+  # boolean-shaped string on the other can never be equal. That is the exact
+  # shape of the mistake A-46 reported — a policy written against a boolean and
+  # a host sending a string, or the reverse — and the whole defect was that it
+  # produced no signal. The comparison still answers honestly; the author hears
+  # about it. Narrow on purpose: `?name == "alpha"` is an ordinary string
+  # comparison and says nothing.
+  defp warn_boolean_mismatch(op, l, r) do
+    if boolean_string_mismatch?(l, r) do
+      Logger.warning(
+        "[anemos] boolean/string mismatch in #{op}: #{inspect(l)} and #{inspect(r)} are " <>
+          "different types and can never be equal. Boolean literals are `true`/`false`; " <>
+          "the quoted forms are strings."
+      )
+    end
+
+    :ok
+  end
+
+  defp boolean_string_mismatch?(l, r) when is_boolean(l), do: r in ["true", "false"]
+  defp boolean_string_mismatch?(l, r) when is_boolean(r), do: l in ["true", "false"]
+  defp boolean_string_mismatch?(_l, _r), do: false
 
   # --- Pipe evaluation ---
 

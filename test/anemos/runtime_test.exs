@@ -179,14 +179,19 @@ defmodule Anemos.RuntimeTest do
     }
 
     rule use-cap {
-      when DO_IT {
-        demand test-cap
-        log "after demand"
+      context "test" {
+        when DO_IT {
+          demand test-cap
+          log "after demand"
+        }
       }
     }
     """)
 
-    {:ok, results} = Anemos.Runtime.dispatch(:test_demand, "DO_IT")
+    # The capability declares `context test`, so the demanding rule has to
+    # stand in it and the event has to name it. Before A-07 the context line
+    # constrained nothing and this passed with the rule unscoped.
+    {:ok, results} = Anemos.Runtime.dispatch(:test_demand, "DO_IT", %{context_path: "test"})
     log_values = for %{type: :log, value: v} <- results, do: v
     assert "cap executed" in log_values
     assert "after demand" in log_values

@@ -20,6 +20,16 @@ defmodule Anemos.Runtime.Demand do
   Were it otherwise, a stack composed entirely of `:optional` demands naming
   capabilities that do not exist would return `{:ok, []}` — a gate that reads
   as an authorization check while authorizing nothing.
+
+  ## Neither is a context denial
+
+  For the same reason, a capability refused because the demanding rule sits
+  outside its declared context is fatal under every flag. Failure flags
+  describe how much a policy may tolerate a capability that *tried and could
+  not*; they do not get to describe how much it may tolerate crossing a
+  security boundary. The demanding rule's context is read from the
+  `:_rule_source` the dispatcher stamps into the execution context, and an
+  absent one denies — see `Anemos.Runtime.ContextScope`.
   """
 
   alias Anemos.Runtime.CapabilityServer
@@ -34,7 +44,7 @@ defmodule Anemos.Runtime.Demand do
 
   ## Examples
 
-      iex> {:ok, pid} = Anemos.Runtime.CapabilityServer.start_link(name_str: "k", context: "t", handler: fn _ -> {:ok, [%{type: :log, value: "ok"}]} end)
+      iex> {:ok, pid} = Anemos.Runtime.CapabilityServer.start_link(name_str: "k", context: nil, handler: fn _ -> {:ok, [%{type: :log, value: "ok"}]} end)
       iex> {:ok, ops} = Anemos.Runtime.Demand.evaluate([%{capability: "k", flag: :requisite}], %{"k" => pid}, %{})
       iex> [%{type: :log, value: "ok"}] = ops
       [%{type: :log, value: "ok"}]
@@ -57,10 +67,24 @@ defmodule Anemos.Runtime.Demand do
     case Map.get(registry, demand.capability) do
       nil -> handle_missing(demand)
       pid ->
-        case CapabilityServer.execute(pid, context) do
+        case CapabilityServer.execute(pid, context, demanding_context(context)) do
           {:ok, ops} -> handle_success(demand, ops, rest, registry, context, results, deferred_error)
+          # Fatal regardless of flag, and regardless of what else the stack
+          # would have gone on to authorize.
+          {:error, {:context_denied, error}} -> {:error, error}
           {:error, reason} -> handle_failure(demand, reason, rest, registry, context, results, deferred_error)
         end
+    end
+  end
+
+  # The dispatcher stamps `{rule_name, rule_context}` into every execution
+  # context before running a rule's operations. Anything else — a direct
+  # `evaluate/3` call from a test or a host — counts as having no context,
+  # which a scoped capability refuses.
+  defp demanding_context(context) do
+    case Map.get(context, :_rule_source) do
+      {_rule_name, rule_context} -> rule_context
+      _ -> nil
     end
   end
 

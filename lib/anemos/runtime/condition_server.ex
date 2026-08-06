@@ -4,6 +4,11 @@ defmodule Anemos.Runtime.ConditionServer do
   Holds boolean state. Evaluates incoming events against trigger logic.
   Broadcasts `CONDITION_<name>` on false->true transition.
   Queryable for current state at any time.
+
+  On a false->true transition the condition body's side effects run and yield a
+  list of operations. Those operations only go somewhere if an `:on_side_effects`
+  callback was supplied — nothing here can execute a `:command` or route an
+  `:emit`, which is the dispatcher's job. Without the callback they are dropped.
   """
 
   use GenServer
@@ -17,7 +22,12 @@ defmodule Anemos.Runtime.ConditionServer do
     * `:subscriptions` — list of event names this condition listens to (required)
     * `:evaluator` — 2-arity function `(event_name, context) -> boolean` (required)
     * `:side_effects` — AST nodes to evaluate on transition (optional)
-    * `:side_effect_handler` — zero-arity function called on false->true (optional)
+    * `:side_effect_handler` — function called on false->true (optional). The
+      compiler produces a 1-arity function taking the triggering event context;
+      a 0-arity function is also accepted.
+    * `:on_side_effects` — callback `(name, [operation]) -> any` receiving the
+      operations the side-effect handler produced (optional). Without it the
+      operations are discarded — see the moduledoc.
     * `:on_transition` — callback `(name) -> any` called on false->true (optional)
     * `:name` — process registration name (optional)
   """
@@ -57,6 +67,7 @@ defmodule Anemos.Runtime.ConditionServer do
       evaluator: Keyword.fetch!(opts, :evaluator),
       side_effects: Keyword.get(opts, :side_effects, []),
       side_effect_handler: Keyword.get(opts, :side_effect_handler),
+      on_side_effects: Keyword.get(opts, :on_side_effects),
       on_transition: Keyword.get(opts, :on_transition),
       value: false
     }
@@ -72,7 +83,7 @@ defmodule Anemos.Runtime.ConditionServer do
       new_value = state.evaluator.(event_name, context)
       case {state.value, new_value} do
         {false, true} ->
-          if state.side_effect_handler, do: state.side_effect_handler.()
+          run_side_effects(state, context)
           if state.on_transition, do: state.on_transition.(state.name)
           {:noreply, %{state | value: true}}
         {_old, new_val} ->
@@ -80,6 +91,20 @@ defmodule Anemos.Runtime.ConditionServer do
       end
     else
       {:noreply, state}
+    end
+  end
+
+  defp run_side_effects(%{side_effect_handler: nil}, _context), do: :ok
+
+  defp run_side_effects(state, context) do
+    handler = state.side_effect_handler
+
+    result =
+      if is_function(handler, 1), do: handler.(context), else: handler.()
+
+    case {result, state.on_side_effects} do
+      {{:ok, ops}, callback} when is_function(callback, 2) -> callback.(state.name, ops)
+      _ -> :ok
     end
   end
 end

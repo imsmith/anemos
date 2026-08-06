@@ -61,6 +61,11 @@ than removed.
 | A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | Open |
 | A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; the class is unaudited |
 | A-45 | LOW | Lexer post-processing errors report column 1, violating the stated contract | Open |
+| A-46 | HIGH | The language has no boolean literals; `== true` is inverted from intent | Open |
+| A-47 | MEDIUM | Compound `AND` event triggers behave as `OR` | Open |
+| A-48 | MEDIUM | `until` on a condition trigger cannot latch | Open |
+| A-49 | MEDIUM | Multiple trigger blocks in one condition run each other's side effects | Open |
+| A-50 | MEDIUM | Condition-body operations are computed and dropped; needs dispatcher wiring | Open |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -1345,6 +1350,161 @@ hardcode column `1`. The line number is accurate.
 
 Fixing this properly means threading column through token metadata, which is the same
 change A-31 needs for its source-excerpt-and-caret work. Do them together.
+
+---
+
+## A-46 — The language has no boolean literals; `== true` is inverted from intent
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · **[REPRODUCED]**
+
+### Symptom
+
+`lib/anemos/lexer.ex` has no `true`/`false` token rule. `true` in policy source lexes as an
+identifier, and the parser produces `%AST.Literal{type: :identifier, value: "true"}` — a
+**string**.
+
+Reproduced end to end against `if ?flag == true`:
+
+```text
+condition AST: %Anemos.AST.BinaryOp{
+  op: :==,
+  left:  %Anemos.AST.VarRef{sigil: "?", name: "flag"},
+  right: %Anemos.AST.Literal{type: :identifier, value: "true"}   # <- a binary
+}
+
+?flag = true    (boolean) => {:ok, [], %{}}                      # guard does NOT fire
+?flag = "true"  (string)  => {:ok, [%{type: :log, value: "fired"}], %{}}   # guard DOES fire
+```
+
+### Why this is worse than "always false"
+
+The guard is **inverted from intent**, not merely dead. A host application that supplies a
+genuine boolean — the natural thing to do, and what `Anemos.Event` payloads will carry from
+any real event source — gets a guard that never fires. A host that happens to supply the
+string `"true"` gets one that works. Neither behaviour is documented and nothing warns.
+
+Every `== true`, `== false`, `!= true` and `unless ... == true` construct in every policy
+is affected. This compounds A-25: the language's failure mode for this mistake is a
+successful run with silently wrong output.
+
+### Why it was not caught
+
+Nothing in the test suite or the examples uses a boolean literal. It was found only because
+a first draft of an unrelated condition test used `unless ?maintenance == true` and failed
+for this reason.
+
+### What should change
+
+Add `true`/`false` as lexer tokens producing real boolean literals. Decide explicitly
+whether `?var == "true"` should keep working for string-valued context data, or whether
+that becomes a type error — and say so in the README's expression section.
+
+---
+
+## A-47 — Compound `AND` event triggers behave as `OR`
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM
+
+`event_to_subscriptions/1` (`lib/anemos/compiler.ex:520`) discards the `:and` / `:or`
+operator from `{:compound, op, events}` and returns a flat subscription list. So:
+
+```text
+when (SENSOR_A AND SENSOR_B) { ... }
+```
+
+fires on **either** event alone. `AND` and `OR` compile identically.
+
+The README documents compound events with both operators as a supported feature. `AND` is
+the one a policy author would reach for to express "both of these have happened", and it
+silently means "either".
+
+### Status
+
+Left unchanged deliberately during the A-04 work rather than guessed at. Correct `AND`
+semantics require knowing whether the events must be simultaneous, or both-seen-within-a
+-window, or both-currently-true — which is the deferred event-state model (level-vs-edge
+events, paired-event dwell cancellation). Guessing here would bake in the wrong answer.
+
+The A-04 evaluator work makes the gap explicit and cheap to close once that model lands.
+
+---
+
+## A-48 — `until` on a condition trigger cannot latch
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM
+
+A rule's `until` guard latches permanently via `persistent_bindings[{:until_tripped}]`. A
+condition's evaluator is `(event_name, context) -> boolean` with nowhere to store that
+latch (`lib/anemos/compiler.ex:255`).
+
+It is currently compiled as "false while the guard holds", which **re-arms** if the guard
+stops holding — whereas `until` on a rule is permanent. The same keyword means two
+different things depending on which construct it appears in, and only one of them matches
+the documented semantics.
+
+Fixing it needs either state in `ConditionServer` or an evaluator signature change that
+reaches `store_supervisor.ex`.
+
+---
+
+## A-49 — Multiple trigger blocks in one condition run each other's side effects
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM
+
+`compile_condition/1` concatenates every `when` and `at` body into a single `all_bodies`
+list, so whichever trigger fires executes **all** of them.
+
+Single-trigger conditions — the only form the spec grammar allows — are unaffected, which
+is why this has never surfaced. But the parser accepts multiple trigger blocks, so it is
+reachable from policy text. Same shape as A-17, where multiple `when` blocks in one rule
+collide on shared state.
+
+Fixing it means selecting bodies by triggering event, which pushes the side-effect handler
+to 2-arity and out into `store_supervisor.ex`.
+
+---
+
+## A-50 — Condition-body operations are computed and dropped
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · partially fixed
+
+### Symptom
+
+`condition_server.ex:75` invoked the side-effect handler and discarded its return value:
+`if state.side_effect_handler, do: state.side_effect_handler.()`. The operations a
+condition body produces — including `emit` with a channel destination and
+`[MODULE::verb]` commands — went nowhere. Only the synthetic `CONDITION_<name>` event
+escaped.
+
+### This is a defect, not a design choice — two independent sources
+
+The language specification §3.2 states a satisfied condition "emits a `CONDITION_<name>`
+event to the message bus", and its worked example at line 757 is:
+
+```text
+condition networkchanged {
+  when (...) { emit [EVENT::ip.addr.changed to channel(...)] as :... }
+}
+```
+
+That `emit` with a channel destination is the point of the block, not decoration. The
+project's own condition-semantics design note agrees: "false→true transition: state
+updates, `CONDITION_<name>` event fires, **side effects in the condition body execute**".
+
+### Status
+
+Partially fixed. The handler is now 1-arity and receives the triggering event context, so
+`?var` in a condition body resolves instead of silently yielding `nil`. An optional
+`:on_side_effects` callback — `(name, ops) -> any` — now receives the produced operations,
+and the moduledoc states plainly that without it they are still dropped.
+
+### What remains
+
+`store_supervisor.ex:133-135` builds the `ConditionServer` child spec and must also pass
+`on_side_effects:` — a closure handing `(name, ops)` to the same operation-execution path
+the dispatcher uses for rule handler results. Until that is wired, a condition body's
+`emit` and commands still go nowhere. One line in `store_supervisor.ex` plus an entry
+point on the dispatcher.
 
 ---
 

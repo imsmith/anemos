@@ -27,6 +27,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
   alias Anemos.Runtime.{DataStore, ModuleRegistry, PolicyStore, StoreSupervisor, SubscribableRegistry, TripleStore}
   alias Anemos.Runtime.ConditionServer
+  alias Anemos.Runtime.ContextScope
 
   # Ceiling on re-entrant event dispatch (`emit ... as`, `nextevent`,
   # `nextrule`). Matches @while_limit in Anemos.Compiler: a policy author
@@ -435,20 +436,36 @@ defmodule Anemos.Runtime.Dispatcher do
 
   # --- Private ---
 
-  # Re-entrant dispatch is bounded, not truncated and not fatal: the caller
-  # gets a structured error naming the event it gave up on, and the
-  # dispatcher stays alive to serve the next request.
-  defp dispatch_to_rules(event_name, _context, state, depth) when depth >= @max_event_depth do
-    {[{:error, recursion_error(event_name)}], state}
+  defp dispatch_to_rules(event_name, context, state, depth) do
+    state.index
+    |> Map.get(event_name, [])
+    |> Enum.map(&{&1, event_name})
+    |> dispatch_rules(event_name, context, state, depth)
   end
 
-  defp dispatch_to_rules(event_name, context, state, depth) do
-    matching = Map.get(state.index, event_name, [])
+  # The single entry point into rule execution. Everything that reaches a
+  # rule handler goes through here — the event index, `emit ... as`,
+  # `nextevent` and `nextrule` — so the context filter and the dwell branch
+  # cannot be skipped by picking a different caller. `nextrule` used to
+  # reimplement a subset of this and consulted neither (A-39).
+  #
+  # Takes `{rule, event_name}` pairs rather than an event name because
+  # `nextrule` selects rules by *rule* name and still needs a real event
+  # name to hand the handler and to key dwell state by.
+  #
+  # Re-entrant dispatch is bounded, not truncated and not fatal: the caller
+  # gets a structured error naming the target it gave up on, and the
+  # dispatcher stays alive to serve the next request.
+  defp dispatch_rules(_pairs, label, _context, state, depth) when depth >= @max_event_depth do
+    {[{:error, recursion_error(label)}], state}
+  end
+
+  defp dispatch_rules(pairs, _label, context, state, depth) do
     event_context = Map.get(context, :context_path)
 
-    matching
-    |> Enum.filter(&context_matches?(&1, event_context))
-    |> Enum.reduce({[], state}, fn rule, {results_acc, st} ->
+    pairs
+    |> Enum.filter(fn {rule, _event_name} -> context_matches?(rule, event_context) end)
+    |> Enum.reduce({[], state}, fn {rule, event_name}, {results_acc, st} ->
       case Map.get(rule, :dwell_duration_ms) do
         nil ->
           dispatch_immediate(rule, event_name, context, results_acc, st, depth)
@@ -484,9 +501,14 @@ defmodule Anemos.Runtime.Dispatcher do
         rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
         exec_context = Map.put(context, :_rule_source, {rule.name, rule_context})
 
-        all_results =
-          Enum.flat_map(ops, fn op ->
-            List.wrap(execute_op(op, exec_context, new_st, depth))
+        # execute_op/4 returns {results, state}: `nextevent` and `nextrule`
+        # re-enter dispatch, and the state they produce — persistent `set`
+        # bindings, dwell timers — has to come back out. Threading it
+        # through the fold is what A-16 was missing.
+        {all_results, new_st} =
+          Enum.reduce(ops, {[], new_st}, fn op, {acc, st_op} ->
+            {res, st_op} = execute_op(op, exec_context, st_op, depth)
+            {acc ++ List.wrap(res), st_op}
           end)
 
         {normal_results, emit_events} =
@@ -510,13 +532,9 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  defp context_matches?(_rule, nil), do: true
-
+  # Fails closed on an event that names no context: see ContextScope.
   defp context_matches?(rule, event_context) do
-    case get_in(rule, [Access.key(:meta), :context_path]) do
-      nil -> true
-      rule_context -> String.starts_with?(event_context, rule_context)
-    end
+    ContextScope.within?(event_context, get_in(rule, [Access.key(:meta), :context_path]))
   end
 
   defp collect_transitions do
@@ -557,18 +575,24 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
+  # Every clause returns `{results, state}`. Only the re-entrant ones can
+  # actually change the state, but a uniform shape is what lets
+  # dispatch_immediate/6 fold over the op list without knowing which is which.
   defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state, _depth) do
-    case ModuleRegistry.lookup(state.registry, mod_name) do
-      {:ok, mod} -> mod.handle_verb(verb, args, context)
-      :error ->
-        {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
-          message: "Module #{mod_name} not found in registry")}
-    end
+    result =
+      case ModuleRegistry.lookup(state.registry, mod_name) do
+        {:ok, mod} -> mod.handle_verb(verb, args, context)
+        :error ->
+          {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
+            message: "Module #{mod_name} not found in registry")}
+      end
+
+    {result, state}
   end
 
-  defp execute_op(%{type: :log, value: value} = op, _context, _state, _depth) do
+  defp execute_op(%{type: :log, value: value} = op, _context, state, _depth) do
     Logger.info("[anemos] #{value}")
-    {:ok, op}
+    {{:ok, op}, state}
   end
 
   defp execute_op(%{type: :emit} = op, context, state, _depth) do
@@ -595,25 +619,31 @@ defmodule Anemos.Runtime.Dispatcher do
     end
 
     # Re-dispatch label as event if present
-    if is_binary(op[:label]) do
-      {:emit_event, op.label, op}
-    else
-      {:ok, op}
-    end
+    result =
+      if is_binary(op[:label]) do
+        {:emit_event, op.label, op}
+      else
+        {:ok, op}
+      end
+
+    {result, state}
   end
 
   defp execute_op(%{type: :demand, capability: cap_name} = op, context, state, _depth) do
     demands = [%{capability: cap_name, flag: Map.get(op, :flag, :requisite)}]
 
-    case Anemos.Runtime.Demand.evaluate(demands, state.capability_servers, context) do
-      {:ok, ops} -> Enum.map(ops, fn result_op -> {:ok, result_op} end)
-      {:error, _} = err -> [err]
-    end
+    results =
+      case Anemos.Runtime.Demand.evaluate(demands, state.capability_servers, context) do
+        {:ok, ops} -> Enum.map(ops, fn result_op -> {:ok, result_op} end)
+        {:error, _} = err -> [err]
+      end
+
+    {results, state}
   end
 
   defp execute_op(%{type: :assert_triple, subject: s, predicate: p, object: o} = op, _context, state, _depth) do
     TripleStore.assert_triple(state.triple_store, s, p, o)
-    {:ok, op}
+    {{:ok, op}, state}
   end
 
   defp execute_op(%{type: :triple_query} = op, _context, state, _depth) do
@@ -621,34 +651,35 @@ defmodule Anemos.Runtime.Dispatcher do
     p = triple_query_pattern(op.predicate)
     o = triple_query_pattern(op.object)
     results = TripleStore.match(state.triple_store, s, p, o)
-    {:ok, %{type: :triple_result, query: op, results: results}}
+    {{:ok, %{type: :triple_result, query: op, results: results}}, state}
   end
 
   defp execute_op(%{type: :nextevent, target: target}, context, state, depth) do
-    {results, _state} = dispatch_to_rules(target, context, state, depth + 1)
-    results
+    dispatch_to_rules(target, context, state, depth + 1)
   end
 
-  # `nextrule` re-enters a rule handler directly rather than going back
-  # through the index, so it needs its own ceiling — `rule a { nextrule a }`
-  # never reaches dispatch_to_rules/4 at all.
-  defp execute_op(%{type: :nextrule, target: target}, _context, _state, depth)
-       when depth >= @max_event_depth do
-    [{:error, recursion_error("nextrule:#{target}")}]
-  end
-
-  defp execute_op(%{type: :nextrule, target: target}, context, state, depth) do
-    matching = Enum.filter(state.rules, fn rule -> rule.name == target end)
-
-    Enum.flat_map(matching, fn rule ->
-      persistent = Map.get(state.rule_bindings, rule.name, %{})
-      case safe_handle(rule, "nextrule:#{target}", context, persistent) do
-        {:ok, ops, _new_persistent} ->
-          Enum.flat_map(ops, fn op -> List.wrap(execute_op(op, context, state, depth + 1)) end)
-        {:error, reason} ->
-          [{:error, {:handler_crash, rule.name, reason}}]
+  # Selects rules by *rule* name and then hands them to the same
+  # dispatch_rules/5 the event index uses, so a `nextrule` target gets the
+  # context filter and the dwell branch applied to it (A-39) and its
+  # persistent bindings come back out (A-16).
+  #
+  # The handler is given the rule's own first subscription as the event
+  # name. The old synthetic `"nextrule:<target>"` matched no subscription,
+  # which meant guards and dwell keys saw an event name that could never
+  # occur in a real dispatch.
+  defp execute_op(%{type: :nextrule, target: target} = op, context, state, depth) do
+    pairs =
+      for rule <- state.rules, rule.name == target do
+        {rule, nextrule_event_name(rule, target)}
       end
-    end)
+
+    dispatch_rules(
+      pairs,
+      "nextrule:#{target}",
+      nextrule_context(context, Map.get(op, :args)),
+      state,
+      depth + 1
+    )
   end
 
   defp execute_op(%{type: :register_data, data: data}, context, state, _depth) do
@@ -668,12 +699,31 @@ defmodule Anemos.Runtime.Dispatcher do
       end
       DataStore.register(state.data_store, data.name, scope, data.dataset)
     end
-    {:ok, %{type: :register_data, name: data.name}}
+    {{:ok, %{type: :register_data, name: data.name}}, state}
   end
 
-  defp execute_op(%{type: :register_query, query: query}, _context, _state, _depth) do
-    {:ok, %{type: :register_query, name: query.name}}
+  defp execute_op(%{type: :register_query, query: query}, _context, state, _depth) do
+    {{:ok, %{type: :register_query, name: query.name}}, state}
   end
+
+  defp nextrule_event_name(rule, target) do
+    case rule.subscriptions do
+      [event_name | _] -> event_name
+      _ -> "nextrule:#{target}"
+    end
+  end
+
+  # `nextrule foo { a: 1 }` delivers its arguments as event context data, so
+  # the target reads them with `?a` exactly as it would read a real event
+  # payload. Nothing produces these yet — see the note in the report —
+  # but the delivery path is here rather than dropping them silently.
+  defp nextrule_context(context, args) when is_map(args) and map_size(args) > 0 do
+    Map.update(context, :context_data, args, fn existing ->
+      Map.merge(existing || %{}, args)
+    end)
+  end
+
+  defp nextrule_context(context, _args), do: context
 
   # --- Dwell timer state machine ---
   #

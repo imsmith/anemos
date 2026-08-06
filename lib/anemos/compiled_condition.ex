@@ -10,7 +10,7 @@ defmodule Anemos.CompiledCondition do
           subscriptions: [String.t()],
           evaluator: (String.t(), map() -> boolean()),
           side_effects: list(),
-          side_effect_handler: (-> {:ok, [map()]}) | nil,
+          side_effect_handler: (map() -> {:ok, [map()]}) | nil,
           context: String.t() | nil
         }
 end

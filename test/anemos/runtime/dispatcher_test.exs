@@ -288,9 +288,13 @@ defmodule Anemos.Runtime.DispatcherTest do
         rules: [compiled_rule],
         registry: registry,
         capabilities: [
+          # Unscoped: this test is about the demand op reaching the
+          # capability server at all. A scoped capability would refuse
+          # `demand-test`, which declares no context of its own — see
+          # Anemos.Runtime.TrustBoundaryTest for that path.
           %Anemos.CompiledCapability{
             name: "test-cap",
-            context: "test",
+            context: nil,
             handler: fn _ctx -> {:ok, [%{type: :emit, value: "cap-result"}]} end
           }
         ]

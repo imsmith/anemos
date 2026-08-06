@@ -44,10 +44,16 @@ defmodule Anemos.CompiledQuery do
   @enforce_keys [:name]
   defstruct [:name, :scope, :expect, :engine, :body, :return, :handler]
 
+  # `expect` names are binaries, not atoms, and must stay that way (A-08).
+  # They are arbitrary query bindings the policy author invents, so there is no
+  # closed set to validate against and interning them from source text is
+  # unbounded. `String.to_existing_atom/1` would be worse than the leak: whether
+  # `expect :customer_id` parsed would depend on whether some unrelated module
+  # happened to intern `:customer_id` first, making the language nondeterministic.
   @type t :: %__MODULE__{
           name: String.t(),
           scope: :local | :global | nil,
-          expect: [atom()] | nil,
+          expect: [String.t()] | nil,
           engine: String.t() | nil,
           body: String.t() | nil,
           return: String.t() | nil,
@@ -173,6 +179,7 @@ defmodule Anemos.Compiler do
   defp compile_condition(%AST.Condition{name: name, body: body}) do
     when_blocks = extract_when_blocks(body)
     at_blocks = extract_at_blocks(body)
+    predicates = extract_condition_predicates(body)
 
     subscriptions =
       Enum.flat_map(when_blocks, fn %AST.When{event: event} ->
@@ -195,13 +202,13 @@ defmodule Anemos.Compiler do
       if all_bodies == [] do
         nil
       else
-        fn ->
-          {ops, _bindings} = eval_body(all_bodies, %{}, %{})
+        fn context ->
+          {ops, _bindings} = eval_body(all_bodies, context, %{})
           {:ok, ops}
         end
       end
 
-    evaluator = fn _event_name, _context -> true end
+    evaluator = build_condition_evaluator(when_blocks, at_blocks, predicates)
 
     condition = %Anemos.CompiledCondition{
       name: name,
@@ -212,6 +219,66 @@ defmodule Anemos.Compiler do
     }
 
     {condition, at_schedules}
+  end
+
+  # A condition's truth is decided by its trigger blocks, evaluated against the
+  # event that reached it:
+  #
+  #   * `when` / `at` blocks say *which* events can make it true. The condition
+  #     is true when the incoming event matches one of them and that block's
+  #     guard is satisfied.
+  #   * a top-level `if` block is a predicate over the event context that must
+  #     also hold — this is how "only when X" is expressed.
+  #
+  # `if` blocks nested inside a trigger body are control flow for the side
+  # effects, not part of the trigger, and are not consulted here.
+  #
+  # A condition with no trigger blocks can never become true.
+  defp build_condition_evaluator([], [], _predicates), do: fn _event_name, _context -> false end
+
+  defp build_condition_evaluator(when_blocks, at_blocks, predicates) do
+    triggers =
+      Enum.map(when_blocks, fn %AST.When{event: event, guard: guard} ->
+        {event_to_subscriptions(event), guard}
+      end) ++
+        Enum.map(at_blocks, fn %AST.At{time_spec: time_spec, guard: guard} ->
+          {event_name, _spec, _recurrence} = at_spec_to_event(time_spec)
+          {[event_name], guard}
+        end)
+
+    fn event_name, context ->
+      triggered? =
+        Enum.any?(triggers, fn {events, guard} ->
+          event_name in events and trigger_guard_satisfied?(guard, context)
+        end)
+
+      triggered? and
+        Enum.all?(predicates, fn expr -> truthy?(eval_condition(expr, context, %{})) end)
+    end
+  end
+
+  defp trigger_guard_satisfied?(nil, _context), do: true
+
+  defp trigger_guard_satisfied?({:unless, expr}, context),
+    do: not truthy?(eval_condition(expr, context, %{}))
+
+  # `until` on a condition trigger is evaluated without memory: the condition is
+  # false while the guard holds, and becomes eligible again if it stops holding.
+  # A rule's `until` latches permanently; a condition has nowhere to latch,
+  # since its evaluator is a pure function of (event, context).
+  defp trigger_guard_satisfied?({:until, expr}, context),
+    do: not truthy?(eval_condition(expr, context, %{}))
+
+  defp truthy?(value), do: !!value
+
+  # Top-level `if` blocks in a condition body — predicates on the condition,
+  # distinct from `if` used as control flow inside a trigger body.
+  defp extract_condition_predicates(body) do
+    Enum.flat_map(body, fn
+      %AST.If{condition: condition} -> [condition]
+      %AST.Context{body: ctx_body} -> extract_condition_predicates(ctx_body)
+      _other -> []
+    end)
   end
 
   # --- Capability compilation ---
@@ -449,8 +516,13 @@ defmodule Anemos.Compiler do
     throw({:compile_error, "for <duration>: zero duration not allowed"})
   end
 
-  defp duration_to_dwell_ms({amount, _unit} = dur) when amount > 0 do
-    Anemos.Runtime.Duration.to_ms(dur)
+  # `to_ms!/1` rather than `to_ms/1`: the non-bang form returns an error tuple
+  # for an unrecognised unit, which would be stored as if it were a duration.
+  defp duration_to_dwell_ms({amount, unit} = dur) when amount > 0 do
+    Anemos.Runtime.Duration.to_ms!(dur)
+  rescue
+    ArgumentError ->
+      throw({:compile_error, "for <duration>: unknown unit #{inspect(unit)}"})
   end
 
   # --- Event to subscriptions ---
@@ -516,26 +588,45 @@ defmodule Anemos.Compiler do
 
   # --- Body evaluation ---
 
-  # Process dictionary (:anemos_accumulated_ops) is used intentionally here.
-  # When return/done throws to abort Enum.reduce, the in-flight accumulator
-  # is lost. The process dictionary lets the throw clause capture ops built
-  # so far. The key is saved/restored around each eval_body call so nested
-  # bodies (if/while) compose correctly.
+  # Flow control (return/done/nextevent/nextrule) aborts evaluation with a
+  # throw, which discards the in-flight `Enum.reduce` accumulator. Rather than
+  # stashing that accumulator in global state, each level of evaluation catches
+  # the throw on its way out and prepends the operations it had accumulated
+  # before the abort. The throw payload is therefore the complete op list by
+  # the time it reaches `build_handler`, and no state outlives the call.
   defp eval_body(statements, context, bindings) do
-    # Process dict: save previous ops for nested eval_body restore
-    prev_ops = Process.get(:anemos_accumulated_ops, [])
-
     {ops_rev, final_bindings} =
       Enum.reduce(statements, {[], bindings}, fn stmt, {ops_acc, bindings_acc} ->
-        # Process dict: snapshot current ops so throw can capture them
-        Process.put(:anemos_accumulated_ops, prev_ops ++ Enum.reverse(ops_acc))
-        {new_ops, new_bindings} = eval_statement(stmt, context, bindings_acc)
+        {new_ops, new_bindings} =
+          prepend_ops_on_abort(Enum.reverse(ops_acc), fn ->
+            eval_statement(stmt, context, bindings_acc)
+          end)
+
         {Enum.reverse(new_ops) ++ ops_acc, new_bindings}
       end)
 
-    # Process dict: restore previous ops after body completes normally
-    Process.put(:anemos_accumulated_ops, prev_ops)
     {Enum.reverse(ops_rev), final_bindings}
+  end
+
+  # Run `fun`; if a flow-control throw unwinds through it, re-throw the same
+  # signal with `prefix` prepended to the operations it carries. Any other
+  # throw (e.g. `{:compile_error, _}`) propagates untouched.
+  defp prepend_ops_on_abort([], fun), do: fun.()
+
+  defp prepend_ops_on_abort(prefix, fun) do
+    fun.()
+  catch
+    {:anemos_return, ops, bindings} ->
+      throw({:anemos_return, prefix ++ ops, bindings})
+
+    {:anemos_done, ops, bindings} ->
+      throw({:anemos_done, prefix ++ ops, bindings})
+
+    {:anemos_nextevent, target, ops, bindings} ->
+      throw({:anemos_nextevent, target, prefix ++ ops, bindings})
+
+    {:anemos_nextrule, target, args, ops, bindings} ->
+      throw({:anemos_nextrule, target, args, prefix ++ ops, bindings})
   end
 
   # --- Guard checking (for if blocks) ---
@@ -639,44 +730,35 @@ defmodule Anemos.Compiler do
     eval_while(condition, body, context, bindings, [], 0)
   end
 
-  # Process dict: snapshot ops before each for-loop iteration so throw/catch
-  # early exit (return/done) captures results from prior iterations.
+  # Prior iterations' ops are prepended to any flow-control throw so an early
+  # exit from the loop body still reports what earlier iterations produced.
   defp eval_statement(%AST.For{var: var, iterable: iterable, body: body}, context, bindings) do
     collection = resolve_iterable(iterable, context, bindings)
-    # Process dict: save outer accumulated ops for restore after iteration
-    outer_ops = Process.get(:anemos_accumulated_ops, [])
 
     Enum.reduce(collection, {[], bindings}, fn item, {ops_acc, bindings_acc} ->
-      # Process dict: include prior iteration ops so throw captures them
-      Process.put(:anemos_accumulated_ops, outer_ops ++ ops_acc)
       iter_bindings = Map.put(bindings_acc, {:let, var}, item)
-      {new_ops, new_bindings} = eval_body(body, context, iter_bindings)
-      # Process dict: restore to pre-iteration state
-      Process.put(:anemos_accumulated_ops, outer_ops)
+
+      {new_ops, new_bindings} =
+        prepend_ops_on_abort(ops_acc, fn -> eval_body(body, context, iter_bindings) end)
+
       cleaned = Map.delete(new_bindings, {:let, var})
       {ops_acc ++ new_ops, cleaned}
     end)
   end
 
-  # Flow control throws: each captures the accumulated ops snapshot from the
-  # process dict so build_handler's catch clause can return them. See the
-  # comment on eval_body for why the process dict is used here.
+  # Flow control throws carry the ops accumulated so far. Each enclosing body
+  # and loop prepends its own accumulation as the throw unwinds — see
+  # `prepend_ops_on_abort/2`.
   defp eval_statement(%AST.Return{}, _context, bindings) do
-    # Process dict: snapshot ops accumulated so far for early exit
-    ops = Process.get(:anemos_accumulated_ops, [])
-    throw({:anemos_return, ops, bindings})
+    throw({:anemos_return, [], bindings})
   end
 
   defp eval_statement(%AST.Done{}, _context, bindings) do
-    # Process dict: snapshot ops accumulated so far for early exit
-    ops = Process.get(:anemos_accumulated_ops, [])
-    throw({:anemos_done, ops, bindings})
+    throw({:anemos_done, [], bindings})
   end
 
   defp eval_statement(%AST.NextEvent{target: target}, _context, bindings) do
-    # Process dict: snapshot ops accumulated so far for early exit
-    ops = Process.get(:anemos_accumulated_ops, [])
-    throw({:anemos_nextevent, target, ops, bindings})
+    throw({:anemos_nextevent, target, [], bindings})
   end
 
   defp eval_statement(%AST.NextRule{target: target, args: args}, context, bindings) do
@@ -685,9 +767,8 @@ defmodule Anemos.Compiler do
         Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
       _ -> nil
     end
-    # Process dict: snapshot ops accumulated so far for early exit
-    ops = Process.get(:anemos_accumulated_ops, [])
-    throw({:anemos_nextrule, target, resolved_args, ops, bindings})
+
+    throw({:anemos_nextrule, target, resolved_args, [], bindings})
   end
 
   # Inline data/query declarations are extracted and registered at compile/load
@@ -706,16 +787,13 @@ defmodule Anemos.Compiler do
     {ops_acc, bindings}
   end
 
-  # Process dict: snapshot loop-accumulated ops before each iteration so
-  # throw/catch early exit (return/done) captures results from prior iterations.
+  # Ops from prior iterations are prepended to any flow-control throw so an
+  # early exit from the loop body still reports what earlier iterations produced.
   defp eval_while(condition, body, context, bindings, ops_acc, iteration) do
     if eval_condition(condition, context, bindings) do
-      # Process dict: save outer state, set loop ops for throw capture
-      outer = Process.get(:anemos_accumulated_ops, [])
-      Process.put(:anemos_accumulated_ops, outer ++ ops_acc)
-      {new_ops, new_bindings} = eval_body(body, context, bindings)
-      # Process dict: restore to pre-iteration state
-      Process.put(:anemos_accumulated_ops, outer)
+      {new_ops, new_bindings} =
+        prepend_ops_on_abort(ops_acc, fn -> eval_body(body, context, bindings) end)
+
       eval_while(condition, body, context, new_bindings, ops_acc ++ new_ops, iteration + 1)
     else
       {ops_acc, bindings}

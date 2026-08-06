@@ -369,6 +369,92 @@ defmodule Anemos.CompilerTest do
     assert is_function(cond.evaluator, 2)
   end
 
+  # --- A-04: the trigger expression must reach the evaluator ---
+
+  test "condition evaluator is false for an event it does not subscribe to" do
+    input = """
+    condition networkchanged {
+      when INFRA_ip4_addr_changed {
+        log "network changed"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("INFRA_ip4_addr_changed", %{}) == true
+    assert cond.evaluator.("SOMETHING_ELSE", %{}) == false
+  end
+
+  test "condition evaluator honours an unless guard on the trigger" do
+    input = """
+    condition maintenance_free {
+      when SERVICE_PING unless ?mode == "maintenance" {
+        log "up"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("SERVICE_PING", %{context_data: %{"mode" => "normal"}}) == true
+    assert cond.evaluator.("SERVICE_PING", %{context_data: %{"mode" => "maintenance"}}) == false
+  end
+
+  test "condition evaluator honours a top-level if trigger as a predicate" do
+    input = """
+    condition disk_pressure {
+      when DISK_STAT {
+        log "checked"
+      }
+      if ?pct > 90 {
+        log "high"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("DISK_STAT", %{context_data: %{"pct" => 95}}) == true
+    assert cond.evaluator.("DISK_STAT", %{context_data: %{"pct" => 50}}) == false
+  end
+
+  test "condition with a compound OR trigger is true for either event" do
+    input = """
+    condition networkchanged {
+      when (INFRA_ip4_addr_changed OR INFRA_ip6_addr_changed) {
+        log "network changed"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("INFRA_ip4_addr_changed", %{}) == true
+    assert cond.evaluator.("INFRA_ip6_addr_changed", %{}) == true
+    assert cond.evaluator.("INFRA_unrelated", %{}) == false
+  end
+
+  test "condition side effects see the triggering event context" do
+    input = """
+    condition named_host {
+      when HOST_SEEN {
+        log ?hostname
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert {:ok, [%{type: :log, value: "alpha"}]} =
+             cond.side_effect_handler.(%{context_data: %{"hostname" => "alpha"}})
+  end
+
   test "compiles capability declaration into CompiledCapability" do
     input = """
     capability test-key {
@@ -805,5 +891,28 @@ defmodule Anemos.CompilerTest do
 
     assert ev1_rule.dwell_duration_ms == nil
     assert ev2_rule.dwell_duration_ms == 300_000
+  end
+
+  # A-37: the lexer constrains `for <duration>` units to nine known values, so
+  # this AST cannot be produced by the parser today. Compiled directly, an
+  # unknown unit must be rejected rather than stored as a dwell duration.
+  test "an unknown dwell duration unit is a compile error, not a stored value" do
+    ast = %Anemos.AST.Program{
+      declarations: [
+        %Anemos.AST.Rule{
+          name: "r",
+          body: [
+            %Anemos.AST.When{
+              event: "EV",
+              duration: {2, :fortnights},
+              body: [%Anemos.AST.Log{expression: %Anemos.AST.Literal{value: "hi"}}]
+            }
+          ]
+        }
+      ]
+    }
+
+    assert {:error, message} = Compiler.compile(ast)
+    assert message =~ "fortnights"
   end
 end

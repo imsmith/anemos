@@ -23,4 +23,10 @@ defmodule Anemos.Runtime.Errors do
 
   register_error "anemos.runtime/unknown_capability", :validation,
     message: "Capability not found in registry"
+
+  # `:auth`, not `:validation`: the capability exists and the demand was well
+  # formed. The demanding rule was simply standing outside the context the
+  # capability declared.
+  register_error "anemos.runtime/capability_context_denied", :auth,
+    message: "Capability demanded from outside its declared context"
 end

@@ -7,10 +7,14 @@ defmodule Anemos.Runtime.DemandTest do
 
   doctest Anemos.Runtime.Demand
 
+  # Unscoped (`context: nil`) on purpose: these tests exercise PAM flag
+  # semantics, and a scoped capability would refuse every demand here before
+  # a flag was ever consulted. Context scoping has its own tests in
+  # Anemos.Runtime.TrustBoundaryTest.
   defp start_capability(name, result) do
     {:ok, pid} = CapabilityServer.start_link(
       name_str: name,
-      context: "test",
+      context: nil,
       handler: fn _ctx -> result end
     )
     pid

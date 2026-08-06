@@ -107,6 +107,40 @@ defmodule Anemos.Runtime.ConditionServerTest do
     assert_receive :side_effect_fired
   end
 
+  test "a 1-arity side effect handler receives the triggering event context" do
+    test_pid = self()
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "ctx_effects",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effect_handler: fn context ->
+          send(test_pid, {:side_effect_context, context})
+          {:ok, []}
+        end
+      )
+
+    ConditionServer.handle_event(pid, "EV", %{context_data: %{"host" => "alpha"}})
+    assert_receive {:side_effect_context, %{context_data: %{"host" => "alpha"}}}
+  end
+
+  test "side effect operations are handed to on_side_effects when supplied" do
+    test_pid = self()
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "routed",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effect_handler: fn _ctx -> {:ok, [%{type: :log, value: "effect"}]} end,
+        on_side_effects: fn name, ops -> send(test_pid, {:ops, name, ops}) end
+      )
+
+    ConditionServer.handle_event(pid, "EV", %{})
+    assert_receive {:ops, "routed", [%{type: :log, value: "effect"}]}
+  end
+
   test "side effects do not execute on true->true" do
     test_pid = self()
 

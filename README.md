@@ -124,21 +124,47 @@ in a single call without a supervision tree:
 
 ```elixir
 source = File.read!("priv/examples/garage-lights.rule")
-{:ok, results} = Anemos.run(source, event: "SENSOR_MOTION_DETECTED")
+
+{:ok, results} =
+  Anemos.run(source,
+    event: "SENSOR_MOTION_DETECTED",
+    context_path: "garage.motion.sensor"
+  )
 ```
+
+`context_path` is required here because the rule is wrapped in a `context`
+block. `context` is a security boundary and fails closed: omitting the path
+is not "run everything", it is "I decline to say where I am standing", and a
+declared boundary refuses that.
 
 ### CLI
 
 ```bash
-mix anemos.run <file.rule> --event <EVENT_NAME>
+mix anemos.run <file.rule> --event <EVENT_NAME> [options]
 ```
 
+| Option | Meaning |
+| --- | --- |
+| `--event`, `-e` | Event name to dispatch. Required. |
+| `--context`, `-c` | Context path the caller occupies, matched against each rule's `context` block. |
+| `--context-data K=V` | External data that `?var` resolves against. Repeatable. |
+| `--stub-modules` | Register the demonstration doubles some examples need. |
+| `--help`, `-h` | Usage summary. |
+
+`--context` and `--context-data` are different things: the first is *where
+the caller stands*, the second is *what it brought with it*.
+
 ```bash
-$ mix anemos.run priv/examples/garage-lights.rule --event SENSOR_MOTION_DETECTED
+$ mix anemos.run priv/examples/garage-lights.rule \
+    --event SENSOR_MOTION_DETECTED --context garage.motion.sensor
+Parsed priv/examples/garage-lights.rule.
 Dispatched SENSOR_MOTION_DETECTED -- 1 operation(s):
 
   [DEVICE::set "garage.lights" "on"]
 ```
+
+The task exits `0` only when every operation succeeded, so it can gate a
+script or a CI step.
 
 ## Language Constructs
 

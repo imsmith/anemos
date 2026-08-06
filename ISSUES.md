@@ -45,7 +45,7 @@ than removed.
 | A-27 | LOW | No CI, no linting, no static analysis | Open |
 | A-28 | LOW | `comn` path dependency makes the repo unbuildable | Open |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | Open |
-| A-30 | LOW | Two of three shipped examples do not work | Open |
+| A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
 | A-32 | LOW | Repository hygiene | Open |
 | A-33 | MEDIUM | `Anemos.Module` documents two functions that do not exist | Open |
@@ -57,8 +57,10 @@ than removed.
 | A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | **Fixed** — `dispatch_rules/5` is now the only path into a handler |
 | A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | **Fixed** — syntax is `nextrule t with { k: v }`; needed a lexer fix too |
 | A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | Open — decision needed |
+| A-56 | HIGH | Module calls in expression position are never dispatched | Open — design decision needed |
+| A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | Open |
-| A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | Open |
+| A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
 | A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
@@ -890,10 +892,21 @@ genuinely absent context data all resolve to `nil`, log an empty line, and repor
 There is no distinction between "you meant a different sigil" and "the environment did not
 supply this".
 
-**A shipped example has this bug.** `priv/examples/normalize-pdfs.rule:9-12` binds
-`let title = ...` (creating `@title`) and then compares `if $title ne $meta_title`. Both
-are `nil`, `nil ne nil` is false, and the branch is dead. Nobody noticed because nothing
-complained.
+**Two shipped examples have this bug**, in two different sigil shapes.
+
+`priv/examples/normalize-pdfs.rule:9-12` binds `let title = ...` (creating `@title`) and
+then compares `if $title ne $meta_title`. Both are `nil`, `nil ne nil` is false, the branch
+is dead.
+
+`priv/examples/ddns.rule` had a subtler form found 2026-08-06:
+`let update = (:fqdn IN A ipv4) AND (:fqdn IN AAAA ipv6)` — `ipv4` and `ipv6` are **bare
+words**, which lex as identifier *literals*, so the rule asserted the strings `"ipv4"` and
+`"ipv6"` as addresses and the two `let` bindings above it were computed and thrown away.
+Corrected to `@fqdn`/`@ipv4`/`@ipv6`.
+
+The second shape is worse than a missing sigil, because a bare word is a *valid literal* —
+there is no unbound variable for a diagnostic to catch. Any fix for A-25 that only checks
+sigil resolution will miss it.
 
 ### What should change
 
@@ -1804,6 +1817,104 @@ A sweep of every `defstruct` in `lib/` closes this family out:
 `CompiledData.raw` / `.format` / `.dynamic`, `Envelope.channel` / `.timestamp`, and
 `CompiledRule.dwell_duration_ms` were all checked and have real producers. Beyond the four
 above, `lib/` is clean of this shape.
+
+---
+
+## A-56 — Module calls in expression position are never dispatched
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · **[REPRODUCED]** · supersedes A-30's diagnosis
+
+### Symptom
+
+A `[MODULE::verb]` call used as a *value* is never invoked. `resolve_expr/3`
+(`lib/anemos/compiler.ex:862`) returns an inert descriptor map:
+
+```elixir
+defp resolve_expr(%AST.Command{module: mod, verb: verb, args: args}, context, bindings) do
+  resolved_args = Enum.map(args, &resolve_expr(&1, context, bindings))
+  %{type: :command, module: mod, verb: verb, args: resolved_args}
+end
+```
+
+And `let x = [MOD::verb]` (`compiler.ex:700`) emits the op for the dispatcher to run *and*
+binds the descriptor, so the real return value is discarded into the top-level result list:
+
+```elixir
+%{type: :command} = cmd_op ->
+  {[cmd_op], Map.put(bindings, {:let, name}, cmd_op)}
+```
+
+Reproduced directly:
+
+```text
+let e = [DEVICE::get "sensor"] ; log @e
+=> [%{type: :command, module: "DEVICE", verb: "get", args: ["sensor"]},
+    %{type: :log, value: %{type: :command, module: "DEVICE", verb: "get", args: ["sensor"]}}]
+```
+
+`@e` is the descriptor. Every form is affected:
+
+| Form | Result |
+| --- | --- |
+| `if [FILE::extension] eq "pdf"` | false — the module is never called |
+| `let e = [FILE::extension]` then `log @e` | logs the descriptor map |
+| `let e = [FILE::extension]` then `if @e eq "pdf"` | false |
+| `[DEVICE::set "x" [FILE::extension]]` | the nested arg is a descriptor map |
+
+**A module call has no usable return value anywhere in the language.** The only place its
+real value surfaces is the top-level result list.
+
+### Why it happens
+
+Architectural, not a typo. Expression evaluation runs inside the compiled closure; module
+dispatch happens in the dispatcher *afterwards*, when it walks the returned operation list.
+The closure has no way to reach the module registry mid-evaluation, so it emits a
+description of the call it would like made and binds that description.
+
+### This supersedes A-30's stated cause
+
+A-30 attributes `normalize-pdfs.rule`'s failure to the `FILE` stub returning an echo map.
+That is a misdiagnosis. An example-only `FILE::extension` returning a genuine `"pdf"` was
+written and unit-tested, and the guard is **still** false, because the call is never made.
+Replacing the stub cannot fix the example.
+
+### Design decision required before implementing
+
+Three shapes, and this needs deciding rather than guessing:
+
+1. **Resolve during evaluation.** The closure calls the registry synchronously when it
+   meets a `%AST.Command{}` in expression position, and does *not* also emit it as a
+   separate op. `let e = [FILE::extension]` then binds `"pdf"` and no stray operation leaks
+   into the results. Matches what the README and both shipped examples already assume.
+   Requires the module registry to reach the closure via the evaluation context — the same
+   shape the dispatcher already uses to pass `:data_store`. Note it also gives expression
+   evaluation side-effect power, which is a real semantic change.
+2. **Two-phase.** Hoist module calls out of expressions, execute them, substitute the
+   results, then evaluate. Keeps expressions effect-free; more machinery.
+3. **Make it a compile error.** Honest minimum: expression-position module calls are
+   currently unsupported, so reject them at compile time instead of silently producing
+   garbage. Cheap, and strictly better than today, but it deletes a form the README and
+   both examples use.
+
+Interacts with A-11: whatever reaches the closure must not hand third-party verb code more
+authority than it needs.
+
+---
+
+## A-57 — `type:ipv4` keyword arguments are flattened to positional
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM
+
+`[INFRA::get_ip "eth0" type:ipv4]` arrives at `handle_verb/3` as three positional
+arguments — `["eth0", "type", "ipv4"]` — an identifier literal followed by an atom literal.
+A handler cannot distinguish it from two positional strings, and cannot tell which argument
+was meant as a keyword.
+
+The form appears in the language spec and in `priv/examples/ddns.rule`. The parser accepts
+it and silently discards its structure.
+
+Same family as A-51's colon defect: colon-delimited syntax that the language's own
+documents use and the lexer/parser never modelled.
 
 ---
 

@@ -116,6 +116,74 @@ defmodule Anemos.Compiler do
   true. The author gets told the shapes disagree rather than reading a guard
   that never fires.
 
+  ## `AND` compounds; it does not merge (A-73)
+
+  `AND` is two operators sharing a spelling, and which one you get is decided
+  by the operands.
+
+  Over booleans it is logical conjunction and means what it has always meant:
+  `if ?x eq 1 AND ?y eq 2` fires only when both comparisons hold.
+
+  Over anything else it **compounds** — `let update = (A) AND (B)` means "let
+  `update` have the value `A` *and* the value `B`", not "let `update` have the
+  value `A`-combined-with-`B`". The binding is a collection of both operands:
+
+      let update = (:h IN A "1.1.1.1") AND (:h IN AAAA "::1")
+
+      @update == [["h", "IN", "A",    "1.1.1.1"],
+                  ["h", "IN", "AAAA", "::1"]]
+
+  The defect this replaced was `l && r`, which in Elixir *answers `r`*
+  whenever `l` is truthy. Over non-boolean operands the left one was evaluated
+  and silently thrown away, so `priv/examples/ddns.rule` read as "update both
+  records" and updated one.
+
+  ### Why the spine is flattened before evaluation
+
+  A parenthesised triple pattern evaluates to a **list** —
+  `["h", "IN", "A", "1.2.3.4"]` — so a compound of triples is a list of lists,
+  and a *runtime* rule such as "if the left operand is already a list, append
+  to it" cannot tell a triple from an already-compounded pair. It would turn
+  `["h", "IN", "A", "x"] AND C` into `["h", "IN", "A", "x", C]`.
+
+  `AND` is left-associative, so `(A) AND (B) AND (C)` parses as
+  `((A AND B) AND C)` and naive nesting yields `[[A, B], C]` rather than
+  `[A, B, C]`.
+
+  Both problems are the same problem — runtime values are ambiguous where the
+  AST spine is not. So `flatten_and_spine/1` collects the whole chain of
+  `%AST.BinaryOp{op: :and}` nodes into one operand list *before* any of them
+  is evaluated, and the decision is taken once over the whole list. There is
+  no runtime wrapper struct and no marker tuple: a compound is an ordinary
+  list by the time it reaches a binding, because it flows on into calls like
+  `[INFRA::ddns_update ...]` as an argument and host code must not have to
+  understand an Anemos-internal type.
+
+  ### Mixed operands
+
+  Not settled by the A-73 decision; chosen here, and stated so it can be
+  overruled cheaply. `true` is the **identity of conjunction**, and a falsey
+  operand is **absorbing**:
+
+    * Any operand that is `false` or `nil` answers that value for the whole
+      `AND`, and nothing is compounded. This keeps every truthiness guard
+      working — `if ?missing AND ?present` stays false rather than becoming
+      the truthy list `[nil, "here"]`.
+    * `true` operands are dropped from the compound, since "the value `true`
+      and the value `X`" carries nothing `X` does not. `true AND (A)` is `A`;
+      `true AND true` is `true`.
+
+  Both alternatives were worse. Compounding `true` in would put a boolean in
+  the middle of a DNS payload; making the mix a compile error is not available
+  for the same reason it was not available to A-46 — operand types are not
+  knowable at compile time, since a `?var` is whatever the host sent.
+
+  ### `&&` and `OR` are unchanged
+
+  `&&` remains purely logical `l && r`, which also leaves an author a way to
+  ask for the old behaviour deliberately. `OR` is untouched: the A-73 decision
+  covers `AND` only and alternation must not be extended by analogy.
+
   ## Expression position invokes modules (A-56)
 
   A `[MODULE::verb]` written where a *value* is expected — `if
@@ -1161,6 +1229,17 @@ defmodule Anemos.Compiler do
     eval_pipe(collection, right, context, bindings)
   end
 
+  # A-73. `AND` is decided over the whole left-associative spine at once, on
+  # the AST — never operand-by-operand at runtime, where a triple pattern and
+  # an already-compounded pair are both just lists and cannot be told apart.
+  # See the moduledoc section on `AND`.
+  defp eval_condition(%AST.BinaryOp{op: :and} = node, context, bindings) do
+    node
+    |> flatten_and_spine()
+    |> Enum.map(&resolve_expr(&1, context, bindings))
+    |> combine_and()
+  end
+
   defp eval_condition(%AST.BinaryOp{op: op, left: left, right: right}, context, bindings) do
     l = resolve_expr(left, context, bindings)
     r = resolve_expr(right, context, bindings)
@@ -1193,8 +1272,9 @@ defmodule Anemos.Compiler do
       op when op in [:le, :<=] ->
         l <= r
 
-      # Logical
-      op when op in [:and, :&&] ->
+      # Logical. `:and` never reaches here — it has its own clause above
+      # (A-73). `&&` stays purely logical on purpose.
+      :&& ->
         l && r
 
       op when op in [:or, :||] ->
@@ -1281,6 +1361,38 @@ defmodule Anemos.Compiler do
   defp eval_condition(expr, context, bindings) do
     resolve_expr(expr, context, bindings)
   end
+
+  # A-73. Collapse a chain of `AND` into one operand list, in source order.
+  # Both sides are descended, which makes `AND` associative: `A AND (B AND C)`
+  # and `(A AND B) AND C` are the same three-operand compound. Nothing in the
+  # language can observe a nested compound anyway — a compound is an ordinary
+  # list and so is a triple pattern — so pretending grouping survived would
+  # only produce a shape no consumer can interpret.
+  defp flatten_and_spine(%AST.BinaryOp{op: :and, left: left, right: right}),
+    do: flatten_and_spine(left) ++ flatten_and_spine(right)
+
+  defp flatten_and_spine(node), do: [node]
+
+  # A-73. One decision over the whole operand list. Order matters and every
+  # operand has already been evaluated: A-56 forbids short-circuiting because
+  # an operand may be a module call whose side effect is the point.
+  defp combine_and(values) do
+    if Enum.any?(values, &falsey?/1) do
+      # Absorbing, and the first one wins, so `?missing AND ?present` is
+      # falsey rather than the truthy list `[nil, "here"]`.
+      Enum.find(values, &falsey?/1)
+    else
+      # `true` is the identity of conjunction and carries nothing, so it
+      # drops out rather than landing in the middle of a payload.
+      case Enum.reject(values, &(&1 === true)) do
+        [] -> true
+        [single] -> single
+        compound -> compound
+      end
+    end
+  end
+
+  defp falsey?(value), do: value === false or value === nil
 
   # A-46. Equality does not coerce, so a boolean on one side and a
   # boolean-shaped string on the other can never be equal. That is the exact

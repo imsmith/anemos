@@ -41,7 +41,7 @@ than removed.
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | Open — decision |
 | A-72 | MEDIUM | `log` of any non-`String.Chars` value crashed the dispatcher | **Fixed** |
-| A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | Open |
+| A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | **Fixed** — `AND` compounds; spine flattened on the AST; `&&` and `OR` unchanged |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
@@ -2255,13 +2255,51 @@ only one of them turns out to be.
 ### Family
 
 This is A-46's shape: a boolean operator applied to operands that are not booleans,
-answering something the author cannot have meant, with no diagnostic. A-46 was fixed by
-giving the language real boolean literals; this needs `and`/`or` to either reject
-non-boolean operands or define a combining semantics for them — which, for triple patterns
-specifically, probably means "assert both", not "answer one".
+answering something the author cannot have meant, with no diagnostic.
 
 Note `and`/`or` currently evaluate **both** operands before combining, so this is a discard
-rather than a short-circuit. Making them lazy would be a separate language decision.
+rather than a short-circuit.
+
+### DECIDED 2026-08-06 — `AND` compounds, it does not merge
+
+**`AND` over non-boolean operands is a compounding operator, not a logical one.**
+
+> `let update = (A) AND (B)` means "let update have the value A **and** the value B", not
+> "let update have the value A-combined-with-B".
+
+So the binding is a collection of both operands:
+
+```text
+let update = (:h IN A "1.1.1.1") AND (:h IN AAAA "::1")
+
+@update == [["h", "IN", "A",    "1.1.1.1"],
+            ["h", "IN", "AAAA", "::1"]]
+```
+
+Logical conjunction is retained for boolean operands — `if ?x eq 1 AND ?y eq 2` must keep
+meaning what it means today. The dispatch is on operand type: booleans conjoin, everything
+else compounds.
+
+### The ambiguity this creates, which must be resolved at compile time
+
+A triple pattern **evaluates to a list** (`["h", "IN", "A", "1.2.3.4"]`, measured). So a
+compound of triples is a list of lists, and a runtime rule like "if the left operand is a
+list, append to it" cannot tell a triple from an already-compounded pair — it would turn
+`["h","IN","A","x"] AND C` into `["h","IN","A","x",C]`.
+
+`AND` is left-associative, so `(A) AND (B) AND (C)` parses as `((A AND B) AND C)` and a
+naive nesting yields `[[A, B], C]` rather than `[A, B, C]`.
+
+**Resolve it in the compiler, not at runtime.** The AST spine is unambiguous: flatten
+`%BinaryOp{op: :and}` nodes into a single operand list *before* evaluating, then evaluate
+each leaf. No runtime marker is needed and the triple-versus-compound question never arises.
+
+### Open — not decided, do not assume
+
+- **`OR`.** The decision above is about `AND` only. `OR` presumably remains alternation, but
+  that has not been stated and must not be extended by analogy.
+- **Mixed operands** — `true AND (triple)`. Compound, error, or coerce? Needs a stated
+  answer, whichever is chosen.
 
 ---
 

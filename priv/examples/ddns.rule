@@ -17,14 +17,16 @@
 ;
 ; KNOWN GAPS — this example does not yet run end to end, and the reasons
 ; are in the runtime, not in this file. See the comments at each site.
+; The module-call and AND gaps are closed (A-56, A-73); the remaining ones
+; are all string interpolation.
 
 capability katachora-ddns-key {
   context infra.networking
 
-  ; GAP: the SECRET::unlock call is not evaluated here. A module call in
-  ; expression position compiles to an inert descriptor map
-  ; (compiler.ex:862), so what gets emitted is a description of the call,
-  ; not its result. The capability hands its consumer a descriptor.
+  ; CLOSED (A-56): the SECRET::unlock call is dispatched here and what gets
+  ; emitted is its return value, not a description of the call. Against
+  ; --stub-modules that value is the SECRET double's marker, deliberately
+  ; not key material.
   on demand {
     emit [SECRET::unlock(agent.did_meshid_z6MkAgent123.operator.security:did_key_67890)]
       as :katachora.ddns.key
@@ -55,12 +57,13 @@ rule update-ddns {
     ; asserted the literal strings "ipv4" and "ipv6" as the addresses —
     ; the two `let`s above were computed and then ignored. Same class of
     ; mistake as normalize-pdfs.rule (A-25): nothing reports it.
+    ;
+    ; AND here is the compounding operator, not the logical one (A-73):
+    ; @update is BOTH triples, and the emit below carries both records.
+    ; It used to be `l && r`, which answers r, so the A record was built
+    ; and thrown away — the example read as "update both" and updated one.
     let update = (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)
 
-    ; GAP: @ipv4 and @ipv6 still resolve to command descriptors rather than
-    ; addresses — see compiler.ex:700, where `let x = [MOD::verb]` binds the
-    ; descriptor and discards the dispatched call's return value.
-    ;
     ; GAP: `as ddns.update.:{?fqdn}` renders literally, as above.
     emit [INFRA::ddns_update(:katachora.ddns.key, "katachora.com", @update)
           to channel(system.config.network.dns.ddns)]

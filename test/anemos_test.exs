@@ -220,17 +220,20 @@ defmodule AnemosTest do
       # in expression position, so the address appears where the rule
       # actually put it: inside the payload the emit carries.
       #
-      # Only the IPv6 address is reachable to assert on. `let update =
-      # (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)` evaluates `AND` as
-      # `l && r`, which answers `r` and drops the IPv4 triple entirely.
-      # That is a separate defect in how `AND` combines triple patterns, and
-      # it predates this change.
+      # A-73 then made both addresses reachable. `let update =
+      # (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)` used to evaluate `AND`
+      # as `l && r`, which answers `r` and dropped the IPv4 triple entirely —
+      # the example read as "update both records" and updated one. `AND` over
+      # non-boolean operands now compounds, so the emit carries both.
       assert [%{type: :emit, label: "katachora.ddns.key"}, %{type: :emit} = update] =
                report.results
 
-      assert %{module: "INFRA", verb: "ddns_update", args: [_key, _zone, triple]} = update.value
-      assert "2001:db8::7" in triple
-      assert "host.katachora.com" in triple
+      assert %{module: "INFRA", verb: "ddns_update", args: [_key, _zone, records]} = update.value
+
+      assert records == [
+               ["host.katachora.com", "IN", "A", "203.0.113.7"],
+               ["host.katachora.com", "IN", "AAAA", "2001:db8::7"]
+             ]
     end
 
     test "every shipped example parses and compiles" do

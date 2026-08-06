@@ -246,7 +246,10 @@ defmodule Anemos.AST do
     @enforce_keys []
     @type t :: %__MODULE__{
       name: String.t() | nil,
-      expect: [atom()],
+      # Binaries, not atoms: `expect` names are arbitrary query bindings the
+      # policy author invents, so there is no closed set to validate against
+      # and interning them from untrusted source text is unbounded (A-08).
+      expect: [String.t()],
       engine: String.t() | nil,
       body: String.t() | nil,
       return: String.t() | nil,

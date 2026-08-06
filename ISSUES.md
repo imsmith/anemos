@@ -59,6 +59,8 @@ than removed.
 | A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
 | A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
 | A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | Open |
+| A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; the class is unaudited |
+| A-45 | LOW | Lexer post-processing errors report column 1, violating the stated contract | Open |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -1287,6 +1289,62 @@ Identical in shape to the `PolicyStore` defect that A-01 fixed, one supervisor c
 — only the host application knows them.
 
 Note this compounds A-10: the registry is both hijackable and non-durable.
+
+---
+
+## A-44 — Parser accepts specs the runtime cannot dispatch
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · found during the A-08 work
+
+### Symptom
+
+`Anemos.Runtime.Scheduler.day_to_number/1` clauses only on `:monday`..`:sunday`. Before the
+A-08 closed-set validation landed, both of these lexed, parsed, and compiled cleanly:
+
+```text
+at DAY_notaday { ... }
+at 09:00 every notaday { ... }
+```
+
+They then raised `FunctionClauseError` inside the scheduler process when the timer fired —
+far in time and place from the offending source line, and (before A-01) taking the
+scheduler's whole timer set down with it.
+
+### Status
+
+Both instances are **incidentally fixed**: the A-08 work made `DAY_*` literals and
+recurrence names closed-set lookups whose miss is a lexer or parse error. That was a side
+effect of preventing atom interning, not a deliberate validation pass.
+
+### Why it stays open
+
+The *class* is unaudited. The parser accepts constructs the runtime cannot dispatch, and
+the failure surfaces at fire time rather than at parse time. Two instances were found by
+accident while fixing something else; nothing has systematically checked for others.
+
+This is the same gap A-31 describes from the diagnostics side: there is no semantic
+validation pass between compile and load. Unknown modules, verbs, capabilities, and
+`nextrule` targets are all deferred to runtime in exactly this way.
+
+### What should change
+
+Audit every runtime function that pattern-matches on a value originating in policy text
+and confirm the parser constrains it to the same set. The systematic fix is the semantic
+validation pass in A-31.
+
+---
+
+## A-45 — Lexer post-processing errors report column 1
+
+**Filed:** 2026-08-06 · **Severity:** LOW
+
+`tokenize/1`'s `{:error, msg, line, col}` contract promises a real column, and `CLAUDE.md`
+states "Parser errors include line/col position". But `build_tokens/3` carries no column
+information, so post-processing errors — including the new closed-set `DAY_*` rejection —
+hardcode column `1`. The line number is accurate.
+
+Fixing this properly means threading column through token metadata, which is the same
+change A-31 needs for its source-excerpt-and-caret work. Do them together.
 
 ---
 

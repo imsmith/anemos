@@ -100,11 +100,34 @@ defmodule Anemos.SecretTest do
           Logger.info("inspected: #{inspect(s)}")
           Logger.info("interpolated: #{s}")
           Logger.info(fn -> "lazy: #{inspect(%{key: s})}" end)
-          Logger.error("in metadata", secret: s)
         end)
 
       refute log =~ @plaintext
       assert log =~ "redacted"
+    end
+
+    # Split out and given explicit :metadata capture deliberately. Previously
+    # this assertion lived in the test above as a bare
+    # `Logger.error("in metadata", secret: s)`, and it passed for the wrong
+    # reason: :secret is not in any Logger :metadata configuration, so the
+    # backend never rendered the metadata at all and the refute could not have
+    # failed whatever Secret did. Credo caught it as an unconfigured metadata
+    # key. The `assert log =~ "in metadata"` line below is load-bearing — it
+    # proves the metadata was actually rendered, so the refute means something.
+    test "Logger does not disclose the plaintext through metadata" do
+      s = Secret.new(@plaintext)
+
+      log =
+        ExUnit.CaptureLog.capture_log([metadata: [:secret]], fn ->
+          Logger.error("in metadata", secret: s)
+        end)
+
+      assert log =~ "in metadata"
+      # Metadata is rendered via String.Chars, not Inspect, so this is the
+      # "[REDACTED]" form rather than "#Anemos.Secret<redacted>". Both paths
+      # are covered — that they differ is why the wrapper implements both.
+      assert log =~ "secret=[REDACTED]"
+      refute log =~ @plaintext
     end
 
     test "raising with a secret in the message does not disclose it" do

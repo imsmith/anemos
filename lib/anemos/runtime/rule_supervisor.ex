@@ -58,7 +58,7 @@ defmodule Anemos.Runtime.RuleSupervisor do
   The returned pid is a plain `Supervisor` with no children; rule-scoped
   stores are added to it with `Supervisor.start_child/2`.
   """
-  @spec ensure_scope(DynamicSupervisor.supervisor(), String.t()) ::
+  @spec ensure_scope(Supervisor.supervisor(), String.t()) ::
           {:ok, pid()} | {:error, term()}
   def ensure_scope(sup, rule_name) do
     case scope(sup, rule_name) do
@@ -85,7 +85,7 @@ defmodule Anemos.Runtime.RuleSupervisor do
   Returns the scope supervisor for `rule_name`, or `nil` if the rule has
   never needed one. Never starts anything.
   """
-  @spec scope(DynamicSupervisor.supervisor(), String.t()) :: pid() | nil
+  @spec scope(Supervisor.supervisor(), String.t()) :: pid() | nil
   def scope(sup, rule_name) do
     Enum.find_value(scopes(sup), fn {name, pid} -> name == rule_name && pid end)
   end
@@ -93,7 +93,7 @@ defmodule Anemos.Runtime.RuleSupervisor do
   @doc """
   Returns `[{rule_name, pid}]` for every live rule scope.
   """
-  @spec scopes(DynamicSupervisor.supervisor()) :: [{String.t(), pid()}]
+  @spec scopes(Supervisor.supervisor()) :: [{String.t(), pid()}]
   def scopes(sup) do
     for {_id, pid, _type, _mods} <- DynamicSupervisor.which_children(sup),
         is_pid(pid),
@@ -106,7 +106,7 @@ defmodule Anemos.Runtime.RuleSupervisor do
   @doc """
   Tears down a rule's scope and everything in it. Idempotent.
   """
-  @spec stop_scope(DynamicSupervisor.supervisor(), String.t()) :: :ok
+  @spec stop_scope(Supervisor.supervisor(), String.t()) :: :ok
   def stop_scope(sup, rule_name) do
     case scope(sup, rule_name) do
       nil ->

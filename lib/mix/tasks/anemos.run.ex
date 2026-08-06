@@ -27,8 +27,18 @@ defmodule Mix.Tasks.Anemos.Run do
   ## Exit status
 
   `0` only when every operation succeeded. `1` on a usage error, an
-  unreadable file, a parse or compile failure, or any operation that
-  returned an error — so the task can gate a script or a CI step.
+  unreadable file, a refused load, a parse or compile failure, or any
+  operation that returned an error — so the task can gate a script or a CI
+  step.
+
+  ## The load is gated
+
+  The source goes through the same trust boundary as
+  `Anemos.Runtime.load/3` — the `:max_policy_bytes` ceiling and the
+  configured `Anemos.Runtime.LoadAuthority` (A-59). A refusal is reported
+  as such, named as the boundary rather than as a broken rule file, and
+  exits `1`. The default authority permits everything, so this changes
+  nothing until an operator configures one.
 
   An empty result is reported as one of three distinct outcomes, because
   they call for three different fixes: nothing subscribed to the event
@@ -112,8 +122,31 @@ defmodule Mix.Tasks.Anemos.Run do
 
     case Anemos.run_report(source, run_opts) do
       {:ok, report} -> report_lines(report, file)
-      {:error, reason} -> {:error, [{:error, "Could not run #{file}: " <> describe(reason)}]}
+      {:error, reason} -> {:error, [{:error, failure_line(reason, file)}]}
     end
+  end
+
+  # A refusal is not a broken rule file, and saying "Could not run" for it
+  # sends the author to look for a syntax error that is not there. It is
+  # the trust boundary (A-59) declining to compile the source, so it names
+  # the boundary and points at what an author or operator can change.
+  defp failure_line(%Comn.Errors.ErrorStruct{code: "anemos.runtime/load_denied"} = err, file) do
+    # `err.message`, not `describe/1`: the registry's `field` and `:auth`
+    # category are operator correlation fields, and rendering them here
+    # tails the sentence with "(at source) (auth)" in front of someone
+    # trying to work out why their file will not run. The framing below
+    # already says everything those two encode.
+    "Refused to load #{file}: " <>
+      err.message <>
+      "\n\nThis is the load trust boundary, not a problem with the rule file. " <>
+      "The load authority is `config :anemos, :load_authority` " <>
+      "(currently #{inspect(Anemos.Runtime.LoadAuthority.configured())}) and the size " <>
+      "ceiling is `config :anemos, :max_policy_bytes` " <>
+      "(currently #{Anemos.Runtime.LoadAuthority.max_bytes()} bytes)."
+  end
+
+  defp failure_line(reason, file) do
+    "Could not run #{file}: " <> describe(reason)
   end
 
   defp stub_modules(opts) do

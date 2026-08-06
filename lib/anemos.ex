@@ -9,7 +9,17 @@ defmodule Anemos do
   alias Anemos.Parser
   alias Anemos.Compiler
   alias Anemos.Runtime.{ContextScope, Dispatcher, ModuleRegistry, Standalone}
+  alias Anemos.Runtime.{LoadAuthority, LoadRequest}
   alias Anemos.Runtime.Modules
+
+  # `LoadRequest.runtime` names which runtime a load is destined for, so an
+  # authority can decide per-tenant. A `run/2` has no named runtime — it
+  # builds a throwaway dispatcher and tears it down — so it says so rather
+  # than borrowing the name of a runtime it is not touching. An authority
+  # that keys on `runtime` therefore sees the standalone path as its own
+  # thing and can refuse it outright, which is the correct default for a
+  # host that only means to permit loads into a named runtime.
+  @standalone_runtime :standalone
 
   @default_modules %{
     "DEVICE" => Modules.Device,
@@ -84,11 +94,28 @@ defmodule Anemos do
       matching against each rule's `context` block
     - `:context_data` — external key-value data that `?var` resolves against
     - `:modules` — extra module registrations, merged over `default_modules/0`
+    - `:authorization` — passed through to the configured
+      `Anemos.Runtime.LoadAuthority` as `LoadRequest.authorization`; a token,
+      a peer identity, whatever the authority was written to check
 
   `:context_path` and `:context_data` are merged into `:context`; they are a
   convenience for callers that would otherwise hand-build the map. They are
   two different things: the first is the scope the caller is standing in,
   the second is the data it brought with it.
+
+  ## The load is gated
+
+  `source` goes through the same trust boundary as
+  `Anemos.Runtime.load/3`: the unwaivable `:max_policy_bytes` ceiling, then
+  the module configured as `config :anemos, :load_authority` (A-59). This
+  is not a developer shortcut around the boundary — a host embedding this
+  to execute policy it did not write gets the gate it configured, here as
+  well as there.
+
+  A refusal is `{:error, %Comn.Errors.ErrorStruct{}}` with code
+  `anemos.runtime/load_denied`. The default authority is
+  `LoadAuthority.Permissive`, so an embedder that has configured nothing
+  sees no change.
 
   Returns `{:ok, results}` or `{:error, reason}`. Use `run_report/2` when an
   empty result list needs to be distinguished from a boundary denial.
@@ -105,7 +132,8 @@ defmodule Anemos do
 
       iex> {:error, _} = Anemos.run("rule {", event: "EV")
   """
-  @spec run(String.t(), keyword()) :: {:ok, list()} | {:error, String.t()}
+  @spec run(String.t(), keyword()) ::
+          {:ok, list()} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
   def run(source, opts) do
     case run_report(source, opts) do
       {:ok, report} -> {:ok, report.operations}
@@ -128,14 +156,19 @@ defmodule Anemos do
       iex> {silent.subscribed, silent.reachable}
       {0, 0}
   """
-  @spec run_report(String.t(), keyword()) :: {:ok, report()} | {:error, String.t()}
+  @spec run_report(String.t(), keyword()) ::
+          {:ok, report()} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
   def run_report(source, opts) do
     event = Keyword.fetch!(opts, :event)
     context = build_context(opts)
     context_path = Map.get(context, :context_path)
     modules = Map.merge(@default_modules, Keyword.get(opts, :modules, %{}))
 
-    with {:ok, ast} <- Parser.parse(source),
+    # The same gate `Anemos.Runtime.load/3` goes through, because it is
+    # the only way to get an AST for the compiler (A-59). This path used
+    # to call `Parser.parse/1` itself, which is exactly how it ended up
+    # with no ceiling and no authority while looking like it had both.
+    with {:ok, ast} <- LoadAuthority.gate(@standalone_runtime, source, opts),
          {:ok, compiled} <- Compiler.compile(ast),
          {:ok, registry} <- ModuleRegistry.start_link([]) do
       try do
@@ -189,6 +222,48 @@ defmodule Anemos do
   end
 
   # --- Private ---
+
+  # A-59: `run/2` used to go straight from source to `Parser.parse` to
+  # `Compiler.compile`, so the one entry point that most obviously handles
+  # a policy file somebody else wrote was the one with no trust boundary.
+  # These two are the same checks `Anemos.Runtime.load/3` makes, against
+  # the same `LoadAuthority` — there is no fast path, because "there is a
+  # fast path that skips authorization" is not a property that stays
+  # documented.
+  defp gate_size(source) do
+    case LoadAuthority.check_size(source) do
+      :ok -> :ok
+      {:error, message} -> {:error, load_denied(message)}
+    end
+  end
+
+  defp gate_authority(source, ast, opts) do
+    request = %LoadRequest{
+      runtime: @standalone_runtime,
+      source: source,
+      byte_size: byte_size(source),
+      authorization: Keyword.get(opts, :authorization),
+      signers: LoadAuthority.signers(ast)
+    }
+
+    case LoadAuthority.authorize(request) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        # The authority's reason names *why* it refused, not what it was
+        # given, so it is safe to surface. The source is not.
+        {:error,
+         load_denied(
+           "the configured load authority #{inspect(LoadAuthority.configured())} " <>
+             "refused the load: #{inspect(reason)}"
+         )}
+    end
+  end
+
+  defp load_denied(message) do
+    Comn.Errors.Registry.error!("anemos.runtime/load_denied", field: "source", message: message)
+  end
 
   # `:context` stays the authoritative map so callers that already build one
   # keep working; `:context_path` and `:context_data` are folded in on top.

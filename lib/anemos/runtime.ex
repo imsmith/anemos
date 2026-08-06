@@ -27,6 +27,15 @@ defmodule Anemos.Runtime do
   ## Options
 
     * `:name` — required, used to register and address the runtime
+    * `:keyring` — `%{signer_name => Comn.Secrets.Key.t()}` of **public**
+      keys, used by `Anemos.Runtime.LoadAuthority.Signed` to verify the
+      detached signature of a policy that declares `signed_by` (A-05).
+      Defaults to empty, which means every declared signer is unknown and
+      therefore refused. See `Anemos.Runtime.TrustStore`.
+    * `:unsigned_policy` — `:strict | :warn | :permit` for sources that
+      declare no signer at all. Defaults to `:permit`; see
+      `Anemos.Runtime.TrustStore` for why the default is the insecure one
+      and when that must be revisited.
   """
 
   use Supervisor
@@ -42,7 +51,8 @@ defmodule Anemos.Runtime do
     PolicyStore,
     RuleSupervisor,
     Scheduler,
-    StoreSupervisor
+    StoreSupervisor,
+    TrustStore
   }
 
   @doc """
@@ -301,6 +311,15 @@ defmodule Anemos.Runtime do
     # policy store and the store supervisor; the scheduler dispatches into
     # the dispatcher.
     children = [
+      # First, and started unconditionally even when nothing is configured
+      # (A-05). `LoadAuthority.Signed` refuses any load into a runtime with
+      # no trust store, because "I cannot decide" on a security boundary
+      # has to mean refusal; always starting one keeps that refusal for
+      # genuine failures instead of making it the normal case.
+      {TrustStore,
+       name: TrustStore.name_for(name),
+       keyring: Keyword.get(opts, :keyring, %{}),
+       unsigned_policy: Keyword.get(opts, :unsigned_policy, :permit)},
       {ModuleRegistry, name: registry_name(name)},
       {ContextStore, name: context_store_name(name)},
       {PolicyStore, name: policy_store_name(name)},

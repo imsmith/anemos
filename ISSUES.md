@@ -20,7 +20,7 @@ than removed.
 | A-02 | CRITICAL | Unbounded event recursion never terminates | **Fixed** — depth ceiling 10,000, structured error; 5 regression tests |
 | A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | Open |
 | A-04 | CRITICAL | Every `condition` fires unconditionally | Open |
-| A-05 | HIGH | `signed_by` parsed and never verified | Design decided 2026-08-06; implementation scheduled after wave 3 |
+| A-05 | HIGH | `signed_by` parsed and never verified | **Fixed** — `LoadAuthority.Signed` + `TrustStore`; but see A-59 and A-60 |
 | A-06 | HIGH | Context isolation fails open, two ways | **Fixed** — `ContextScope.within?/2`, segment-aware and fail-closed |
 | A-07 | HIGH | Capability context scoping is decorative | **Fixed** — enforced in the server; denial bypasses PAM flags |
 | A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
@@ -61,6 +61,8 @@ than removed.
 | A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
 | A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
+| A-59 | HIGH | `Anemos.run/2` and the CLI bypass `LoadAuthority` entirely | Open |
+| A-60 | HIGH | `signed_by` is rule-only syntax, so `:strict` cannot load a condition file | Open |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
@@ -1971,6 +1973,99 @@ correct rather than merely convenient:
 
 An unwrapped secret reaching a `log` op is a host module failing to wrap it — addressed by
 A-11's schemas and by `Anemos.Secret` adoption, not by blinding every log statement.
+
+---
+
+## A-59 — `Anemos.run/2` and the CLI bypass `LoadAuthority` entirely
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · **[REPRODUCED]** · found while implementing A-05
+
+### Symptom
+
+There are two doors into the compiler and only one of them is gated.
+
+```text
+lib/anemos/runtime.ex:141    with :ok <- gate_size(source),          # <- byte ceiling
+                             {:ok, ast} <- Anemos.Parser.parse(source),
+                        :182 case LoadAuthority.authorize(request)    # <- authority
+
+lib/anemos.ex:138            with {:ok, ast} <- Parser.parse(source),  # <- nothing
+```
+
+`Anemos.run/2` (`lib/anemos.ex:109`) and `run_report/2` (`:138`) go straight from source to
+`Parser.parse` to `Compiler.compile`. No `gate_size`, no `LoadRequest`, no `authorize`.
+
+`Mix.Tasks.Anemos.Run` calls `run_report/2` at `lib/mix/tasks/anemos.run.ex:113`.
+
+### What bypasses
+
+Everything the trust boundary was built from:
+
+- A-12's unwaivable byte ceiling (`:max_policy_bytes`)
+- A-12's `LoadAuthority` gate
+- A-05's signature verification, which is an authority implementation and therefore inherits
+  the same hole
+
+### Why this matters more than it looks
+
+The CLI is the path that most obviously handles **a policy file somebody else wrote** — and
+it is the one path with no gate. Worse, `Anemos.run/2` is public, documented API: a host
+embedding it to execute tenant policy gets none of the boundary, silently, while
+`Anemos.Runtime.load/3` on the same source would be gated.
+
+Two entry points with different security properties and no marking to say which is which is
+the same shape as A-39 (`nextrule` reimplementing a subset of dispatch and skipping the
+context filter). The fix there was to make one path the only path.
+
+### What should change
+
+Route `Anemos.run/2` through the same gate, or document it loudly as the deliberately
+ungated developer entry point and make the CLI use the gated path. The first is preferable —
+"there is a fast path that skips authorization" is not a property that stays documented.
+
+---
+
+## A-60 — `signed_by` is rule-only syntax, so `:strict` cannot load a condition file
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · found while implementing A-05
+
+### Symptom
+
+`parse_rule_metadata/2` (`lib/anemos/parser.ex:154-178`) is reachable only from `parse_rule`
+(`:133`). So `signed_by` is accepted **only inside a `rule` declaration**.
+
+```text
+condition networkchanged {
+  signed_by :operator          => {:error, "Unexpected token keyword on line 2,
+  ...                                        expected statement"}
+}
+```
+
+`LoadAuthority.signers/1` over a source containing only conditions, capabilities or data
+blocks returns `[]`.
+
+### Consequence
+
+- Under `:permit`, such a source loads **unverified** — it is treated as unsigned because it
+  carries no signer, and there is no syntax by which it could carry one.
+- Under `:strict`, such a source can **never load**, because nothing would satisfy the check.
+
+That makes `:strict` — the entire point of the unsigned-policy setting — unusable for any
+policy set containing a standalone condition or capability file. A deployment that turns on
+the security control discovers it cannot load half its policies, and the only way forward is
+to turn it back off.
+
+### Status
+
+Pinned as a passing test in `signature_verification_test.exs` ("a source of non-rule
+declarations cannot be signed at all — a known limitation") so it is a decision on the
+record rather than a production surprise.
+
+### What should change
+
+Either lift `signed_by` to a source-level or declaration-level construct so any declaration
+can carry provenance, or scope `:strict` explicitly to rule-bearing sources and say so. The
+first is the real fix; the second is honest triage.
 
 ---
 

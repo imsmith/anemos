@@ -20,7 +20,7 @@ than removed.
 | A-02 | CRITICAL | Unbounded event recursion never terminates | **Fixed** — depth ceiling 10,000, structured error; 5 regression tests |
 | A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | Open |
 | A-04 | CRITICAL | Every `condition` fires unconditionally | Open |
-| A-05 | HIGH | `signed_by` parsed and never verified | Open |
+| A-05 | HIGH | `signed_by` parsed and never verified | Design decided 2026-08-06; implementation scheduled after wave 3 |
 | A-06 | HIGH | Context isolation fails open, two ways | **Fixed** — `ContextScope.within?/2`, segment-aware and fail-closed |
 | A-07 | HIGH | Capability context scoping is decorative | **Fixed** — enforced in the server; denial bypasses PAM flags |
 | A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
@@ -272,6 +272,50 @@ manufactures false provenance — worse than having no signing at all.
 
 Under the multi-tenant decision this must be **implemented**: verify the signature
 before `load/2` installs the rule, and reject on failure.
+
+### Design decided 2026-08-06 — ready to implement, scheduled after wave 3
+
+**Signature location: detached.** `load/3` takes it — `Anemos.Runtime.load(name, source, signature: sig)`.
+No DSL change; `signed_by` continues to carry identity only. The source stays clean and
+diffable. This is an API change to `load/2`, which is already changing shape this cycle
+(it now returns `:ok | {:partial, failures} | {:error, reason}`), so both land together.
+
+**Key scheme: `Comn.Secrets.Key`, public keys only.**
+
+A correction worth recording, because it was checked rather than assumed: `Comn.Secret`
+is a **protocol** exposing only `to_blob/1` and `from_blob/1` — serialization, not crypto.
+`Comn.Secrets` (plural) is the behaviour, and it declares only `lock/2`, `unlock/2`,
+`wrap/2`, `unwrap/2`. **There is no sign or verify function anywhere in `comn`.** This is
+the same trap as A-33.
+
+What `comn` does provide, and what Anemos will use:
+
+- `Comn.Secrets.Key` — Ed25519 keypairs (also declares `:rsa_4096`, `:ecdsa_p256`)
+- `Key.fingerprint/1` — algorithm-tagged key identity, the natural resolution target for a
+  `signed_by` signer name
+- `Key.fingerprint_matches?/2`
+
+Anemos implements verification itself with `:crypto.verify(:eddsa, ...)` and holds a trust
+store of **public keys only**. That is deliberate: `comn` finding C-3
+(`.legacy/docs/comn-findings.md`) is that the Ed25519 *signing* private key is currently
+reused as ChaCha20 encryption key material, a key-separation violation. A verifier that
+never holds a private key cannot compound it.
+
+Signing (producing signatures) is explicitly **out of scope** for this repository. Anemos
+verifies; something else signs.
+
+**Unsigned-rule policy: runtime-configurable `:strict | :warn | :permit`,** set at
+`Anemos.Runtime.start_link/1`, defaulting to `:permit`.
+
+The default is knowingly the insecure one. Rationale: every example, test fixture and
+Livebook cell is currently unsigned, and a strict default would make the CLI unusable
+without a key before any signing tooling exists. `:permit` allows incremental adoption;
+`:strict` is what a production host sets. **This default must be revisited once signing
+tooling exists** — a permissive default that outlives its justification is how A-05
+happened in the first place.
+
+**Implementation seam.** The A-12 `load/2` gating work is being built with this in mind, so
+signature verification slots in at the same boundary rather than needing rework.
 
 ---
 

@@ -121,6 +121,7 @@ defmodule Anemos.Runtime.Dispatcher do
       policy_store: Keyword.fetch!(opts, :policy_store),
       rule_supervisor: Keyword.get(opts, :rule_supervisor),
       condition_servers: %{},
+      condition_contexts: %{},
       capability_servers: %{},
       triple_store: nil,
       data_store: nil,
@@ -174,20 +175,23 @@ defmodule Anemos.Runtime.Dispatcher do
           ConditionServer.get_state(pid)
         end)
 
-        # Collect any condition transition messages now in our mailbox
-        synthetic_events = collect_transitions()
+        # Drain what the condition servers sent us. Both message kinds are
+        # collected in one pass so they stay in arrival order: a condition
+        # emits its side effects before it announces its transition, and
+        # reordering them would run a CONDITION_<name> rule before the body
+        # that provoked it.
+        condition_messages = collect_condition_messages()
 
         # Dispatch original event to matching rules
         {results, state} = dispatch_to_rules(event_name, context, state, 0)
 
-        # Dispatch synthetic CONDITION_<name> events to matching rules
-        {synthetic_results, state} =
-          Enum.reduce(synthetic_events, {[], state}, fn cond_name, {acc, st} ->
-            {res, st} = dispatch_to_rules("CONDITION_#{cond_name}", context, st, 0)
+        {condition_results, state} =
+          Enum.reduce(condition_messages, {[], state}, fn message, {acc, st} ->
+            {res, st} = apply_condition_message(message, context, st)
             {acc ++ res, st}
           end)
 
-        {results ++ synthetic_results, state}
+        {results ++ condition_results, state}
       end)
 
     {:reply, results, state}
@@ -255,10 +259,31 @@ defmodule Anemos.Runtime.Dispatcher do
     # transition callbacks pointing at itself.
     Enum.each(compiled.conditions, fn cond_spec ->
       {:ok, _pid} =
-        StoreSupervisor.put_condition(state.store_supervisor, cond_spec, fn name ->
-          send(dispatcher_pid, {:condition_transition, name})
-        end)
+        StoreSupervisor.put_condition(
+          state.store_supervisor,
+          cond_spec,
+          fn name -> send(dispatcher_pid, {:condition_transition, name}) end,
+          # Both callbacks `send` rather than `call`, and must. They run
+          # inside the condition server's handle_cast, at a moment when the
+          # dispatcher is blocked in ConditionServer.get_state/1 waiting for
+          # that very cast to drain. A call back into the dispatcher here
+          # deadlocks. The operations are picked up from the mailbox in
+          # handle_call({:dispatch, ...}) and executed there, inside the
+          # dispatch cycle that produced them.
+          fn name, ops -> send(dispatcher_pid, {:condition_side_effects, name, ops}) end
+        )
     end)
+
+    # The dispatcher only learns a condition's name from the callbacks, so
+    # it keeps the declared context alongside in order to stamp
+    # `:_rule_source` when the body's operations run. Rebuilt on every
+    # apply_compiled/2, which covers the init/1 replay as well as {:load, _}.
+    condition_contexts =
+      Enum.reduce(compiled.conditions, state.condition_contexts, fn cond_spec, acc ->
+        Map.put(acc, cond_spec.name, Map.get(cond_spec, :context))
+      end)
+
+    state = %{state | condition_contexts: condition_contexts}
 
     Enum.each(compiled.capabilities, fn cap ->
       {:ok, _pid} = StoreSupervisor.put_capability(state.store_supervisor, cap)

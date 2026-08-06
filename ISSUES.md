@@ -21,17 +21,17 @@ than removed.
 | A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | Open |
 | A-04 | CRITICAL | Every `condition` fires unconditionally | Open |
 | A-05 | HIGH | `signed_by` parsed and never verified | Open |
-| A-06 | HIGH | Context isolation fails open, two ways | Open |
-| A-07 | HIGH | Capability context scoping is decorative | Open |
+| A-06 | HIGH | Context isolation fails open, two ways | **Fixed** — `ContextScope.within?/2`, segment-aware and fail-closed |
+| A-07 | HIGH | Capability context scoping is decorative | **Fixed** — enforced in the server; denial bypasses PAM flags |
 | A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
-| A-09 | HIGH | Default connector logs secrets in plaintext | Open |
-| A-10 | HIGH | `ModuleRegistry` verb routing can be hijacked | Open |
+| A-09 | HIGH | Default connector logs secrets in plaintext | **Fixed** — `Redact.summarize/1` in the connector; `Anemos.Secret` wrapper added |
+| A-10 | HIGH | `ModuleRegistry` verb routing can be hijacked | **Mitigated** — write-once + logged; not authorization, see entry |
 | A-11 | HIGH | No input validation between DSL and host verbs | Open |
 | A-12 | HIGH | `load/2` has no trust boundary | Open |
 | A-13 | MEDIUM | Demand fails open on unknown capabilities | Fixed — pending suite verification |
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | Fixed — pending suite verification |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | Open |
-| A-16 | MEDIUM | `nextrule`/`nextevent` discard state | Open — fix jointly with A-39, same clause |
+| A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
 | A-17 | MEDIUM | Sibling `when` block destroys armed dwell state | Open |
 | A-18 | MEDIUM | `Anemos.run/2` leaks 4 processes per call | **Fixed** — `Runtime.Standalone` with explicit teardown; 2 regression tests |
 | A-19 | MEDIUM | Same-time `at` blocks collide and leak timers | Open |
@@ -54,7 +54,10 @@ than removed.
 | A-36 | LOW | Spec/test drift on transducer naming | Open |
 | A-37 | LOW | `compiler.ex:453` type confusion latent in dwell duration | Open |
 | A-38 | LOW | DST exposure is wider than `scheduler.ex` — `nld.ex` too | Open |
-| A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | Open |
+| A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | **Fixed** — `dispatch_rules/5` is now the only path into a handler |
+| A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | Open |
+| A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | Open |
+| A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | Open |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
 | A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
 | A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
@@ -1505,6 +1508,102 @@ and the moduledoc states plainly that without it they are still dropped.
 the dispatcher uses for rule handler results. Until that is wired, a condition body's
 `emit` and commands still go nowhere. One line in `store_supervisor.ex` plus an entry
 point on the dispatcher.
+
+---
+
+## A-51 — `nextrule` args are dropped in the parser, not the compiler
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · corrects A-16's diagnosis
+
+### Symptom
+
+`lib/anemos/parser.ex:1098`:
+
+```elixir
+defp parse_nextrule([{:identifier, meta, target} | rest]) do
+  {:ok, %AST.NextRule{target: target, args: nil, line: meta[:line]}, rest}
+end
+```
+
+`args:` is hardcoded `nil`, and `%AST.BlockArgs{}` is **never constructed anywhere in the
+parser** — `grep -c BlockArgs lib/anemos/parser.ex` returns 0.
+
+### Correction to A-16
+
+A-16 said "drops the `args` the compiler resolved... so they go nowhere". That points one
+layer too low. The compiler resolves nothing because the parser never gives it anything.
+`compiler.ex:683-691`, which resolves `%AST.BlockArgs{pairs: pairs}` into a map, is dead
+code reachable only from a hand-built AST — which also explains the audit's Appendix B
+observation that `AST.BlockArgs` is defined, documented, and never constructed.
+
+`nextrule foo { a: 1 }` does not parse into args at all; the brace block is consumed
+elsewhere.
+
+### Status
+
+The **delivery** half is now built: `dispatcher.ex`'s `nextrule_context/2` merges resolved
+args into `:context_data` so a target rule reads them as `?a`. No compiler change is
+needed — `compiler.ex:683-691` is already correct and starts working the moment the parser
+feeds it. What remains is `parse_nextrule/1` constructing a `BlockArgs`.
+
+---
+
+## A-52 — `dispatcher.ex` still discloses payloads in three places
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · sibling of A-09
+
+A-09 closed the disclosure in the default channel connector. Three sites in the dispatcher
+have the same shape and were out of that agent's ownership:
+
+1. **The `:log` operation** — `Logger.info("[anemos] #{value}")`. Arguably worse than A-09,
+   because a policy author can put any expression in a `log` op. `Anemos.Secret` covers this
+   for free when a value is wrapped — it interpolates as `[REDACTED]` — but an unwrapped
+   secret goes straight to `:info`. One-line fix using `Anemos.Redact.summarize/1`.
+2. **Handler crash reporting** — `"Rule #{rule.name} raised: #{inspect(reason)}"`. A crash
+   reason routinely carries the arguments that caused it, which for `[SECRET::unlock ...]`
+   is the credential. This is A-21 in concrete form.
+3. **Subscription failure** — `"data block '#{name}' not subscribed: #{inspect(reason)}"`.
+   Lower severity, same shape.
+
+Sites 2 and 3 need a judgement call about how much of an error reason to keep for
+debuggability; site 1 does not. `Anemos.Redact` and `Anemos.Secret` are both available with
+no new dependency and no configuration.
+
+---
+
+## A-53 — CLI has no `--context`, so every scoped example prints "No rules matched"
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · **regression introduced by the A-06 fix**
+
+### Symptom
+
+```text
+$ mix anemos.run priv/examples/garage-lights.rule --event SENSOR_MOTION_DETECTED
+No rules matched event SENSOR_MOTION_DETECTED.
+```
+
+Same for `ddns.rule`. Both declare a `context`, the Mix task never supplies a context path,
+and the now-fail-closed boundary correctly denies.
+
+`garage-lights.rule` is the one example A-30 recorded as working, so this is a real
+user-visible regression, not a test artifact.
+
+### Why the fix is not at fault
+
+The boundary behaviour is correct and was not weakened. The gap is that
+`Mix.Tasks.Anemos.Run` has no way to say where it is standing: `extract_event/1`
+(`lib/mix/tasks/anemos.run.ex:58`) parses only `--event`, and `Anemos.run/2` is handed no
+context.
+
+This also explains a pre-existing complaint in the usability audit (§10.6): context-scoped
+rules were untestable from the CLI, and the context feature could not be demonstrated at
+all. The old behaviour hid that by matching everything.
+
+### What should change
+
+Thread a `--context` flag through `Mix.Tasks.Anemos.Run` into `Anemos.run/2`. Use
+`OptionParser` rather than extending the hand-rolled `chunk_every/4` scan, which silently
+ignores unknown flags.
 
 ---
 

@@ -123,16 +123,27 @@ defmodule Anemos.Runtime.StoreSupervisor do
   the dispatcher pid, so a dispatcher that has just restarted must install
   callbacks pointing at itself. The condition's boolean state resets to
   `false` in the process, which is the safe reading.
+
+  `on_side_effects` is the second such callback, and it exists for the same
+  reason `on_transition` does: the condition server can compute a body's
+  operations but cannot execute one — routing an `emit` or a `[MOD::verb]`
+  is the dispatcher's job. Omitting it leaves the operations dropped, which
+  is what A-50 was.
   """
-  @spec put_condition(Supervisor.supervisor(), map(), (String.t() -> any())) ::
-          {:ok, pid()} | {:error, term()}
-  def put_condition(sup, cond_spec, on_transition) do
+  @spec put_condition(
+          Supervisor.supervisor(),
+          map(),
+          (String.t() -> any()),
+          (String.t(), [map()] -> any()) | nil
+        ) :: {:ok, pid()} | {:error, term()}
+  def put_condition(sup, cond_spec, on_transition, on_side_effects \\ nil) do
     args = [
       name_str: cond_spec.name,
       subscriptions: cond_spec.subscriptions,
       evaluator: cond_spec.evaluator,
       side_effects: Map.get(cond_spec, :side_effects, []),
       side_effect_handler: Map.get(cond_spec, :side_effect_handler),
+      on_side_effects: on_side_effects,
       on_transition: on_transition
     ]
 

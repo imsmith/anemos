@@ -1,0 +1,67 @@
+specification {
+    element actor {
+        style {
+            shape browser
+            color muted
+        }
+    }
+    element system
+    element container
+    element component
+    relationship ipc
+    relationship message
+    relationship rpc
+}
+
+model {
+    policyauthor = actor {
+        title 'Policy Author'
+        description 'Writes .rule policy source in the Anemos DSL (see priv/examples/*.rule).'
+    }
+
+    hostapp = actor {
+        title 'Host Application'
+        description 'An Elixir application that starts Anemos.Runtime in its own supervision tree and calls load/register/dispatch.'
+    }
+
+    operator = actor {
+        title 'Operator'
+        description 'Runs a single .rule file against one event from the shell via the mix anemos.run task.'
+    }
+
+    comn = system {
+        title 'Comn'
+        description 'Path dependency ../comn. Anemos uses Comn.Errors.Registry, Comn.Discovery, Comn.Contexts and Comn.EventBus, and Anemos.Runtime implements the Comn behaviour.'
+        technology 'Elixir Umbrella Application'
+    }
+
+    nimble = system {
+        title 'NimbleParsec'
+        description 'Hex dependency used to build the Anemos tokenizer.'
+        technology 'Elixir Library'
+    }
+
+    anemos = system {
+        title 'Anemos'
+        description 'Event-driven automation DSL: lexer, recursive-descent parser, compiler to closures, and a supervisable runtime interpreter.'
+        technology 'Elixir Application (OTP app :anemos, mod Anemos.Application)'
+    }
+
+    policyauthor -[ipc]-> anemos "Authors .rule policy source loaded by"
+    hostapp -[ipc]-> anemos "Starts Anemos.Runtime and calls load/2, register/3, dispatch/3"
+    hostapp -[message]-> anemos "Dispatches events (string, map, or Anemos.Event impl)"
+    operator -[ipc]-> anemos "Invokes mix anemos.run FILE --event EVENT"
+
+    anemos -[message]-> hostapp "Invokes registered Anemos.Runtime.Module verb handlers"
+    anemos -[message]-> comn "Publishes Anemos.Envelope via Comn.EventBus (Anemos.Channel.ComnBus)"
+    anemos -[ipc]-> comn "Registers error codes, discovers modules, wraps dispatch in Comn.Contexts"
+    anemos -[ipc]-> nimble "Builds the token combinators in Anemos.Lexer"
+}
+
+views {
+    view context_anemos {
+        title "Anemos System Context"
+        description "Who uses Anemos and what it depends on, as built from mix.exs, lib/anemos.ex and lib/anemos/application.ex."
+        include *
+    }
+}

@@ -1,0 +1,80 @@
+model {
+    extend anemos {
+        facade = container {
+            title 'Anemos'
+            description 'lib/anemos.ex. One-shot run/2: parses, compiles, starts a throwaway ModuleRegistry and Dispatcher, dispatches one event, tears down.'
+            technology 'Elixir Module'
+        }
+
+        frontend = container {
+            title 'Frontend'
+            description 'Lexer, recursive-descent parser, AST structs and the compiler that lowers AST to closures and compiled structs.'
+            technology 'Elixir Modules'
+        }
+
+        runtime = container {
+            title 'Runtime'
+            description 'Anemos.Runtime supervisor plus the servers, registries and stores it and the Dispatcher start.'
+            technology 'Elixir Supervisor / GenServers / Agents'
+        }
+
+        modules = container {
+            title 'Modules'
+            description 'The DEVICE/FILE verb-handler extension point: Anemos.Runtime.Module behaviour, the use Anemos.Module macro, and two stub implementations.'
+            technology 'Elixir Behaviour + Macro'
+        }
+
+        channels = container {
+            title 'Channels'
+            description 'Anemos.Channel behaviour and its two connectors, plus the Anemos.Envelope struct carried to them by emit.'
+            technology 'Elixir Behaviour'
+        }
+
+        extensions = container {
+            title 'Extension Points'
+            description 'Anemos.Event protocol (with a Map impl), Anemos.Subscribable behaviour, and Anemos.DataModel behaviour for pluggable formats and query engines.'
+            technology 'Elixir Protocol + Behaviours'
+        }
+
+        mixtask = container {
+            title 'Mix Task'
+            description 'lib/mix/tasks/anemos.run.ex. CLI entrypoint that reads a .rule file and calls Anemos.run/2.'
+            technology 'Mix.Task'
+        }
+
+        otpapp = container {
+            title 'Application'
+            description 'Anemos.Application. Starts an empty one_for_one supervisor; its only real work is re-running Comn.Errors.Registry.discover/0 and Comn.Discovery.discover/0 at boot.'
+            technology 'Elixir Application'
+        }
+
+        facade -[ipc]-> frontend "Parser.parse then Compiler.compile"
+        facade -[ipc]-> runtime "Starts a ModuleRegistry and Dispatcher, dispatches, then stops them"
+        facade -[ipc]-> modules "Registers the DEVICE and FILE stubs as default modules"
+
+        mixtask -[ipc]-> facade "Calls Anemos.run/2"
+
+        runtime -[ipc]-> frontend "load/2 parses and compiles source before handing it to the Dispatcher"
+        runtime -[rpc]-> modules "Looks a module name up in ModuleRegistry and calls its verb handler"
+        runtime -[message]-> channels "Hands Anemos.Envelope to the configured connector on emit"
+        runtime -[ipc]-> extensions "Normalises dispatched terms through Anemos.Event; DataStore subscribes via Anemos.Subscribable"
+        frontend -[ipc]-> extensions "Compiles query blocks against Anemos.DataModel handlers"
+    }
+
+    anemos.otpapp -[ipc]-> comn "Comn.Errors.Registry.discover, Comn.Discovery.discover"
+    anemos.runtime -[ipc]-> comn "Comn.Contexts.with_context around dispatch; Comn.Errors.Registry.error!"
+    anemos.channels -[message]-> comn "Anemos.Channel.ComnBus publishes to Comn.EventBus"
+    anemos.frontend -[ipc]-> nimble "Anemos.Lexer is built from NimbleParsec combinators"
+
+    hostapp -[ipc]-> anemos.runtime "Starts {Anemos.Runtime, name: ...} in its supervision tree"
+    operator -[ipc]-> anemos.mixtask "mix anemos.run"
+    policyauthor -[ipc]-> anemos.frontend "Writes the .rule source the parser consumes"
+}
+
+views {
+    view container_anemos of anemos {
+        title "Anemos Containers"
+        description "The container decomposition of Anemos as built from lib/."
+        include *
+    }
+}

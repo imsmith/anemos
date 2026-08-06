@@ -25,3 +25,7 @@ anemos-*.tar
 # Git worktrees
 /.worktrees/
 
+#Elixir bookkeeping
+*.beam
+mix.lock
+

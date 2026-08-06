@@ -1,0 +1,138 @@
+model {
+    extend anemos.runtime {
+        supervisor = component {
+            title 'Anemos.Runtime'
+            description 'Supervisor (one_for_one) and public API: load/2, register/3, dispatch/3, connect/2, put_context/3, condition_state/2. Implements the Comn behaviour.'
+            technology 'Elixir Supervisor'
+        }
+
+        moduleregistry = component {
+            title 'Anemos.Runtime.ModuleRegistry'
+            description 'Agent mapping module names such as DEVICE and FILE to Elixir modules. Supervised child.'
+            technology 'Elixir Agent'
+        }
+
+        contextstore = component {
+            title 'Anemos.Runtime.ContextStore'
+            description 'Agent holding external key-value context data for ? variable resolution. Supervised child.'
+            technology 'Elixir Agent'
+        }
+
+        dispatcher = component {
+            title 'Anemos.Runtime.Dispatcher'
+            description 'GenServer holding compiled rules indexed by subscription. Routes events, evaluates guards, runs handlers inside Comn.Contexts, and starts condition and capability servers.'
+            technology 'Elixir GenServer'
+        }
+
+        scheduler = component {
+            title 'Anemos.Runtime.Scheduler'
+            description 'GenServer for at-triggers. Arms timers and dispatches synthetic AT_* events back into the runtime.'
+            technology 'Elixir GenServer'
+        }
+
+        conditionserver = component {
+            title 'Anemos.Runtime.ConditionServer'
+            description 'GenServer per named condition, holding its boolean state. Started by the Dispatcher, one per compiled condition.'
+            technology 'Elixir GenServer'
+        }
+
+        capabilityserver = component {
+            title 'Anemos.Runtime.CapabilityServer'
+            description 'GenServer per named capability, invoked on demand. Started by the Dispatcher.'
+            technology 'Elixir GenServer'
+        }
+
+        triplestore = component {
+            title 'Anemos.Runtime.TripleStore'
+            description 'Agent-based triple store for RDF-like facts. Started by the Dispatcher; backs assert and match.'
+            technology 'Elixir Agent'
+        }
+
+        datastore = component {
+            title 'Anemos.Runtime.DataStore'
+            description 'GenServer holding named datasets for data blocks, scoped global or per rule. Started by the Dispatcher.'
+            technology 'Elixir GenServer'
+        }
+
+        subscribableregistry = component {
+            title 'Anemos.Runtime.SubscribableRegistry'
+            description 'Agent mapping protocol strings to Anemos.Subscribable handler modules, used to populate live datasets.'
+            technology 'Elixir Agent'
+        }
+
+        demand = component {
+            title 'Anemos.Runtime.Demand'
+            description 'Evaluates a stack of demand operations against capability servers.'
+            technology 'Elixir Module'
+        }
+
+        builtins = component {
+            title 'Anemos.Runtime.Builtins'
+            description 'Collection-processing functions for pipeline expressions: filter, map, reduce, emit. Called from compiled closures.'
+            technology 'Elixir Module'
+        }
+
+        duration = component {
+            title 'Anemos.Runtime.Duration'
+            description 'Converts duration tuples such as {5, :min} to milliseconds. Used for dwell timers and schedules.'
+            technology 'Elixir Module'
+        }
+
+        nld = component {
+            title 'Anemos.Runtime.NLD'
+            description 'Natural Language Date resolver used by at-triggers and the Scheduler.'
+            technology 'Elixir Module'
+        }
+
+        errors = component {
+            title 'Anemos.Runtime.Errors'
+            description 'Compile-time error code registry built on Comn.Errors.Registry.'
+            technology 'Elixir Module'
+        }
+
+        datamodelregistry = component {
+            title 'Anemos.Runtime.DataModelRegistry'
+            description 'Agent mapping data model keyword strings to handler modules. Present in lib/ but not started by the Runtime supervisor or the Dispatcher; referenced only from tests.'
+            technology 'Elixir Agent'
+        }
+
+        rulesupervisor = component {
+            title 'Anemos.Runtime.RuleSupervisor'
+            description 'DynamicSupervisor for rule processes. Present in lib/ but no other module in lib/ or test/ references it.'
+            technology 'Elixir DynamicSupervisor'
+        }
+
+        supervisor -[ipc]-> moduleregistry "Supervises"
+        supervisor -[ipc]-> contextstore "Supervises"
+        supervisor -[ipc]-> dispatcher "Supervises"
+        supervisor -[ipc]-> scheduler "Supervises"
+
+        dispatcher -[ipc]-> conditionserver "Starts one per compiled condition"
+        dispatcher -[ipc]-> capabilityserver "Starts one per compiled capability"
+        dispatcher -[ipc]-> triplestore "Starts and reads/writes triples"
+        dispatcher -[ipc]-> datastore "Starts and registers datasets"
+        dispatcher -[ipc]-> subscribableregistry "Starts and looks up protocol handlers"
+        dispatcher -[rpc]-> moduleregistry "Resolves module name to handler module"
+        dispatcher -[ipc]-> demand "Evaluates demand stacks against capability servers"
+        dispatcher -[ipc]-> errors "Raises registered error codes on handler crash and unknown module"
+
+        demand -[rpc]-> capabilityserver "Invokes"
+        subscribableregistry -[ipc]-> datastore "Live subscriptions update datasets"
+        scheduler -[message]-> supervisor "Dispatches synthetic AT_* events back through dispatch/3"
+        scheduler -[ipc]-> nld "Resolves natural-language date specs"
+        scheduler -[ipc]-> duration "Converts recurrence durations to milliseconds"
+        supervisor -[ipc]-> contextstore "put_context/3 writes context data"
+    }
+
+    anemos.runtime.builtins -[ipc]-> anemos.runtime.datastore "member?/member_any? lookups from pipeline expressions"
+    anemos.runtime.dispatcher -[message]-> anemos.channels "Hands Anemos.Envelope to the configured connector"
+    anemos.runtime.dispatcher -[rpc]-> anemos.modules "Calls the resolved module verb handler"
+}
+
+views {
+    view component_runtime of anemos.runtime {
+        title "Runtime Components"
+        description "The Anemos.Runtime supervision tree and the processes the Dispatcher starts underneath it."
+        include *
+    }
+}

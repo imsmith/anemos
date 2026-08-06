@@ -1,0 +1,76 @@
+model {
+    extend anemos.frontend {
+        lexer = component {
+            title 'Anemos.Lexer'
+            description 'NimbleParsec tokenizer. Produces the token stream for keywords, operators, durations and demand syntax.'
+            technology 'Elixir Module (NimbleParsec)'
+        }
+
+        parser = component {
+            title 'Anemos.Parser'
+            description 'Recursive-descent parser over the token stream. Handles operator precedence, elseif chains, loops, flow control, guards, query and data blocks.'
+            technology 'Elixir Module'
+        }
+
+        ast = component {
+            title 'Anemos.AST'
+            description 'AST node structs: Program, Rule, Capability, Command, On, At, Set, Let, Log, Emit, Triple, Demand, Flow, It, VarRef, BinaryOp, UnaryOp, ListLiteral, BlockArgs, Context.'
+            technology 'Elixir Structs'
+        }
+
+        compiler = component {
+            title 'Anemos.Compiler'
+            description 'Lowers an AST Program to closures. Resolves durations and NLD date specs at compile time and emits builtin pipeline calls.'
+            technology 'Elixir Module'
+        }
+
+        compilationresult = component {
+            title 'Anemos.CompilationResult'
+            description 'Result of compiling a program: rules, conditions, capabilities, schedules and data.'
+            technology 'Elixir Struct'
+        }
+
+        compiledrule = component {
+            title 'Anemos.CompiledRule'
+            description 'Name, event subscriptions, handler closure and optional dwell duration.'
+            technology 'Elixir Struct'
+        }
+
+        compiledcondition = component {
+            title 'Anemos.CompiledCondition'
+            description 'Name, trigger subscriptions, evaluator function and side effects.'
+            technology 'Elixir Struct'
+        }
+
+        compiledcapability = component {
+            title 'Anemos.CompiledCapability'
+            description 'Name, context scope and handler closure for on-demand execution.'
+            technology 'Elixir Struct'
+        }
+
+        compiledschedule = component {
+            title 'Anemos.CompiledSchedule'
+            description 'Event name, time spec, recurrence and handler for at-triggers.'
+            technology 'Elixir Struct'
+        }
+
+        lexer -[ipc]-> parser "Supplies tokens to"
+        parser -[ipc]-> ast "Builds"
+        ast -[ipc]-> compiler "Consumed by"
+        compiler -[ipc]-> compilationresult "Returns"
+        compilationresult -[ipc]-> compiledrule "Contains rules"
+        compilationresult -[ipc]-> compiledcondition "Contains conditions"
+        compilationresult -[ipc]-> compiledcapability "Contains capabilities"
+        compilationresult -[ipc]-> compiledschedule "Contains schedules"
+    }
+
+    anemos.frontend.compiler -[ipc]-> anemos.runtime "Closures call Runtime.Duration, Runtime.NLD, Runtime.Builtins and Runtime.DataStore"
+}
+
+views {
+    view component_frontend of anemos.frontend {
+        title "Frontend Components"
+        description "Lexer to parser to AST to compiler, and the compiled structs it produces."
+        include *
+    }
+}

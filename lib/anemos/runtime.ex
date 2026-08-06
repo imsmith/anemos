@@ -46,7 +46,6 @@ defmodule Anemos.Runtime do
     ContextStore,
     Dispatcher,
     LoadAuthority,
-    LoadRequest,
     ModuleRegistry,
     PolicyStore,
     RuleSupervisor,
@@ -131,16 +130,13 @@ defmodule Anemos.Runtime do
   @spec load(atom(), String.t(), keyword()) ::
           :ok | {:partial, [load_failure()]} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
   def load(name, source, opts \\ []) do
-    # Order matters. The ceiling is enforced before the parser is handed
-    # anything, because bounding what an untrusted caller can make the
-    # parser allocate is the point of having one. The authority runs after
-    # the parse and before the compile: after, because that is the only way
-    # `signers` can exist for it to decide on (the A-05 seam); before,
-    # because compiling is what turns text into closures and nothing
-    # unauthorized should get that far.
-    with :ok <- gate_size(source),
-         {:ok, ast} <- Anemos.Parser.parse(source),
-         :ok <- gate_authority(name, source, ast, opts),
+    # `LoadAuthority.gate/3` is the ceiling, the parse and the authority,
+    # in that order and for the reasons documented there. Going through it
+    # is not a convention this function observes — it is the only way to
+    # get an AST for the compiler, which is what keeps a second entry
+    # point from quietly growing a second set of security properties
+    # (A-59).
+    with {:ok, ast} <- LoadAuthority.gate(name, source, opts),
          {:ok, compiled} <- Anemos.Compiler.compile(ast) do
       dispatcher_failures =
         dispatcher_name(name)
@@ -161,40 +157,6 @@ defmodule Anemos.Runtime do
         failures -> {:partial, failures}
       end
     end
-  end
-
-  defp gate_size(source) do
-    case LoadAuthority.check_size(source) do
-      :ok -> :ok
-      {:error, message} -> {:error, load_denied(message)}
-    end
-  end
-
-  defp gate_authority(name, source, ast, opts) do
-    request = %LoadRequest{
-      runtime: name,
-      source: source,
-      byte_size: byte_size(source),
-      authorization: Keyword.get(opts, :authorization),
-      signers: LoadAuthority.signers(ast)
-    }
-
-    case LoadAuthority.authorize(request) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        # The authority's reason names *why* it refused, not what it was
-        # given, so it is safe to surface. The source is not.
-        {:error,
-         load_denied(
-           "#{inspect(LoadAuthority.configured())} refused the load: #{inspect(reason)}"
-         )}
-    end
-  end
-
-  defp load_denied(message) do
-    Comn.Errors.Registry.error!("anemos.runtime/load_denied", field: "source", message: message)
   end
 
   # Both Dispatcher.load/2 and Scheduler.schedule/2 answer :ok or

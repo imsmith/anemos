@@ -20,7 +20,7 @@ than removed.
 | A-02 | CRITICAL | Unbounded event recursion never terminates | **Fixed** — depth ceiling 10,000, structured error; 5 regression tests |
 | A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | Open |
 | A-04 | CRITICAL | Every `condition` fires unconditionally | Open |
-| A-05 | HIGH | `signed_by` parsed and never verified | **Fixed** — `LoadAuthority.Signed` + `TrustStore`; but see A-59 and A-60 |
+| A-05 | HIGH | `signed_by` parsed and never verified | **Fixed** — `LoadAuthority.Signed` + `TrustStore`. A-59 closed; A-60 still limits `:strict` |
 | A-06 | HIGH | Context isolation fails open, two ways | **Fixed** — `ContextScope.within?/2`, segment-aware and fail-closed |
 | A-07 | HIGH | Capability context scoping is decorative | **Fixed** — enforced in the server; denial bypasses PAM flags |
 | A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
@@ -64,7 +64,7 @@ than removed.
 | A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
 | A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
-| A-59 | HIGH | `Anemos.run/2` and the CLI bypass `LoadAuthority` entirely | Open |
+| A-59 | HIGH | `Anemos.run/2` and the CLI bypass `LoadAuthority` entirely | **Fixed** — both callers collapsed onto `LoadAuthority.gate/3`, the only door to an AST |
 | A-60 | HIGH | `signed_by` is rule-only syntax, so `:strict` cannot load a condition file | Open |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |

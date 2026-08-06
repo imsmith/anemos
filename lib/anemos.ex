@@ -6,19 +6,18 @@ defmodule Anemos do
   against a given event in a single call.
   """
 
-  alias Anemos.Parser
   alias Anemos.Compiler
   alias Anemos.Runtime.{ContextScope, Dispatcher, ModuleRegistry, Standalone}
-  alias Anemos.Runtime.{LoadAuthority, LoadRequest}
+  alias Anemos.Runtime.LoadAuthority
   alias Anemos.Runtime.Modules
 
-  # `LoadRequest.runtime` names which runtime a load is destined for, so an
-  # authority can decide per-tenant. A `run/2` has no named runtime — it
-  # builds a throwaway dispatcher and tears it down — so it says so rather
-  # than borrowing the name of a runtime it is not touching. An authority
-  # that keys on `runtime` therefore sees the standalone path as its own
-  # thing and can refuse it outright, which is the correct default for a
-  # host that only means to permit loads into a named runtime.
+  # The runtime name this path presents to the load authority. `run/2` has
+  # no named runtime — it builds a throwaway dispatcher and tears it down
+  # again — so it says so rather than borrowing the name of a runtime it
+  # is not touching. An authority that keys on `LoadRequest.runtime`
+  # therefore sees the standalone path as its own thing and can refuse it
+  # outright, which is the right default for a host that only means to
+  # permit loads into a runtime it named. See `LoadAuthority.gate/3`.
   @standalone_runtime :standalone
 
   @default_modules %{
@@ -222,48 +221,6 @@ defmodule Anemos do
   end
 
   # --- Private ---
-
-  # A-59: `run/2` used to go straight from source to `Parser.parse` to
-  # `Compiler.compile`, so the one entry point that most obviously handles
-  # a policy file somebody else wrote was the one with no trust boundary.
-  # These two are the same checks `Anemos.Runtime.load/3` makes, against
-  # the same `LoadAuthority` — there is no fast path, because "there is a
-  # fast path that skips authorization" is not a property that stays
-  # documented.
-  defp gate_size(source) do
-    case LoadAuthority.check_size(source) do
-      :ok -> :ok
-      {:error, message} -> {:error, load_denied(message)}
-    end
-  end
-
-  defp gate_authority(source, ast, opts) do
-    request = %LoadRequest{
-      runtime: @standalone_runtime,
-      source: source,
-      byte_size: byte_size(source),
-      authorization: Keyword.get(opts, :authorization),
-      signers: LoadAuthority.signers(ast)
-    }
-
-    case LoadAuthority.authorize(request) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        # The authority's reason names *why* it refused, not what it was
-        # given, so it is safe to surface. The source is not.
-        {:error,
-         load_denied(
-           "the configured load authority #{inspect(LoadAuthority.configured())} " <>
-             "refused the load: #{inspect(reason)}"
-         )}
-    end
-  end
-
-  defp load_denied(message) do
-    Comn.Errors.Registry.error!("anemos.runtime/load_denied", field: "source", message: message)
-  end
 
   # `:context` stays the authoritative map so callers that already build one
   # keep working; `:context_path` and `:context_data` are folded in on top.

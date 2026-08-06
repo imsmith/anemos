@@ -48,7 +48,7 @@ than removed.
 | A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
 | A-32 | LOW | Repository hygiene | Open |
-| A-33 | MEDIUM | `Anemos.Module` documents two functions that do not exist | Open |
+| A-33 | MEDIUM | `Anemos.Module` documents two functions that do not exist | **Fixed** — example uses a real API and points at `Anemos.Secret` |
 | A-34 | MEDIUM | Format `data` blocks are silently discarded | Open |
 | A-35 | MEDIUM | `compile_query/1` is an unmarked stub; `query_blocks` never read | Open |
 | A-36 | LOW | Spec/test drift on transducer naming | Open |

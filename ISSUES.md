@@ -26,8 +26,8 @@ than removed.
 | A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
 | A-09 | HIGH | Default connector logs secrets in plaintext | **Fixed** — `Redact.summarize/1` in the connector; `Anemos.Secret` wrapper added |
 | A-10 | HIGH | `ModuleRegistry` verb routing can be hijacked | **Mitigated** — write-once + logged; not authorization, see entry |
-| A-11 | HIGH | No input validation between DSL and host verbs | Open |
-| A-12 | HIGH | `load/2` has no trust boundary | Open |
+| A-11 | HIGH | No input validation between DSL and host verbs | **Fixed** — optional `arg_schema/1` enforced pre-dispatch + `PathGuard` confinement |
+| A-12 | HIGH | `load/2` has no trust boundary | **Fixed** — `LoadAuthority` behaviour, byte ceiling, `:load` removed from `act/1` |
 | A-13 | MEDIUM | Demand fails open on unknown capabilities | Fixed — pending suite verification |
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | Fixed — pending suite verification |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | Open |
@@ -59,7 +59,8 @@ than removed.
 | A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | Open — decision needed |
 | A-56 | HIGH | Module calls in expression position are never dispatched | Open — design decision needed |
 | A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
-| A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | Open |
+| A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
+| A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
@@ -317,8 +318,21 @@ without a key before any signing tooling exists. `:permit` allows incremental ad
 tooling exists** — a permissive default that outlives its justification is how A-05
 happened in the first place.
 
-**Implementation seam.** The A-12 `load/2` gating work is being built with this in mind, so
-signature verification slots in at the same boundary rather than needing rework.
+**Implementation seam — built and verified 2026-08-06.** A-12's gating landed with this in
+mind. `Anemos.Runtime.LoadAuthority.authorize/1` runs **after parse and before compile**, and
+receives an `%Anemos.Runtime.LoadRequest{}` carrying `runtime`, `source`, `byte_size`,
+`authorization` and `signers`. Signature verification is therefore an *authority
+implementation*: it needs the signer names, the source bytes, and a keyring, and it has all
+three. **No change to `load/3`, to `LoadRequest`, or to the behaviour is required when A-05
+lands.**
+
+**A trap on that seam, found while building it — read this before implementing.**
+`parser.ex:163` matches `{:atom, _, signer}`, but the lexer's atom token payload is a
+**binary**. So `signed_by :operator` yields `signers: ["operator"]` — strings, not atoms.
+
+A keyring lookup written against atoms will silently never match, and a verifier that never
+matches a signer is a verifier that never rejects one. That is a fail-open shape sitting
+directly on the security seam. Verified by test at the time of writing.
 
 ---
 
@@ -516,8 +530,19 @@ on caller-supplied paths with no normalization and no root confinement. Wire tha
 real `FILE` verb — which `lib/anemos/runtime/modules/file.ex` exists as a placeholder for
 — and `[FILE::read "../../etc/shadow"]` is a working path traversal on day one.
 
-The `context` map handed to every verb also carries the live `:data_store` pid
-(`dispatcher.ex:408`) — a process handle exposed to every third-party verb.
+~~The `context` map handed to every verb also carries the live `:data_store` pid
+(`dispatcher.ex:408`) — a process handle exposed to every third-party verb.~~
+
+**Struck 2026-08-06 — this was factually wrong.** Disproved by test rather than by
+argument: `test/anemos/runtime/arg_validation_test.exs:216` refutes `:data_store` in the
+verb context, and it **passed against unmodified code**. The verb context is
+`%{_rule_source: {rule_name, ctx}}` plus whatever the event caller supplied. `:data_store`
+is added to `enriched_context`, which is handed to `rule.handler` — the compiled closure
+needs it for `memberof()` — but `run_ops/5` is called with the *original* context, so it
+never reaches `handle_verb/3`. The cited line number no longer corresponds to anything.
+
+Recorded rather than deleted: the claim came from the original audit and was carried
+forward here unverified.
 
 ### What should change
 
@@ -1915,6 +1940,37 @@ it and silently discards its structure.
 
 Same family as A-51's colon defect: colon-delimited syntax that the language's own
 documents use and the lexer/parser never modelled.
+
+---
+
+## A-58 — WITHDRAWN
+
+**Filed and withdrawn 2026-08-06.**
+
+Filed against an intermediate state in which the `:log` operation redacted its value
+through `Redact.summarize/1`, so `log "hello world"` printed `[anemos] r: binary(11 bytes)`.
+The entry argued that this flattened a distinction the compiler already knows — an authored
+literal cannot disclose anything the reader of the policy file does not already have,
+whereas `log ?token` is resolved runtime data.
+
+**That redaction was reverted before it shipped, so there is nothing to refine.** The
+`:log` clause is `Logger.info("[anemos] #{value}")` and prints verbatim.
+
+The reasoning is retained because it is the argument for why the current behaviour is
+correct rather than merely convenient:
+
+- `log` is the policy author's deliberate "print this", and the only debugging tool the
+  language has. A shape summary is not a hardened `log`; it is no `log`.
+- The defence on that path already exists and is narrower: `Anemos.Secret` implements
+  `String.Chars`, so a wrapped secret interpolates as `[REDACTED]` through the identical
+  clause. A test named for that fact now pins it, so a future change that reaches for
+  `summarize/1` here breaks a test that explains why it should not.
+- The distinction that matters is **the author asked for this value to be printed** versus
+  **a value leaked out of an error nobody asked to see**. A-52's sites 2 and 3 are the
+  latter and remain redacted; site 1 is the former and does not.
+
+An unwrapped secret reaching a `log` op is a host module failing to wrap it — addressed by
+A-11's schemas and by `Anemos.Secret` adoption, not by blinding every log statement.
 
 ---
 

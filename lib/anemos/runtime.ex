@@ -36,6 +36,8 @@ defmodule Anemos.Runtime do
   alias Anemos.Runtime.{
     ContextStore,
     Dispatcher,
+    LoadAuthority,
+    LoadRequest,
     ModuleRegistry,
     PolicyStore,
     RuleSupervisor,
@@ -63,11 +65,28 @@ defmodule Anemos.Runtime do
           {:schedule | :data_block, String.t(), term()}
 
   @doc """
-  Loads a policy source string into the running interpreter.
+  Loads a policy source string into the running interpreter. **Privileged.**
 
   Parses and compiles the source, then adds the resulting rules,
   conditions, and capabilities to the dispatcher and arms any schedules.
   Can be called multiple times — policies accumulate.
+
+  ## This is the trust boundary
+
+  Whoever controls `source` controls every verb registered in this runtime.
+  The call is therefore gated (A-12): it is checked against a source-size
+  ceiling, then handed to the module configured as `config :anemos,
+  :load_authority` as an `Anemos.Runtime.LoadRequest`. It is also *not*
+  reachable through `act/1` — see `Anemos.Runtime.LoadAuthority` for why
+  each of those three is here and what each is worth.
+
+  Pass whatever your authority needs to identify the caller as
+  `:authorization`:
+
+      Anemos.Runtime.load(:anemos, source, authorization: %{tenant: "acme", token: tok})
+
+  The default authority permits everything, so an embedder that has not
+  configured one sees the pre-A-12 behaviour unchanged.
 
   ## Return values
 
@@ -79,7 +98,9 @@ defmodule Anemos.Runtime do
       same source *did* load and will fire; this is not a rollback.
 
     * `{:error, reason}` — nothing loaded. The source failed to parse or
-      compile.
+      compile, or the load was refused. A refusal is a
+      `Comn.Errors.ErrorStruct` with code `anemos.runtime/load_denied`;
+      parse and compile failures keep their existing shape.
 
   The distinction between the last two is the point. Arming a schedule and
   starting a data block subscription are per-declaration best-effort — an
@@ -97,9 +118,19 @@ defmodule Anemos.Runtime do
       end
 
   """
-  @spec load(atom(), String.t()) :: :ok | {:partial, [load_failure()]} | {:error, String.t()}
-  def load(name, source) do
-    with {:ok, ast} <- Anemos.Parser.parse(source),
+  @spec load(atom(), String.t(), keyword()) ::
+          :ok | {:partial, [load_failure()]} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
+  def load(name, source, opts \\ []) do
+    # Order matters. The ceiling is enforced before the parser is handed
+    # anything, because bounding what an untrusted caller can make the
+    # parser allocate is the point of having one. The authority runs after
+    # the parse and before the compile: after, because that is the only way
+    # `signers` can exist for it to decide on (the A-05 seam); before,
+    # because compiling is what turns text into closures and nothing
+    # unauthorized should get that far.
+    with :ok <- gate_size(source),
+         {:ok, ast} <- Anemos.Parser.parse(source),
+         :ok <- gate_authority(name, source, ast, opts),
          {:ok, compiled} <- Anemos.Compiler.compile(ast) do
       dispatcher_failures =
         dispatcher_name(name)
@@ -120,6 +151,40 @@ defmodule Anemos.Runtime do
         failures -> {:partial, failures}
       end
     end
+  end
+
+  defp gate_size(source) do
+    case LoadAuthority.check_size(source) do
+      :ok -> :ok
+      {:error, message} -> {:error, load_denied(message)}
+    end
+  end
+
+  defp gate_authority(name, source, ast, opts) do
+    request = %LoadRequest{
+      runtime: name,
+      source: source,
+      byte_size: byte_size(source),
+      authorization: Keyword.get(opts, :authorization),
+      signers: LoadAuthority.signers(ast)
+    }
+
+    case LoadAuthority.authorize(request) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        # The authority's reason names *why* it refused, not what it was
+        # given, so it is safe to surface. The source is not.
+        {:error,
+         load_denied(
+           "#{inspect(LoadAuthority.configured())} refused the load: #{inspect(reason)}"
+         )}
+    end
+  end
+
+  defp load_denied(message) do
+    Comn.Errors.Registry.error!("anemos.runtime/load_denied", field: "source", message: message)
   end
 
   # Both Dispatcher.load/2 and Scheduler.schedule/2 answer :ok or
@@ -284,29 +349,33 @@ defmodule Anemos.Runtime do
         :dispatcher,
         :scheduler
       ],
-      api: [:load, :register, :dispatch, :connect, :put_context, :condition_state]
+      api: [:load, :register, :dispatch, :connect, :put_context, :condition_state],
+      # Reported so that "we never configured an authority" is a fact an
+      # operator can read off the running system rather than an absence.
+      load_authority: LoadAuthority.configured()
     }
   end
 
   @impl Comn
   def choices do
-    %{actions: ["load", "register", "dispatch", "connect"]}
+    %{actions: ["register", "dispatch", "connect"]}
   end
 
   @impl Comn
   def act(%{action: :dispatch, name: name, event: event, context: ctx}), do: dispatch(name, event, ctx)
   def act(%{action: :dispatch, name: name, event: event}), do: dispatch(name, event)
-  # Not {:ok, load(...)}: that wrapped a parse failure as {:ok, {:error, _}},
-  # so a Comn caller read a failed load as a successful action — the same
-  # swallowing defect as load/2 itself had, one layer up.
-  def act(%{action: :load, name: name, source: source}) do
-    case load(name, source) do
-      :ok -> {:ok, :loaded}
-      {:partial, failures} -> {:ok, {:partial, failures}}
-      {:error, _} = err -> err
-    end
-  end
 
+  # `:load` is deliberately absent (A-12). It used to be here, which meant
+  # anything able to reach the generic Comn action dispatcher could install
+  # policy — and installing policy is installing code against every verb the
+  # host has registered. Loading now has exactly one entry point, `load/3`,
+  # which names its authority. A generic action router has no business
+  # holding the privileged operation of the system.
+  #
+  # (The clause that used to be here also had to be careful not to wrap a
+  # failed load as `{:ok, {:error, _}}`. Deleting the clause removes that
+  # hazard rather than preserving it: there is no longer a second path whose
+  # return convention can drift from `load/3`'s.)
   def act(_input), do: {:error, :unknown_action}
 
   # --- Name helpers ---

@@ -335,8 +335,16 @@ defmodule Anemos.Runtime.Dispatcher do
             failures
 
           {:error, reason} ->
+            # A-52 site 3. Same split as crash_error/2, one severity lower.
+            # The block name is authored text and stays; the handler's reason
+            # is runtime data from a subsystem that was, by definition, in
+            # the middle of authenticating, so only its tag survives into the
+            # log. The full reason is not lost — it rides the structured
+            # failure back to whoever called `load/2`, who is the embedder
+            # rather than the log.
             Logger.warning(
-              "data block '#{data.name}' not subscribed: #{inspect(reason)} — it will never update"
+              "data block '#{data.name}' not subscribed (#{reason_tag(reason)}) — it will " <>
+                "never update; the reason is on the failure returned by load/2"
             )
 
             [{:data_block, data.name, {:subscribe_failed, reason}} | failures]
@@ -351,6 +359,22 @@ defmodule Anemos.Runtime.Dispatcher do
         [{:data_block, data.name, {:no_subscribable_handler, protocol}} | failures]
     end
   end
+
+  # A `{:tag, value}` reason names its failure mode in the head and carries
+  # values in the tail. The head comes from the host's own Subscribable
+  # implementation — authored, not attacker-supplied — so it is safe to
+  # print and is the single most useful token an operator gets. Everything
+  # else is described by shape only.
+  defp reason_tag(tag) when is_atom(tag), do: inspect(tag)
+
+  defp reason_tag(reason) when is_tuple(reason) and tuple_size(reason) > 0 do
+    case elem(reason, 0) do
+      tag when is_atom(tag) -> inspect(tag)
+      _ -> Anemos.Redact.summarize(reason)
+    end
+  end
+
+  defp reason_tag(reason), do: Anemos.Redact.summarize(reason)
 
   # Resolves every supervised child by id, once per callback. Cheaper than a
   # monitor-and-invalidate scheme and, unlike a cached pid, cannot hand a
@@ -459,8 +483,14 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @impl Comn
+  # Only what act/1 below actually implements. "load" and "condition_state"
+  # were advertised here and handled by nothing, so a Comn caller taking
+  # this list at its word got {:error, :unknown_action}. Loading in
+  # particular must not be advertised on a generic action surface at all
+  # (A-12) — `Anemos.Runtime.load/3` is the sole entry point and the place
+  # the authority is consulted.
   def choices do
-    %{actions: ["dispatch", "load", "condition_state"]}
+    %{actions: ["dispatch"]}
   end
 
   @impl Comn
@@ -538,9 +568,62 @@ defmodule Anemos.Runtime.Dispatcher do
         {results_acc ++ results, new_st}
 
       {:error, reason} ->
-        err = Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
-          message: "Rule #{rule.name} raised: #{inspect(reason)}")
-        {results_acc ++ [{:error, err}], st}
+        {results_acc ++ [{:error, crash_error(rule, reason)}], st}
+    end
+  end
+
+  # A-52 site 2.
+  #
+  # A crash reason routinely carries the arguments that provoked it — for
+  # `[SECRET::unlock ...]` that is the credential — so `inspect(reason)`
+  # belongs in neither the returned error nor the log. The split drawn here
+  # is *structure stays, values go*:
+  #
+  #   * the returned error keeps the rule name, the exception module and the
+  #     request id, and nothing else. Those are authored or structural; none
+  #     of them is a value the policy supplied.
+  #
+  #   * the log line carries the same three plus a `Anemos.Redact.summarize/1`
+  #     of the message, keyed by the request id, so an operator holding the
+  #     error can find its context without the context being in the error.
+  #
+  #   * the exception's own message — the only part that actually names
+  #     values — appears nowhere by default. `config :anemos,
+  #     :log_crash_detail, true` restores it for a debugging session; it is
+  #     opt-in because turning it on is a decision to disclose, and that
+  #     decision belongs to the operator rather than to whoever wrote the
+  #     rule that crashed.
+  #
+  # The request id comes off the error struct rather than being generated
+  # here: `Comn.Errors` enriches it from the ambient `Comn.Contexts`, which
+  # is the same id every other error in this dispatch cycle carries.
+  defp crash_error(rule, reason) do
+    {kind, detail} = crash_shape(reason)
+
+    err =
+      Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
+        field: rule.name,
+        message: "")
+
+    ref = err.request_id || "unknown"
+
+    Logger.error(
+      "[anemos] rule handler crash request=#{ref} rule=#{rule.name} kind=#{kind} " <>
+        "detail=#{crash_detail(detail)}"
+    )
+
+    %{err | message: "Rule #{rule.name} raised #{kind} — see log for request #{ref}"}
+  end
+
+  defp crash_shape({:exception, module, message}), do: {inspect(module), message}
+  defp crash_shape({:throw, kind, reason}), do: {"#{kind}", reason}
+  defp crash_shape(other), do: {"error", other}
+
+  defp crash_detail(detail) do
+    if Application.get_env(:anemos, :log_crash_detail, false) do
+      inspect(detail)
+    else
+      Anemos.Redact.summarize(detail)
     end
   end
 
@@ -623,20 +706,25 @@ defmodule Anemos.Runtime.Dispatcher do
   # Crash boundary for compiled rule handler closures. Catches exception types
   # that can arise from evaluated user-supplied .rule code. Unexpected exception
   # types are intentionally left to crash and restart via the supervisor.
+  # The exception *module* is kept separately from its message because
+  # crash_error/2 discloses the first and redacts the second: the module
+  # names a failure mode, the message names the values that caused it.
   defp safe_handle(rule, event_name, context, persistent_bindings) do
     rule.handler.(event_name, context, persistent_bindings)
   rescue
-    e in RuntimeError -> {:error, Exception.message(e)}
-    e in ArgumentError -> {:error, Exception.message(e)}
-    e in FunctionClauseError -> {:error, Exception.message(e)}
-    e in MatchError -> {:error, Exception.message(e)}
-    e in BadMapError -> {:error, Exception.message(e)}
-    e in KeyError -> {:error, Exception.message(e)}
-    e in UndefinedFunctionError -> {:error, Exception.message(e)}
-    e in ArithmeticError -> {:error, Exception.message(e)}
+    e in RuntimeError -> crashed(e)
+    e in ArgumentError -> crashed(e)
+    e in FunctionClauseError -> crashed(e)
+    e in MatchError -> crashed(e)
+    e in BadMapError -> crashed(e)
+    e in KeyError -> crashed(e)
+    e in UndefinedFunctionError -> crashed(e)
+    e in ArithmeticError -> crashed(e)
   catch
-    kind, reason -> {:error, {kind, reason}}
+    kind, reason -> {:error, {:throw, kind, reason}}
   end
+
+  defp crashed(e), do: {:error, {:exception, e.__struct__, Exception.message(e)}}
 
   defp build_index(rules) do
     Enum.reduce(rules, %{}, fn rule, acc ->
@@ -649,10 +737,15 @@ defmodule Anemos.Runtime.Dispatcher do
   # Every clause returns `{results, state}`. Only the re-entrant ones can
   # actually change the state, but a uniform shape is what lets
   # dispatch_immediate/6 fold over the op list without knowing which is which.
+  # Arguments reach here from policy literals and from event payloads, both
+  # untrusted. `Anemos.Runtime.Module.schema_for/2` is consulted and
+  # enforced *before* `handle_verb/3`, so no host module can be reached by a
+  # caller that skipped the check (A-11). A module declaring no schema for
+  # the verb is unvalidated, exactly as before.
   defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state, _depth) do
     result =
       case ModuleRegistry.lookup(state.registry, mod_name) do
-        {:ok, mod} -> mod.handle_verb(verb, args, context)
+        {:ok, mod} -> validate_then_handle(mod, mod_name, verb, args, context)
         :error ->
           {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
             message: "Module #{mod_name} not found in registry")}
@@ -661,6 +754,26 @@ defmodule Anemos.Runtime.Dispatcher do
     {result, state}
   end
 
+  # `log` prints its value verbatim, and that is the intended behaviour.
+  #
+  # A-52 originally called for summarizing this through `Anemos.Redact`.
+  # That was withdrawn, and correctly: `log` is the policy author's
+  # deliberate "print this" and the only debugging tool the language has.
+  # Reducing `log "starting sync"` to a shape descriptor does not harden
+  # anything — it deletes the feature, and an author who cannot see their
+  # own values writes worse policy, not safer policy.
+  #
+  # The disclosure control on this path already exists and is the designed
+  # one: `Anemos.Secret` implements `String.Chars`, so a wrapped secret
+  # interpolates as "[REDACTED]" right here, for free. An *unwrapped* secret
+  # reaching a `log` op is a host module that failed to wrap its return
+  # value — which is what the A-11 argument schemas and `Anemos.Secret`
+  # adoption address at the boundary where the value enters. It is not
+  # something the dispatcher can fix by blinding every log statement.
+  #
+  # The distinction that matters, and the one sites 2 and 3 below turn on:
+  # here the author *asked* for the value to be printed. There, a value
+  # leaked out of an error nobody asked to see.
   defp execute_op(%{type: :log, value: value} = op, _context, state, _depth) do
     Logger.info("[anemos] #{value}")
     {{:ok, op}, state}
@@ -775,6 +888,21 @@ defmodule Anemos.Runtime.Dispatcher do
 
   defp execute_op(%{type: :register_query, query: query}, _context, state, _depth) do
     {{:ok, %{type: :register_query, name: query.name}}, state}
+  end
+
+  defp validate_then_handle(mod, mod_name, verb, args, context) do
+    schema = Anemos.Runtime.Module.schema_for(mod, verb)
+
+    case Anemos.Runtime.ArgSchema.validate(schema, args, verb) do
+      {:ok, validated} ->
+        mod.handle_verb(verb, validated, context)
+
+      {:error, message} ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.runtime/invalid_argument",
+           field: "#{mod_name}::#{verb}",
+           message: message)}
+    end
   end
 
   defp nextrule_event_name(rule, target) do

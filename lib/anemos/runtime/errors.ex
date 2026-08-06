@@ -29,4 +29,17 @@ defmodule Anemos.Runtime.Errors do
   # capability declared.
   register_error "anemos.runtime/capability_context_denied", :auth,
     message: "Capability demanded from outside its declared context"
+
+  # `:validation`, not `:auth`: the caller may well be entitled to the verb.
+  # The arguments it supplied are not the shape the verb declared it accepts
+  # (A-11). Raised by the dispatcher before `handle_verb/3` is reached.
+  register_error "anemos.runtime/invalid_argument", :validation,
+    message: "Verb argument failed its declared schema"
+
+  # `:auth`: loading policy is the trust boundary (A-12). This is the
+  # configured `Anemos.Runtime.LoadAuthority` refusing a load, not a parse
+  # or compile failure — those still answer `{:error, reason}` from the
+  # parser and compiler as before.
+  register_error "anemos.runtime/load_denied", :auth,
+    message: "Policy load refused by the configured load authority"
 end

@@ -254,9 +254,9 @@ defmodule Anemos.Runtime.Dispatcher do
     dispatcher_pid = self()
 
     # Condition and capability servers are (re)started under the store
-    # supervisor, not linked here. put_condition/3 replaces any existing
+    # supervisor, not linked here. put_condition/4 replaces any existing
     # server for the name so that a restarted dispatcher installs
-    # transition callbacks pointing at itself.
+    # callbacks pointing at itself.
     Enum.each(compiled.conditions, fn cond_spec ->
       {:ok, _pid} =
         StoreSupervisor.put_condition(
@@ -419,6 +419,15 @@ defmodule Anemos.Runtime.Dispatcher do
     {:noreply, state}
   end
 
+  @impl true
+  def handle_info({:condition_side_effects, _name, _ops}, state) do
+    # Same as above. A condition can only transition in response to an event
+    # the dispatcher itself cast to it, so reaching this clause means the
+    # cast outlived its dispatch cycle — there is no cycle left to execute
+    # the operations in, and no caller to return them to.
+    {:noreply, state}
+  end
+
   defp build_comn_context(event_name, context) do
     fields = [
       request_id: Map.get(context, :request_id, generate_request_id()),
@@ -524,31 +533,9 @@ defmodule Anemos.Runtime.Dispatcher do
       {:ok, ops, new_persistent} ->
         new_st = put_in(st.rule_bindings[rule.name], new_persistent)
         rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
-        exec_context = Map.put(context, :_rule_source, {rule.name, rule_context})
 
-        # execute_op/4 returns {results, state}: `nextevent` and `nextrule`
-        # re-enter dispatch, and the state they produce — persistent `set`
-        # bindings, dwell timers — has to come back out. Threading it
-        # through the fold is what A-16 was missing.
-        {all_results, new_st} =
-          Enum.reduce(ops, {[], new_st}, fn op, {acc, st_op} ->
-            {res, st_op} = execute_op(op, exec_context, st_op, depth)
-            {acc ++ List.wrap(res), st_op}
-          end)
-
-        {normal_results, emit_events} =
-          Enum.split_with(all_results, fn
-            {:emit_event, _, _} -> false
-            _ -> true
-          end)
-
-        {emit_results, new_st} =
-          Enum.reduce(emit_events, {[], new_st}, fn {:emit_event, label, op}, {acc, s} ->
-            {sub_results, s} = dispatch_to_rules(label, context, s, depth + 1)
-            {acc ++ [{:ok, op} | sub_results], s}
-          end)
-
-        {results_acc ++ normal_results ++ emit_results, new_st}
+        {results, new_st} = run_ops(ops, {rule.name, rule_context}, context, new_st, depth)
+        {results_acc ++ results, new_st}
 
       {:error, reason} ->
         err = Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
@@ -557,21 +544,80 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
+  # Executes a list of operations on behalf of a named declaration.
+  #
+  # `source` is `{name, context_path}` — a rule, or a condition whose body
+  # produced these operations. It becomes `:_rule_source`, which is how a
+  # `demand` learns which context it is standing in and how an `emit`
+  # labels its envelope.
+  #
+  # Shared rather than duplicated on purpose: this is the one place an
+  # operation is executed, so a new caller cannot arrive without the
+  # context filter, the depth ceiling, or the state threading. The three
+  # times something *did* arrive without them are A-16, A-39 and A-50.
+  defp run_ops(ops, source, context, st, depth) do
+    exec_context = Map.put(context, :_rule_source, source)
+
+    # execute_op/4 returns {results, state}: `nextevent` and `nextrule`
+    # re-enter dispatch, and the state they produce — persistent `set`
+    # bindings, dwell timers — has to come back out. Threading it
+    # through the fold is what A-16 was missing.
+    {all_results, st} =
+      Enum.reduce(ops, {[], st}, fn op, {acc, st_op} ->
+        {res, st_op} = execute_op(op, exec_context, st_op, depth)
+        {acc ++ List.wrap(res), st_op}
+      end)
+
+    {normal_results, emit_events} =
+      Enum.split_with(all_results, fn
+        {:emit_event, _, _} -> false
+        _ -> true
+      end)
+
+    {emit_results, st} =
+      Enum.reduce(emit_events, {[], st}, fn {:emit_event, label, op}, {acc, s} ->
+        {sub_results, s} = dispatch_to_rules(label, context, s, depth + 1)
+        {acc ++ [{:ok, op} | sub_results], s}
+      end)
+
+    {normal_results ++ emit_results, st}
+  end
+
   # Fails closed on an event that names no context: see ContextScope.
   defp context_matches?(rule, event_context) do
     ContextScope.within?(event_context, get_in(rule, [Access.key(:meta), :context_path]))
   end
 
-  defp collect_transitions do
-    collect_transitions([])
+  defp collect_condition_messages do
+    collect_condition_messages([])
   end
 
-  defp collect_transitions(acc) do
+  defp collect_condition_messages(acc) do
     receive do
-      {:condition_transition, name} -> collect_transitions([name | acc])
+      {:condition_transition, name} ->
+        collect_condition_messages([{:transition, name} | acc])
+
+      {:condition_side_effects, name, ops} ->
+        collect_condition_messages([{:side_effects, name, ops} | acc])
     after
       0 -> Enum.reverse(acc)
     end
+  end
+
+  defp apply_condition_message({:transition, name}, context, state) do
+    dispatch_to_rules("CONDITION_#{name}", context, state, 0)
+  end
+
+  # A condition body's operations are executed by the same run_ops/5 that
+  # runs a rule handler's, at the same depth, with the same `:_rule_source`
+  # stamp — so an `emit ... as` from a condition body re-enters
+  # dispatch_to_rules/4 and is filtered by context_matches?/2 on the
+  # receiving side, a `demand` is gated by the capability's context, and
+  # the recursion ceiling applies. This is deliberately not a private
+  # execution path: A-39 was one of those.
+  defp apply_condition_message({:side_effects, name, ops}, context, state) do
+    source = {name, Map.get(state.condition_contexts, name)}
+    run_ops(ops, source, context, state, 0)
   end
 
   # Crash boundary for compiled rule handler closures. Catches exception types

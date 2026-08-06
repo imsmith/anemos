@@ -113,6 +113,28 @@ defmodule Anemos.Runtime.ConditionSideEffectsTest do
     assert logs(Dispatcher.dispatch(dispatcher, "IP_CHANGED")) == []
   end
 
+  test "the body runs before the rules woken by CONDITION_<name>" do
+    {dispatcher, _registry} =
+      runtime("""
+      condition ready {
+        when IP_CHANGED {
+          log "body"
+        }
+      }
+
+      rule listener {
+        when CONDITION_ready {
+          log "listener"
+        }
+      }
+      """)
+
+    # The condition server emits its side effects before it announces the
+    # transition, and the dispatcher drains both in arrival order. Reversing
+    # them would run the reaction before the thing reacted to.
+    assert logs(Dispatcher.dispatch(dispatcher, "IP_CHANGED")) == ["body", "listener"]
+  end
+
   # --- The boundary constraint ---
 
   test "an emit from a condition body does not reach a rule outside the event's context" do

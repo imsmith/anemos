@@ -58,6 +58,7 @@ than removed.
 | A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | Open |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | Open |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | Open |
+| A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | Open |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
 | A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
 | A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
@@ -68,7 +69,7 @@ than removed.
 | A-47 | MEDIUM | Compound `AND` event triggers behave as `OR` | Open |
 | A-48 | MEDIUM | `until` on a condition trigger cannot latch | Open |
 | A-49 | MEDIUM | Multiple trigger blocks in one condition run each other's side effects | Open |
-| A-50 | MEDIUM | Condition-body operations are computed and dropped; needs dispatcher wiring | Open |
+| A-50 | MEDIUM | Condition-body operations are computed and dropped; needs dispatcher wiring | **Fixed** — wired via `run_ops/5`; body runs before woken listeners |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -1604,6 +1605,45 @@ all. The old behaviour hid that by matching everything.
 Thread a `--context` flag through `Mix.Tasks.Anemos.Run` into `Anemos.run/2`. Use
 `OptionParser` rather than extending the hand-rolled `chunk_every/4` scan, which silently
 ignores unknown flags.
+
+---
+
+## A-54 — `CompiledCondition.context` is declared and never populated
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · found while wiring A-50
+
+### Symptom
+
+`Anemos.CompiledCondition` declares a `:context` field (`lib/anemos/compiled_condition.ex:6`,
+typed at `:14`), but `compile_condition/1` (`lib/anemos/compiler.ex:212-218`) builds the
+struct without it. It is `nil` for every condition ever compiled. A `context` block inside a
+condition body is parsed into the AST and then dropped.
+
+### Consequence, now that condition side effects actually execute
+
+**A condition can never demand a context-scoped capability.** It always presents `nil` as
+its context, and `ContextScope.within?/2` denies `nil` against any declared scope (A-06's
+fail-closed rule).
+
+That is the correct outcome — but it is fail-closed **by accident, not by declaration**. The
+denial happens because the field is empty, not because a boundary was evaluated. The moment
+`compile_condition/1` populates `:context` from the body's `%AST.Context{}` node, the
+dispatcher's `condition_contexts` map picks it up and the demand starts working; the
+consumer side is already built and tested.
+
+### Pattern worth noting
+
+This is the third instance of the same shape:
+
+| Field | Declared in | Never filled by | Consumer written as if filled |
+| --- | --- | --- | --- |
+| `NextRule.args` | `ast.ex` | `parser.ex:1098` | `compiler.ex:683-691` (A-51) |
+| `CompiledCondition.context` | `compiled_condition.ex:6` | `compiler.ex:212-218` | dispatcher `condition_contexts` |
+| `Envelope.signature` | `envelope.ex:18` | nothing | nothing (A-05) |
+
+A struct field that nothing populates is indistinguishable, at the consumer, from one whose
+value happens to be absent. Worth a Dialyzer pass or a compile-time assertion once A-27's
+static analysis lands.
 
 ---
 

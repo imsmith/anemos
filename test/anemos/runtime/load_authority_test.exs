@@ -14,6 +14,11 @@ defmodule Anemos.Runtime.LoadAuthorityTest do
 
   alias Anemos.Runtime.LoadAuthority
 
+  # The module's examples were documentation only until now — nothing
+  # anywhere in the suite ran `doctest Anemos.Runtime.LoadAuthority`, so
+  # the worked examples on a security decision point were unverified.
+  doctest Anemos.Runtime.LoadAuthority
+
   @policy """
   rule r {
     when EV { log "ok" }

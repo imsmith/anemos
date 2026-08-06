@@ -35,6 +35,32 @@ defmodule Anemos.Runtime.Scheduler do
   does not prevent the rest of the batch from being armed, since a batch is
   the compiled output of a whole policy and discarding all of it for one bad
   date would be worse than partial arming plus a loud report.
+
+  ## One timer per event name
+
+  A schedule is identified by its `event_name`, and that name is the whole
+  of its identity here: the compiler derives it from the time spec alone, so
+  `at 08:00` in two unrelated rules — in two unrelated policy files —
+  produces two specs both named `AT_08_00`.
+
+  Arming both would be wrong twice over. The timers map is keyed by event
+  name, so the second `Map.put` used to displace the first entry while its
+  timer stayed armed: an uncancellable timer firing forever, dispatching an
+  event nothing in the map accounts for (A-19). And the fix is not to key
+  the map more finely, because the *event* is genuinely shared — one
+  `AT_08_00` dispatch already reaches every rule subscribed to `AT_08_00`.
+  Two timers would fire every such rule twice.
+
+  So arming an event name that is already armed **replaces** it: the
+  displaced timer is cancelled first, and the replacement does not consume
+  cap headroom. Re-loading the same policy is therefore idempotent with
+  respect to timers.
+
+  What this cannot fix from here: because the event name carries no rule
+  identity, the scheduler has no way to distinguish `at 08:00` in rule A
+  from `at 08:00` in rule B, and `unschedule/2` therefore disarms the time,
+  not the rule. That requires the compiler to derive schedule names from
+  rule identity as well as time spec.
   """
 
   use GenServer
@@ -77,12 +103,32 @@ defmodule Anemos.Runtime.Scheduler do
   Returns `:ok` when every spec was armed, or `{:error, failures}` where
   `failures` is a list of `{event_name, reason}` for the specs that were not.
   Specs not named in `failures` were armed.
+
+  A spec whose `event_name` is already armed replaces it — see the moduledoc.
   """
   @spec schedule(pid() | atom(), [Anemos.CompiledSchedule.t()]) ::
           :ok | {:error, [{String.t(), failure_reason()}]}
   def schedule(server, schedules) do
     GenServer.call(server, {:schedule, schedules})
   end
+
+  @doc """
+  Disarms the timers for the named events and forgets their specs.
+
+  Idempotent: an event name that is not armed is skipped. This is the
+  counterpart `load/2` needed and did not have — without it, unloading a
+  policy left its `at` blocks firing indefinitely.
+  """
+  @spec unschedule(pid() | atom(), [String.t()]) :: :ok
+  def unschedule(server, event_names) when is_list(event_names) do
+    GenServer.call(server, {:unschedule, event_names})
+  end
+
+  @doc """
+  Returns the specs currently armed, one per event name.
+  """
+  @spec schedules(pid() | atom()) :: [Anemos.CompiledSchedule.t()]
+  def schedules(server), do: GenServer.call(server, :schedules)
 
   @impl true
   def init(opts) do
@@ -94,8 +140,11 @@ defmodule Anemos.Runtime.Scheduler do
       dispatch_fn: dispatch_fn,
       min_interval_ms: limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
       max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
-      timers: %{},
-      schedules: []
+      # event_name => {timer_ref, spec}. The single source of truth for what
+      # is armed; the previous separate `schedules` list accumulated a copy
+      # of every spec ever handed to schedule/2, including the duplicates
+      # whose timers had been displaced, and nothing ever read it.
+      timers: %{}
     }}
   end
 
@@ -109,10 +158,11 @@ defmodule Anemos.Runtime.Scheduler do
       Enum.reduce(new_schedules, {state, []}, fn sched, {state, failures} ->
         case arm(sched, state) do
           {:ok, timer_ref} ->
-            {%{state |
-               timers: Map.put(state.timers, sched.event_name, {timer_ref, sched}),
-               schedules: state.schedules ++ [sched]
-             }, failures}
+            # Cancel before overwriting. The displaced entry's timer is
+            # otherwise unreachable and keeps firing (A-19).
+            state = disarm(state, sched.event_name)
+            {%{state | timers: Map.put(state.timers, sched.event_name, {timer_ref, sched})},
+             failures}
 
           {:error, reason} ->
             Logger.warning(
@@ -127,15 +177,46 @@ defmodule Anemos.Runtime.Scheduler do
     {:reply, reply, state}
   end
 
+  def handle_call({:unschedule, event_names}, _from, state) do
+    {:reply, :ok, Enum.reduce(event_names, state, &disarm(&2, &1))}
+  end
+
+  def handle_call(:schedules, _from, state) do
+    {:reply, Enum.map(state.timers, fn {_name, {_ref, sched}} -> sched end), state}
+  end
+
   # Cap is checked against timers actually armed, so it holds cumulatively
-  # across separate schedule/2 calls.
+  # across separate schedule/2 calls. Re-arming a name that is already armed
+  # replaces rather than adds, so it is exempt: rejecting a policy reload at
+  # the cap when it adds no timers would be a false limit.
   defp arm(sched, state) do
-    if map_size(state.timers) >= state.max_schedules do
+    if map_size(state.timers) >= state.max_schedules and
+         not Map.has_key?(state.timers, sched.event_name) do
       {:error, {:schedule_limit_exceeded, state.max_schedules}}
     else
       start_timer(sched, state)
     end
   end
+
+  # Cancels and drops the timer for `event_name`, if any.
+  #
+  # The two timer kinds need different cancellations and are told apart by
+  # shape: `Process.send_after/3` yields a reference, `:timer.send_interval/2`
+  # a TRef tuple. Cancelling one with the other's function silently does
+  # nothing, which is how an interval timer survives an unschedule.
+  defp disarm(state, event_name) do
+    case Map.pop(state.timers, event_name) do
+      {nil, _timers} ->
+        state
+
+      {{timer_ref, _sched}, timers} ->
+        cancel_timer(timer_ref)
+        %{state | timers: timers}
+    end
+  end
+
+  defp cancel_timer(ref) when is_reference(ref), do: Process.cancel_timer(ref, info: false)
+  defp cancel_timer(tref), do: :timer.cancel(tref)
 
   @impl true
   def handle_info({:fire, event_name}, state) do
@@ -143,12 +224,21 @@ defmodule Anemos.Runtime.Scheduler do
     {:noreply, state}
   end
 
+  # Re-arms only if the event is still armed. A `:fire_recurring` can already
+  # be in the mailbox when the schedule is unscheduled or replaced, and an
+  # unconditional `Map.put` here would resurrect it — reinstating a timer for
+  # a schedule the caller has just disarmed, with no way to disarm it again.
   @impl true
   def handle_info({:fire_recurring, event_name, sched}, state) do
     do_dispatch(event_name, state)
-    timer_ref = schedule_next_occurrence(sched)
-    new_timers = Map.put(state.timers, event_name, {timer_ref, sched})
-    {:noreply, %{state | timers: new_timers}}
+
+    if Map.has_key?(state.timers, event_name) do
+      state = disarm(state, event_name)
+      timer_ref = schedule_next_occurrence(sched)
+      {:noreply, %{state | timers: Map.put(state.timers, event_name, {timer_ref, sched})}}
+    else
+      {:noreply, state}
+    end
   end
 
   defp do_dispatch(event_name, state) do

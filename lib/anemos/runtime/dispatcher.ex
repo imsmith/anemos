@@ -78,12 +78,40 @@ defmodule Anemos.Runtime.Dispatcher do
   @doc """
   Loads compiled rules, conditions, and capabilities into a running dispatcher.
 
-  New declarations are added to the existing set — nothing is replaced.
+  Declarations from different policies accumulate. A rule name that is
+  already loaded is **replaced**, not appended — see the `{:load, _}`
+  callback for why replacement rather than rejection.
   """
-  @spec load(pid() | atom(), Anemos.CompilationResult.t()) :: :ok
+  @spec load(pid() | atom(), Anemos.CompilationResult.t()) :: :ok | {:error, [term()]}
   def load(dispatcher, compiled) do
     GenServer.call(dispatcher, {:load, compiled})
   end
+
+  @doc """
+  Unloads the named rules.
+
+  Removes them from the rule set and the index, cancels any dwell timer they
+  have armed, drops their rule-scoped data blocks, and removes them from the
+  policy store so a dispatcher restart does not bring them back. Rule names
+  that are not loaded are ignored.
+
+  Rules only. Conditions, capabilities and global data blocks are not owned
+  by a rule — a policy-level unload would need a policy identity, which
+  `Anemos.CompilationResult` does not carry.
+  """
+  @spec unload(pid() | atom(), [String.t()]) :: :ok
+  def unload(dispatcher, rule_names) when is_list(rule_names) do
+    GenServer.call(dispatcher, {:unload, rule_names})
+  end
+
+  @doc """
+  Returns the names of the rules currently loaded, without duplicates.
+
+  A rule with several `when` blocks compiles to several rules sharing one
+  name and is reported once.
+  """
+  @spec rules(pid() | atom()) :: [String.t()]
+  def rules(dispatcher), do: GenServer.call(dispatcher, :rules)
 
   @doc """
   Returns the current boolean state of a named condition, or `nil` if not found.
@@ -217,6 +245,31 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @impl true
+  def handle_call({:unload, rule_names}, _from, state) do
+    state = refresh_stores(state)
+    drop = MapSet.new(rule_names)
+
+    # The durable record first, for the same reason load/2 records before
+    # applying: if this crashes halfway, a restart must not resurrect what
+    # the caller asked to remove.
+    :ok = PolicyStore.drop_rules(state.policy_store, rule_names)
+
+    remaining = Enum.reject(state.rules, &MapSet.member?(drop, &1.name))
+
+    state =
+      state
+      |> purge_rule_state(drop)
+      |> drop_rule_data(drop)
+
+    {:reply, :ok, %{state | rules: remaining, index: build_index(remaining)}}
+  end
+
+  @impl true
+  def handle_call(:rules, _from, state) do
+    {:reply, state.rules |> Enum.map(& &1.name) |> Enum.uniq(), state}
+  end
+
+  @impl true
   def handle_call({:condition_state, name}, _from, state) do
     state = refresh_stores(state)
 
@@ -309,13 +362,107 @@ defmodule Anemos.Runtime.Dispatcher do
         end
       end)
 
-    merged_rules = state.rules ++ compiled.rules
+    {state, merged_rules} = merge_rules(state, compiled.rules)
 
     # Condition/capability pids are never cached in state — refresh_stores/1
     # reads them from the supervisor so a restarted server is picked up.
     state = refresh_stores(%{state | rules: merged_rules, index: build_index(merged_rules)})
 
     {state, failures}
+  end
+
+  # Rules from different policies accumulate; a rule *name* that is already
+  # loaded is replaced by the incoming definition.
+  #
+  # Appending unconditionally was A-15: loading the same policy twice put two
+  # copies of every rule in the index, and every event fired each of them —
+  # so a re-load was not idempotent and a hot-reload doubled execution on
+  # each pass.
+  #
+  # Replace rather than reject. Rejecting a duplicate name has nowhere to go
+  # in the contract `Anemos.Runtime.load/3` publishes — `{:partial, failures}`
+  # would report a successful redefinition as a failure — and rejection makes
+  # the common case, reloading an edited policy, impossible without an unload
+  # first. The redefinition is logged instead, because silently changing what
+  # a rule name means is worth a line in the log.
+  #
+  # Replacement is by name and takes *all* of a name's rules with it: a rule
+  # with several `when` blocks compiles to several `CompiledRule` structs
+  # sharing one name, and dropping them individually would leave half of the
+  # old definition running alongside the new one.
+  defp merge_rules(state, []), do: {state, state.rules}
+
+  defp merge_rules(state, incoming) do
+    incoming_names = MapSet.new(incoming, & &1.name)
+
+    replaced =
+      state.rules
+      |> Enum.filter(&MapSet.member?(incoming_names, &1.name))
+      |> Enum.map(& &1.name)
+      |> Enum.uniq()
+
+    if replaced != [] do
+      Logger.info(
+        "[anemos] redefining rule(s) #{Enum.join(replaced, ", ")} — the previous definition " <>
+          "is no longer loaded"
+      )
+    end
+
+    kept = Enum.reject(state.rules, &MapSet.member?(incoming_names, &1.name))
+
+    # The old definition's persistent `set` bindings and armed dwell timers
+    # describe a rule body that no longer exists. Carrying them into the new
+    # definition hands it state it never produced, and leaves a
+    # `{:dwell_fire, ...}` in flight for a `when` block that may be gone.
+    state = purge_rule_state(state, MapSet.new(replaced))
+
+    {state, kept ++ incoming}
+  end
+
+  # Forgets the per-rule execution state the dispatcher holds for the named
+  # rules: persistent `set` bindings and armed dwell timers.
+  #
+  # The dwell timers have to be cancelled explicitly. Dropping the binding
+  # alone leaves the `Process.send_after/3` armed; it fires, finds no entry
+  # and is discarded as stale — harmless in itself, but it is a timer the
+  # runtime cannot account for, and for a rule reloaded in between it lands
+  # on a definition that never armed it.
+  #
+  # Rule-scoped *data* is deliberately not touched here, because this runs
+  # on replacement as well as on unload and a replacement has already
+  # re-registered its inline `data` blocks by the time it reaches this
+  # point — dropping the scope would delete what the incoming policy just
+  # registered. Unload does that separately, in drop_rule_data/2.
+  defp purge_rule_state(state, names) do
+    if MapSet.size(names) == 0 do
+      state
+    else
+      Enum.each(names, fn name ->
+        state.rule_bindings
+        |> Map.get(name, %{})
+        |> Enum.each(fn
+          {{:dwell, _event}, %{timer_ref: ref}} when is_reference(ref) ->
+            Process.cancel_timer(ref, info: false)
+
+          _other ->
+            :ok
+        end)
+      end)
+
+      %{state | rule_bindings: Map.drop(state.rule_bindings, MapSet.to_list(names))}
+    end
+  end
+
+  # Rule-local `data` blocks are scoped by rule name (see execute_op/4 for
+  # :register_data). Nothing else will ever remove them: a rule name is not
+  # a process, so the DataStore has nothing to monitor and no `:DOWN` to act
+  # on (A-24). Unload is the only point at which they are known to be dead.
+  defp drop_rule_data(state, names) do
+    if state.data_store do
+      Enum.each(names, &DataStore.drop_scope(state.data_store, {:local, &1}))
+    end
+
+    state
   end
 
   defp subscribe_data_block(data, protocol, uri, state, failures) do

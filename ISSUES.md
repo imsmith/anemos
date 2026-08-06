@@ -30,16 +30,19 @@ than removed.
 | A-12 | HIGH | `load/2` has no trust boundary | **Fixed** — `LoadAuthority` behaviour, byte ceiling, `:load` removed from `act/1` |
 | A-13 | MEDIUM | Demand fails open on unknown capabilities | Fixed — pending suite verification |
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | Fixed — pending suite verification |
-| A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | Open |
+| A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
+| A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | Open |
+| A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
+| A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
 | A-17 | MEDIUM | Sibling `when` block destroys armed dwell state | Open |
 | A-18 | MEDIUM | `Anemos.run/2` leaks 4 processes per call | **Fixed** — `Runtime.Standalone` with explicit teardown; 2 regression tests |
-| A-19 | MEDIUM | Same-time `at` blocks collide and leak timers | Open |
+| A-19 | MEDIUM | Same-time `at` blocks collide and leak timers | **Fixed** — displaced timers cancelled; `unschedule/2` added. Rule identity is A-61 |
 | A-20 | MEDIUM | Schedules that can never fire report `:ok` | Fixed at the scheduler; `load/2` propagation pending (see A-22) |
 | A-21 | MEDIUM | Internal error detail returned to callers | Open |
 | A-22 | MEDIUM | Three incompatible error representations | Partially fixed — `load/2` now propagates partial failure; the three representations remain |
-| A-23 | MEDIUM | `TripleStore` unbounded list, O(n) insert | Open |
-| A-24 | MEDIUM | `DataStore` scope discriminators inconsistent; cleanup unreachable | Open |
+| A-23 | MEDIUM | `TripleStore` unbounded list, O(n) insert | **Fixed** — `MapSet` backing; retention policy still undecided, see entry |
+| A-24 | MEDIUM | `DataStore` scope discriminators inconsistent; cleanup unreachable | **Fixed** — `get/3` takes `:scope_hint`; explicit `drop_scope/2` |
 | A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Open |
 | A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | Partially fixed — unhandled protocol now surfaces through `load/2`; `memberof` still fails open |
 | A-27 | LOW | No CI, no linting, no static analysis | Open |
@@ -2066,6 +2069,55 @@ record rather than a production surprise.
 Either lift `signed_by` to a source-level or declaration-level construct so any declaration
 can carry provenance, or scope `:strict` explicitly to rule-bearing sources and say so. The
 first is the real fix; the second is honest triage.
+
+---
+
+## A-61 — `at` rule names carry no rule identity, causing silent cross-policy replacement
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · **regression surfaced by the A-15 fix, disclosed by its author**
+
+### Symptom
+
+`compile_at_block/2` (`lib/anemos/compiler.ex:490-509`) derives both the schedule's
+`event_name` and the rule's name from the **time spec alone**. Two `at 08:00` blocks, in two
+unrelated policy files, both compile to a rule named `at_AT_08_00`.
+
+### Why this is now worse than it was
+
+Before A-15, `load` appended, so both rules existed and both fired — a double-fire. A-15
+correctly introduced replace-by-name, so the second policy's `at 08:00` rule now **replaces
+the first policy's**.
+
+That is the right behaviour for a genuinely redefined rule and the wrong behaviour here:
+these are different rules in different files that merely happen to run at the same time. A
+policy silently stops running because an unrelated policy was loaded afterwards, with no
+error and no log line naming a conflict.
+
+Silent loss of a loaded policy is a worse failure than a double-fire for a policy engine, so
+this is a net regression until the names are distinct. It is recorded as such rather than
+buried.
+
+### Second, related collision
+
+`at_spec_to_event/1` (`compiler.ex:526`, `:534`) produces the identical `AT_HH_MM` for both
+`{:time, {h, m}}` and `{:recurring, {:time, {h, m}}, recurrence}`. Recurrence is not encoded.
+So `at 08:00` and `at 08:00 every weekday` — schedules with genuinely different firing
+behaviour — collide on one key, and whichever loads second silently converts the other.
+
+### What blocks on this
+
+- **A-17's `rule_bindings` collision across unrelated policies.** Same root cause: two rules
+  sharing a name share one bindings entry.
+- **Per-rule unschedule.** `Scheduler.unschedule/2` now exists, but it disarms a *time*, not
+  a rule — with no rule identity in the name it cannot disarm rule A's `at 08:00` while
+  leaving rule B's armed.
+- **`unload/2` unscheduling a rule's `at` blocks.** Currently impossible for the same reason.
+
+### What should change
+
+`compile_at_block/2` should derive both names from the rule name **and** the time spec (e.g.
+`AT_<rule>_08_00`), and `at_spec_to_event/1` should encode recurrence. Small change, in
+`compiler.ex`; it is the prerequisite for three separate fixes above.
 
 ---
 

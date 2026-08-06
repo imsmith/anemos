@@ -43,6 +43,33 @@ defmodule Anemos.Runtime.PolicyStore do
   end
 
   @doc """
+  Removes the named rules from every stored compilation result.
+
+  This is what makes `Anemos.Runtime.Dispatcher.unload/2` durable. The
+  dispatcher's rule list is derived and rebuilt from this store on restart,
+  so an unload that touched only the derived view would be undone by the
+  next dispatcher crash — the rule would come back.
+
+  Only rules are removed. A compilation result also carries conditions,
+  capabilities and data blocks, which are not owned by any one rule and are
+  not implied by unloading one. A result left with no rules is kept for the
+  same reason.
+  """
+  @spec drop_rules(Agent.agent(), [String.t()]) :: :ok
+  def drop_rules(store, rule_names) do
+    drop = MapSet.new(rule_names)
+
+    Agent.update(store, fn s ->
+      policies =
+        Enum.map(s.policies, fn compiled ->
+          %{compiled | rules: Enum.reject(compiled.rules, &MapSet.member?(drop, &1.name))}
+        end)
+
+      %{s | policies: policies}
+    end)
+  end
+
+  @doc """
   Returns every loaded compilation result in load order.
   """
   @spec all(Agent.agent()) :: [Anemos.CompilationResult.t()]

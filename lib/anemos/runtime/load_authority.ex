@@ -189,6 +189,121 @@ defmodule Anemos.Runtime.LoadAuthority do
   def authorize(%LoadRequest{} = request), do: configured().authorize(request)
 
   @doc """
+  The gate. Checks the ceiling, parses, and authorizes; returns the AST.
+
+  **This is the only supported way to obtain an AST for the compiler.**
+  That property is the point of the function, and it is stronger than any
+  amount of documentation asking callers not to skip the boundary. A
+  caller that parses on its own and compiles the result has reimplemented
+  a subset of loading and skipped the authority — which is precisely what
+  `Anemos.run/2` did (A-59), and the same shape as A-39, where `nextrule`
+  reimplemented a subset of dispatch and skipped the context filter. Both
+  were fixed by making one path the only path. Two assemblies of the same
+  `LoadRequest` would reintroduce it at the next field added to the
+  struct, so there is one.
+
+  ## Order, and why it is that order
+
+  1. **Ceiling first**, before the parser is handed anything. Bounding
+     what an untrusted caller can make the parser allocate is the entire
+     point of having a ceiling; checking it after the parse would be
+     checking it after the damage.
+  2. **Parse second.** This is what makes `signers` exist at all.
+  3. **Authority third** — after the parse, because `LoadRequest.signers`
+     is the A-05 seam and cannot be populated any earlier; before the
+     compile, because compiling is what turns text into closures and
+     nothing unauthorized should get that far. Compiling is the caller's
+     job, and it happens on the AST this function returns.
+
+  ## `runtime`
+
+  Names which runtime the load is destined for, so an authority can decide
+  per tenant. `Anemos.run/2` passes `:standalone`: it builds a throwaway
+  dispatcher and tears it down again, so it is not loading into any named
+  runtime and does not claim to be. An authority keying on `runtime`
+  therefore sees the standalone path as its own thing and can refuse it
+  outright — the correct default for a host that only means to permit
+  loads into a runtime it named.
+
+  ## Options
+
+    * `:authorization` — passed through as `LoadRequest.authorization`. A
+      token, a peer identity, whatever the configured authority checks.
+
+  ## Return values
+
+  `{:ok, ast}` when the load may proceed. `{:error, reason}` otherwise:
+  a refusal — by the ceiling or by the authority — is a
+  `Comn.Errors.ErrorStruct` with code `anemos.runtime/load_denied`, while
+  a parse failure keeps whatever shape `Anemos.Parser.parse/1` returned.
+  The two are worth telling apart: one is a boundary decision, the other
+  is a broken rule file.
+
+  ## Examples
+
+      iex> {:ok, ast} = Anemos.Runtime.LoadAuthority.gate(:demo, ~s(rule r { when EV { log "hi" } }), [])
+      iex> length(ast.declarations)
+      1
+
+      iex> Application.put_env(:anemos, :max_policy_bytes, 4)
+      iex> {:error, err} = Anemos.Runtime.LoadAuthority.gate(:demo, ~s(rule r { when EV { log "hi" } }), [])
+      iex> Application.delete_env(:anemos, :max_policy_bytes)
+      iex> err.code
+      "anemos.runtime/load_denied"
+
+  """
+  @spec gate(atom(), String.t(), keyword()) ::
+          {:ok, Anemos.AST.Program.t()} | {:error, Comn.Errors.ErrorStruct.t() | String.t()}
+  def gate(runtime, source, opts \\ []) when is_binary(source) do
+    with :ok <- gate_size(source),
+         {:ok, ast} <- Anemos.Parser.parse(source),
+         :ok <- gate_authority(runtime, source, ast, opts) do
+      {:ok, ast}
+    end
+  end
+
+  defp gate_size(source) do
+    case check_size(source) do
+      :ok -> :ok
+      {:error, message} -> {:error, load_denied(message)}
+    end
+  end
+
+  defp gate_authority(runtime, source, ast, opts) do
+    request = %LoadRequest{
+      runtime: runtime,
+      source: source,
+      byte_size: byte_size(source),
+      authorization: Keyword.get(opts, :authorization),
+      signers: signers(ast)
+    }
+
+    case authorize(request) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        # The authority's reason names *why* it refused, not what it was
+        # given, so it is safe to surface. The source is not.
+        #
+        # The module is named in full rather than left bare: this string
+        # reaches a policy author through `mix anemos.run`, and a bare
+        # module name in that position does not tell them what refused
+        # them or what to change. An operator reading a log can still
+        # identify the module.
+        {:error,
+         load_denied(
+           "the configured load authority #{inspect(configured())} " <>
+             "refused the load: #{inspect(reason)}"
+         )}
+    end
+  end
+
+  defp load_denied(message) do
+    Comn.Errors.Registry.error!("anemos.runtime/load_denied", field: "source", message: message)
+  end
+
+  @doc """
   Collects the `signed_by` names declared by an AST's rules.
 
   Empty when nothing in the source claims a signer, which is itself a fact

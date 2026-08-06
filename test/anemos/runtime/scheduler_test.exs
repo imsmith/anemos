@@ -266,6 +266,178 @@ defmodule Anemos.Runtime.SchedulerTest do
     assert Process.alive?(pid)
   end
 
+  # --- A-19: same-name schedules collide and leak timers ---
+
+  describe "colliding event names" do
+    test "re-arming an event name cancels the displaced timer instead of leaking it" do
+      test_pid = self()
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          runtime_name: :test_sched_collide,
+          dispatch_fn: fn event_name, _ctx -> send(test_pid, {:dispatched, event_name}) end
+        )
+
+      # Two `at 08:00` blocks in two unrelated rules compile to the same
+      # synthetic event name. Both arm a timer; the map holds one.
+      spec = %Anemos.CompiledSchedule{
+        event_name: "AT_08_00",
+        time_spec: {:delay_ms, 50},
+        recurrence: nil
+      }
+
+      assert :ok = Scheduler.schedule(pid, [spec, spec])
+
+      # One event name, one timer, one dispatch. The displaced timer must
+      # not survive to produce a second, unattributable dispatch.
+      assert_receive {:dispatched, "AT_08_00"}, 500
+      refute_receive {:dispatched, "AT_08_00"}, 200
+
+      assert map_size(:sys.get_state(pid).timers) == 1
+    end
+
+    test "a collision across separate schedule calls does not leak either" do
+      test_pid = self()
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          runtime_name: :test_sched_collide_calls,
+          dispatch_fn: fn event_name, _ctx -> send(test_pid, {:dispatched, event_name}) end
+        )
+
+      spec = %Anemos.CompiledSchedule{
+        event_name: "AT_08_00",
+        time_spec: {:delay_ms, 60},
+        recurrence: nil
+      }
+
+      assert :ok = Scheduler.schedule(pid, [spec])
+      assert :ok = Scheduler.schedule(pid, [spec])
+
+      assert_receive {:dispatched, "AT_08_00"}, 500
+      refute_receive {:dispatched, "AT_08_00"}, 200
+    end
+
+    test "re-arming does not consume cap headroom" do
+      {:ok, pid} =
+        Scheduler.start_link(runtime_name: :test_sched_collide_cap, max_schedules: 1)
+
+      spec = %Anemos.CompiledSchedule{
+        event_name: "AT_08_00",
+        time_spec: {:delay_ms, 60_000},
+        recurrence: nil
+      }
+
+      assert :ok = Scheduler.schedule(pid, [spec])
+      assert :ok = Scheduler.schedule(pid, [spec])
+    end
+
+    test "duplicate specs do not accumulate in the schedule list" do
+      {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_collide_list)
+
+      spec = %Anemos.CompiledSchedule{
+        event_name: "AT_08_00",
+        time_spec: {:delay_ms, 60_000},
+        recurrence: nil
+      }
+
+      assert :ok = Scheduler.schedule(pid, [spec])
+      assert :ok = Scheduler.schedule(pid, [spec])
+
+      assert length(Scheduler.schedules(pid)) == 1
+    end
+  end
+
+  # --- A-19: no unschedule path ---
+
+  describe "unschedule" do
+    test "unschedule/2 cancels the timer and forgets the spec" do
+      test_pid = self()
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          runtime_name: :test_sched_unschedule,
+          dispatch_fn: fn event_name, _ctx -> send(test_pid, {:dispatched, event_name}) end
+        )
+
+      assert :ok =
+               Scheduler.schedule(pid, [
+                 %Anemos.CompiledSchedule{
+                   event_name: "AT_GONE",
+                   time_spec: {:delay_ms, 60},
+                   recurrence: nil
+                 }
+               ])
+
+      assert :ok = Scheduler.unschedule(pid, ["AT_GONE"])
+
+      refute_receive {:dispatched, "AT_GONE"}, 300
+      assert Scheduler.schedules(pid) == []
+    end
+
+    test "unschedule/2 cancels an interval timer" do
+      test_pid = self()
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          runtime_name: :test_sched_unschedule_interval,
+          min_interval_ms: 10,
+          dispatch_fn: fn event_name, _ctx -> send(test_pid, {:dispatched, event_name}) end
+        )
+
+      assert :ok =
+               Scheduler.schedule(pid, [
+                 %Anemos.CompiledSchedule{
+                   event_name: "AT_INTERVAL_gone",
+                   time_spec: {:interval, {30, :ms}},
+                   recurrence: :interval
+                 }
+               ])
+
+      assert_receive {:dispatched, "AT_INTERVAL_gone"}, 300
+      assert :ok = Scheduler.unschedule(pid, ["AT_INTERVAL_gone"])
+
+      # Drain anything already in flight, then confirm it has stopped.
+      receive do
+        {:dispatched, "AT_INTERVAL_gone"} -> :ok
+      after
+        60 -> :ok
+      end
+
+      refute_receive {:dispatched, "AT_INTERVAL_gone"}, 200
+    end
+
+    test "unschedule/2 on an unknown event name is a no-op" do
+      {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_unschedule_missing)
+      assert :ok = Scheduler.unschedule(pid, ["AT_NEVER_ARMED"])
+    end
+
+    test "a recurring schedule does not resurrect itself after unschedule" do
+      test_pid = self()
+
+      {:ok, pid} =
+        Scheduler.start_link(
+          runtime_name: :test_sched_recurring_unschedule,
+          dispatch_fn: fn event_name, _ctx -> send(test_pid, {:dispatched, event_name}) end
+        )
+
+      # A :fire_recurring already in the mailbox must not re-arm a timer for
+      # an event the caller has just unscheduled.
+      send(
+        pid,
+        {:fire_recurring, "AT_ZOMBIE",
+         %Anemos.CompiledSchedule{
+           event_name: "AT_ZOMBIE",
+           time_spec: {:time, {0, 0}},
+           recurrence: :day
+         }}
+      )
+
+      assert_receive {:dispatched, "AT_ZOMBIE"}, 300
+      assert :sys.get_state(pid).timers == %{}
+    end
+  end
+
   defp start_sched(name, test_pid) do
     Scheduler.start_link(
       runtime_name: name,

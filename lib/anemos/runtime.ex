@@ -162,6 +162,7 @@ defmodule Anemos.Runtime do
   # Both Dispatcher.load/2 and Scheduler.schedule/2 answer :ok or
   # {:error, failures}; they differ only in the shape of a failure entry.
   defp failures_of(:ok, _normalize), do: []
+
   defp failures_of({:error, failures}, normalize) when is_list(failures) do
     Enum.map(failures, normalize)
   end
@@ -293,9 +294,7 @@ defmodule Anemos.Runtime do
        policy_store: policy_store_name(name),
        store_supervisor: store_supervisor_name(name),
        rule_supervisor: rule_supervisor_name(name)},
-      {Scheduler,
-       name: scheduler_name(name),
-       runtime_name: name}
+      {Scheduler, name: scheduler_name(name), runtime_name: name}
     ]
 
     # :rest_for_one, not :one_for_one. The dispatcher's state is derived
@@ -343,7 +342,9 @@ defmodule Anemos.Runtime do
   end
 
   @impl Comn
-  def act(%{action: :dispatch, name: name, event: event, context: ctx}), do: dispatch(name, event, ctx)
+  def act(%{action: :dispatch, name: name, event: event, context: ctx}),
+    do: dispatch(name, event, ctx)
+
   def act(%{action: :dispatch, name: name, event: event}), do: dispatch(name, event)
 
   # `:load` is deliberately absent (A-12). It used to be here, which meant

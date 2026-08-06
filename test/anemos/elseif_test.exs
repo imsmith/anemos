@@ -88,7 +88,9 @@ defmodule Anemos.ElseifTest do
 
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [%AST.When{body: [%AST.If{} = outer]}] = rule.body
-    assert [%AST.If{body: [%AST.Log{expression: %AST.Literal{value: "second"}}]}] = outer.else_body
+
+    assert [%AST.If{body: [%AST.Log{expression: %AST.Literal{value: "second"}}]}] =
+             outer.else_body
   end
 
   # --- End-to-end execution tests ---

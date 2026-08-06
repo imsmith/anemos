@@ -25,7 +25,15 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @behaviour Comn
 
-  alias Anemos.Runtime.{DataStore, ModuleRegistry, PolicyStore, StoreSupervisor, SubscribableRegistry, TripleStore}
+  alias Anemos.Runtime.{
+    DataStore,
+    ModuleRegistry,
+    PolicyStore,
+    StoreSupervisor,
+    SubscribableRegistry,
+    TripleStore
+  }
+
   alias Anemos.Runtime.ConditionServer
   alias Anemos.Runtime.ContextScope
 
@@ -350,7 +358,8 @@ defmodule Anemos.Runtime.Dispatcher do
       Enum.reduce(Map.get(compiled, :data_blocks, []), [], fn data, failures ->
         if data.dataset do
           DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
-            source: data.source)
+            source: data.source
+          )
         end
 
         case data.dynamic do
@@ -547,7 +556,8 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case Map.get(rule_state, dwell_key) do
       %{state: :armed, last_context: context} when context != nil ->
-        rule = Enum.find(state.rules, fn r -> r.name == rule_name and event_name in r.subscriptions end)
+        rule =
+          Enum.find(state.rules, fn r -> r.name == rule_name and event_name in r.subscriptions end)
 
         new_state =
           if rule do
@@ -625,7 +635,16 @@ defmodule Anemos.Runtime.Dispatcher do
   def recon do
     %{
       type: :implementation,
-      operations: [:command, :log, :emit, :demand, :assert_triple, :triple_query, :nextevent, :nextrule]
+      operations: [
+        :command,
+        :log,
+        :emit,
+        :demand,
+        :assert_triple,
+        :triple_query,
+        :nextevent,
+        :nextrule
+      ]
     }
   end
 
@@ -641,7 +660,9 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @impl Comn
-  def act(%{action: :dispatch, pid: pid, event: event, context: ctx}), do: {:ok, dispatch(pid, event, ctx)}
+  def act(%{action: :dispatch, pid: pid, event: event, context: ctx}),
+    do: {:ok, dispatch(pid, event, ctx)}
+
   def act(%{action: :dispatch, pid: pid, event: event}), do: {:ok, dispatch(pid, event)}
   def act(_input), do: {:error, :unknown_action}
 
@@ -750,7 +771,8 @@ defmodule Anemos.Runtime.Dispatcher do
     err =
       Comn.Errors.Registry.error!("anemos.runtime/handler_crash",
         field: rule.name,
-        message: "")
+        message: ""
+      )
 
     ref = err.request_id || "unknown"
 
@@ -889,13 +911,22 @@ defmodule Anemos.Runtime.Dispatcher do
   # enforced *before* `handle_verb/3`, so no host module can be reached by a
   # caller that skipped the check (A-11). A module declaring no schema for
   # the verb is unvalidated, exactly as before.
-  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state, _depth) do
+  defp execute_op(
+         %{type: :command, module: mod_name, verb: verb, args: args},
+         context,
+         state,
+         _depth
+       ) do
     result =
       case ModuleRegistry.lookup(state.registry, mod_name) do
-        {:ok, mod} -> validate_then_handle(mod, mod_name, verb, args, context)
+        {:ok, mod} ->
+          validate_then_handle(mod, mod_name, verb, args, context)
+
         :error ->
-          {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
-            message: "Module #{mod_name} not found in registry")}
+          {:error,
+           Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
+             message: "Module #{mod_name} not found in registry"
+           )}
       end
 
     {result, state}
@@ -946,6 +977,7 @@ defmodule Anemos.Runtime.Dispatcher do
         channel: channel_path,
         timestamp: DateTime.utc_now()
       }
+
       state.channel_connector.publish(channel_path, envelope)
     end
 
@@ -972,7 +1004,12 @@ defmodule Anemos.Runtime.Dispatcher do
     {results, state}
   end
 
-  defp execute_op(%{type: :assert_triple, subject: s, predicate: p, object: o} = op, _context, state, _depth) do
+  defp execute_op(
+         %{type: :assert_triple, subject: s, predicate: p, object: o} = op,
+         _context,
+         state,
+         _depth
+       ) do
     TripleStore.assert_triple(state.triple_store, s, p, o)
     {{:ok, op}, state}
   end
@@ -1015,21 +1052,27 @@ defmodule Anemos.Runtime.Dispatcher do
 
   defp execute_op(%{type: :register_data, data: data}, context, state, _depth) do
     if data.dataset do
-      scope = case data.scope do
-        :local ->
-          # Use rule name as scope discriminator — rules don't run as separate
-          # processes, so pid-based scoping would collapse all inline blocks
-          # into one scope (the dispatcher's pid).
-          rule_name = case context[:_rule_source] do
-            {name, _} -> name
-            _ -> "unknown"
-          end
-          {:local, rule_name}
-        _ ->
-          data.scope || :global
-      end
+      scope =
+        case data.scope do
+          :local ->
+            # Use rule name as scope discriminator — rules don't run as separate
+            # processes, so pid-based scoping would collapse all inline blocks
+            # into one scope (the dispatcher's pid).
+            rule_name =
+              case context[:_rule_source] do
+                {name, _} -> name
+                _ -> "unknown"
+              end
+
+            {:local, rule_name}
+
+          _ ->
+            data.scope || :global
+        end
+
       DataStore.register(state.data_store, data.name, scope, data.dataset)
     end
+
     {{:ok, %{type: :register_data, name: data.name}}, state}
   end
 
@@ -1048,7 +1091,8 @@ defmodule Anemos.Runtime.Dispatcher do
         {:error,
          Comn.Errors.Registry.error!("anemos.runtime/invalid_argument",
            field: "#{mod_name}::#{verb}",
-           message: message)}
+           message: message
+         )}
     end
   end
 
@@ -1095,7 +1139,9 @@ defmodule Anemos.Runtime.Dispatcher do
     truthy? = dwell_signal_truthy?(context)
     rule_state = Map.get(st.rule_bindings, rule.name, %{})
     dwell_key = {:dwell, event_name}
-    current = Map.get(rule_state, dwell_key, %{state: :listening, timer_ref: nil, last_context: nil})
+
+    current =
+      Map.get(rule_state, dwell_key, %{state: :listening, timer_ref: nil, last_context: nil})
 
     new_dwell =
       case {current.state, truthy?} do

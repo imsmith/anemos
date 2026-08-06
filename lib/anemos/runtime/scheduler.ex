@@ -135,17 +135,19 @@ defmodule Anemos.Runtime.Scheduler do
     runtime_name = Keyword.fetch!(opts, :runtime_name)
     dispatch_fn = Keyword.get(opts, :dispatch_fn)
 
-    {:ok, %{
-      runtime_name: runtime_name,
-      dispatch_fn: dispatch_fn,
-      min_interval_ms: limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
-      max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
-      # event_name => {timer_ref, spec}. The single source of truth for what
-      # is armed; the previous separate `schedules` list accumulated a copy
-      # of every spec ever handed to schedule/2, including the duplicates
-      # whose timers had been displaced, and nothing ever read it.
-      timers: %{}
-    }}
+    {:ok,
+     %{
+       runtime_name: runtime_name,
+       dispatch_fn: dispatch_fn,
+       min_interval_ms:
+         limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
+       max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
+       # event_name => {timer_ref, spec}. The single source of truth for what
+       # is armed; the previous separate `schedules` list accumulated a copy
+       # of every spec ever handed to schedule/2, including the duplicates
+       # whose timers had been displaced, and nothing ever read it.
+       timers: %{}
+     }}
   end
 
   defp limit(opts, opt_key, env_key, default) do
@@ -161,6 +163,7 @@ defmodule Anemos.Runtime.Scheduler do
             # Cancel before overwriting. The displaced entry's timer is
             # otherwise unreachable and keeps firing (A-19).
             state = disarm(state, sched.event_name)
+
             {%{state | timers: Map.put(state.timers, sched.event_name, {timer_ref, sched})},
              failures}
 
@@ -317,11 +320,14 @@ defmodule Anemos.Runtime.Scheduler do
   defp ms_until_time(hour, minute) do
     now = NaiveDateTime.local_now()
     target = NaiveDateTime.new!(NaiveDateTime.to_date(now), Time.new!(hour, minute, 0))
-    target = if NaiveDateTime.compare(target, now) != :gt do
-      NaiveDateTime.add(target, 86_400, :second)
-    else
-      target
-    end
+
+    target =
+      if NaiveDateTime.compare(target, now) != :gt do
+        NaiveDateTime.add(target, 86_400, :second)
+      else
+        target
+      end
+
     NaiveDateTime.diff(target, now, :millisecond)
   end
 
@@ -352,13 +358,21 @@ defmodule Anemos.Runtime.Scheduler do
     cond do
       today in 1..5 and NaiveDateTime.compare(target_today, now) == :gt ->
         NaiveDateTime.diff(target_today, now, :millisecond)
+
       today in 1..4 ->
         target = NaiveDateTime.add(target_today, 86_400, :second)
         NaiveDateTime.diff(target, now, :millisecond)
+
       true ->
         days_to_monday = rem(8 - today, 7)
         days_to_monday = if days_to_monday == 0, do: 7, else: days_to_monday
-        target = NaiveDateTime.new!(Date.add(NaiveDateTime.to_date(now), days_to_monday), Time.new!(hour, minute, 0))
+
+        target =
+          NaiveDateTime.new!(
+            Date.add(NaiveDateTime.to_date(now), days_to_monday),
+            Time.new!(hour, minute, 0)
+          )
+
         NaiveDateTime.diff(target, now, :millisecond)
     end
   end
@@ -371,13 +385,21 @@ defmodule Anemos.Runtime.Scheduler do
     cond do
       today in [6, 7] and NaiveDateTime.compare(target_today, now) == :gt ->
         NaiveDateTime.diff(target_today, now, :millisecond)
+
       today == 6 ->
         target = NaiveDateTime.add(target_today, 86_400, :second)
         NaiveDateTime.diff(target, now, :millisecond)
+
       true ->
         days_to_saturday = rem(6 - today + 7, 7)
         days_to_saturday = if days_to_saturday == 0, do: 7, else: days_to_saturday
-        target = NaiveDateTime.new!(Date.add(NaiveDateTime.to_date(now), days_to_saturday), Time.new!(hour, minute, 0))
+
+        target =
+          NaiveDateTime.new!(
+            Date.add(NaiveDateTime.to_date(now), days_to_saturday),
+            Time.new!(hour, minute, 0)
+          )
+
         NaiveDateTime.diff(target, now, :millisecond)
     end
   end
@@ -393,7 +415,13 @@ defmodule Anemos.Runtime.Scheduler do
       NaiveDateTime.diff(target_today, now, :millisecond)
     else
       days_ahead = if days_ahead == 0, do: 7, else: days_ahead
-      target = NaiveDateTime.new!(Date.add(NaiveDateTime.to_date(now), days_ahead), Time.new!(hour, minute, 0))
+
+      target =
+        NaiveDateTime.new!(
+          Date.add(NaiveDateTime.to_date(now), days_ahead),
+          Time.new!(hour, minute, 0)
+        )
+
       NaiveDateTime.diff(target, now, :millisecond)
     end
   end

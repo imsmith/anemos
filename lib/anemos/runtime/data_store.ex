@@ -289,7 +289,9 @@ defmodule Anemos.Runtime.DataStore do
   # Resolve by checking local scope first, then global.
   defp resolve_entry(entries, name, discriminator) do
     case Map.fetch(entries, {name, {:local, discriminator}}) do
-      {:ok, entry} -> entry
+      {:ok, entry} ->
+        entry
+
       :error ->
         case Map.fetch(entries, {name, :global}) do
           {:ok, entry} -> entry

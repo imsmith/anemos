@@ -551,6 +551,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -573,6 +574,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -591,6 +593,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -610,6 +613,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -630,6 +634,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 

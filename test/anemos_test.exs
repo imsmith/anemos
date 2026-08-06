@@ -17,7 +17,9 @@ defmodule AnemosTest do
   describe "run/2 context options" do
     test ":context_path opens a declared boundary" do
       assert {:ok, []} = Anemos.run(@scoped, event: "EV")
-      assert {:ok, [%{module: "DEVICE"}]} = Anemos.run(@scoped, event: "EV", context_path: "garage")
+
+      assert {:ok, [%{module: "DEVICE"}]} =
+               Anemos.run(@scoped, event: "EV", context_path: "garage")
     end
 
     test ":context_path compares segments, not string prefixes" do
@@ -55,7 +57,9 @@ defmodule AnemosTest do
     # cannot tell them apart, which is what made the CLI's single "No rules
     # matched" message wrong in all three cases.
     test "distinguishes nothing-subscribed from boundary-denied" do
-      assert {:ok, unsubscribed} = Anemos.run_report(@scoped, event: "OTHER", context_path: "garage")
+      assert {:ok, unsubscribed} =
+               Anemos.run_report(@scoped, event: "OTHER", context_path: "garage")
+
       assert {unsubscribed.subscribed, unsubscribed.reachable} == {0, 0}
 
       assert {:ok, denied} = Anemos.run_report(@scoped, event: "EV")

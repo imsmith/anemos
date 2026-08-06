@@ -210,7 +210,9 @@ defmodule Anemos.Runtime.LoadAuthority.Signed do
   end
 
   defp ed25519_public(%Key{algorithm: :ed25519, public: public}, _name), do: {:ok, public}
-  defp ed25519_public(%Key{algorithm: algorithm}, name), do: {:error, {:unsupported_algorithm, name, algorithm}}
+
+  defp ed25519_public(%Key{algorithm: algorithm}, name),
+    do: {:error, {:unsupported_algorithm, name, algorithm}}
 
   # A raw 64-byte signature, or the Base64 a text transport would carry.
   # Nothing else: guessing at a third encoding is how a malformed
@@ -270,7 +272,8 @@ defmodule Anemos.Runtime.LoadAuthority.Signed do
     do: "the signature supplied for #{inspect(name)} is not a 64-byte Ed25519 signature"
 
   def describe({:unsupported_algorithm, name, algorithm}),
-    do: "the key for #{inspect(name)} is #{inspect(algorithm)}; only :ed25519 signatures are verified"
+    do:
+      "the key for #{inspect(name)} is #{inspect(algorithm)}; only :ed25519 signatures are verified"
 
   def describe({:bad_signature, name}),
     do: "the signature for #{inspect(name)} does not verify against its trusted key"

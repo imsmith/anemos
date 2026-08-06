@@ -76,7 +76,8 @@ defmodule Anemos.Runtime.LoadResultTest do
     assert [{:schedule, _, _}] = failures
 
     # Partial must not mean nothing loaded.
-    assert {:ok, [%{type: :log, value: "motion"}]} = Anemos.Runtime.dispatch(:load_partial, "MOTION")
+    assert {:ok, [%{type: :log, value: "motion"}]} =
+             Anemos.Runtime.dispatch(:load_partial, "MOTION")
   end
 
   # --- Dispatcher-side failures reach the caller (ISSUES.md A-22) ---

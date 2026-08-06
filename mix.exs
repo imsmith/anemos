@@ -11,7 +11,38 @@ defmodule Anemos.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :test,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases(),
+      dialyzer: dialyzer()
+    ]
+  end
+
+  # `mix check` is the single entry point for a developer or a CI runner.
+  # It runs cheapest-first so the fastest signal fails first:
+  #
+  #   1. format --check-formatted  — seconds, no compile needed
+  #   2. credo --strict            — ~1s once compiled
+  #   3. test                      — ~7s
+  #
+  # `dialyzer` is deliberately NOT in `mix check`. Its first run builds a PLT
+  # over the whole dependency tree (minutes); afterwards it is ~7s, but the
+  # cold-start cost makes it a bad fit for an alias people run reflexively.
+  # Run it as its own step: `mix dialyzer`.
+  defp aliases do
+    [
+      check: ["format --check-formatted", "credo --strict", "test"]
+    ]
+  end
+
+  defp dialyzer do
+    [
+      # :mix and :ex_unit are not pulled in as runtime deps, so without this
+      # Dialyzer reports Mix.shell/0 and Mix.Task.run/1 as unknown functions
+      # in lib/mix/tasks/anemos.run.ex.
+      plt_add_apps: [:mix, :ex_unit],
+      # :unknown is what surfaces @spec references to types that do not exist —
+      # it is how the DynamicSupervisor.supervisor/0 specs were caught.
+      flags: [:error_handling, :unknown]
     ]
   end
 
@@ -38,7 +69,9 @@ defmodule Anemos.MixProject do
     [
       {:comn, path: "../comn"},
       {:nimble_parsec, "~> 1.4"},
-      {:ex_doc, "~> 0.35", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 end

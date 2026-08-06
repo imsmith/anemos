@@ -41,9 +41,7 @@ defmodule Anemos.Runtime.DispatcherDisclosureTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Anemos.Runtime.Standalone.start_link(
-        [rules: compiled.rules, registry: registry] ++ opts
-      )
+      Anemos.Runtime.Standalone.start_link([rules: compiled.rules, registry: registry] ++ opts)
 
     {dispatcher, compiled}
   end

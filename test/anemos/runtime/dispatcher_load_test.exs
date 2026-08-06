@@ -45,13 +45,16 @@ defmodule Anemos.Runtime.DispatcherLoadTest do
     :ok = Dispatcher.load(d, compile!(@policy))
 
     :ok =
-      Dispatcher.load(d, compile!("""
-      rule greet {
-        when PING {
-          log "replaced"
+      Dispatcher.load(
+        d,
+        compile!("""
+        rule greet {
+          when PING {
+            log "replaced"
+          }
         }
-      }
-      """))
+        """)
+      )
 
     assert [{:ok, %{type: :log, value: "replaced"}}] = Dispatcher.dispatch(d, "PING", %{})
   end
@@ -60,13 +63,16 @@ defmodule Anemos.Runtime.DispatcherLoadTest do
     :ok = Dispatcher.load(d, compile!(@policy))
 
     :ok =
-      Dispatcher.load(d, compile!("""
-      rule other {
-        when PING {
-          log "second"
+      Dispatcher.load(
+        d,
+        compile!("""
+        rule other {
+          when PING {
+            log "second"
+          }
         }
-      }
-      """))
+        """)
+      )
 
     values =
       d
@@ -134,13 +140,16 @@ defmodule Anemos.Runtime.DispatcherLoadTest do
       :ok = Dispatcher.load(d, compile!(@policy))
 
       :ok =
-        Dispatcher.load(d, compile!("""
-        rule other {
-          when PING {
-            log "second"
+        Dispatcher.load(
+          d,
+          compile!("""
+          rule other {
+            when PING {
+              log "second"
+            }
           }
-        }
-        """))
+          """)
+        )
 
       assert :ok = Dispatcher.unload(d, ["greet"])
       assert [{:ok, %{value: "second"}}] = Dispatcher.dispatch(d, "PING", %{})
@@ -171,16 +180,19 @@ defmodule Anemos.Runtime.DispatcherLoadTest do
 
     test "unload/2 drops the rule's inline data scope", %{runtime: rt, dispatcher: d} do
       :ok =
-        Dispatcher.load(d, compile!("""
-        rule scoped {
-          data my-set {
-            alpha
+        Dispatcher.load(
+          d,
+          compile!("""
+          rule scoped {
+            data my-set {
+              alpha
+            }
+            when PING {
+              log "hit"
+            }
           }
-          when PING {
-            log "hit"
-          }
-        }
-        """))
+          """)
+        )
 
       data_store = StoreSupervisor.whereis(:"#{rt}.store_supervisor", :data_store)
       assert Anemos.Runtime.DataStore.member?(data_store, "my-set", "alpha", scope_hint: "scoped")

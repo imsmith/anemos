@@ -140,7 +140,9 @@ defmodule Anemos.RuntimeTest do
     }
     """)
 
-    {:ok, results} = Anemos.Runtime.dispatch(:test_ctx, "GREET", %{context_data: %{"name" => "ian"}})
+    {:ok, results} =
+      Anemos.Runtime.dispatch(:test_ctx, "GREET", %{context_data: %{"name" => "ian"}})
+
     assert [%{type: :log, value: "ian"}] = results
   end
 

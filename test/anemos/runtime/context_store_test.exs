@@ -32,10 +32,14 @@ defmodule Anemos.Runtime.ContextStoreTest do
   end
 
   test "bulk load from keyword list" do
-    {:ok, store} = ContextStore.start_link(data: [
-      {"infra.networking.dns.fqdn", "host.example.tld"},
-      {"infra.networking.dns.ttl", "300"}
-    ])
+    {:ok, store} =
+      ContextStore.start_link(
+        data: [
+          {"infra.networking.dns.fqdn", "host.example.tld"},
+          {"infra.networking.dns.ttl", "300"}
+        ]
+      )
+
     assert {:ok, "host.example.tld"} = ContextStore.resolve(store, "infra.networking.dns", "fqdn")
     assert {:ok, "300"} = ContextStore.resolve(store, "infra.networking.dns", "ttl")
   end

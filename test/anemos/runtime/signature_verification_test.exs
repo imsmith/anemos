@@ -129,15 +129,19 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
 
       assert {:error, err} =
                Anemos.Runtime.load(:sv_wrongkey, @signed_source,
-                 authorization: %{signatures: %{"operator" => sign(@signed_source, attacker_private)}}
+                 authorization: %{
+                   signatures: %{"operator" => sign(@signed_source, attacker_private)}
+                 }
                )
 
       assert err.code == "anemos.runtime/load_denied"
 
       assert {:error, {:bad_signature, "operator"}} =
-               Signed.decide(request(:sv_wrongkey, @signed_source, %{
-                 signatures: %{"operator" => sign(@signed_source, attacker_private)}
-               }))
+               Signed.decide(
+                 request(:sv_wrongkey, @signed_source, %{
+                   signatures: %{"operator" => sign(@signed_source, attacker_private)}
+                 })
+               )
     end
 
     test "a signer the keyring does not know is rejected, not permitted" do
@@ -337,12 +341,13 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
       }
       """
 
-      assert {:error, _} = Anemos.Parser.parse("""
-             condition night {
-               signed_by :operator
-               when EV { log "x" }
-             }
-             """)
+      assert {:error, _} =
+               Anemos.Parser.parse("""
+               condition night {
+                 signed_by :operator
+                 when EV { log "x" }
+               }
+               """)
 
       start_supervised!({Anemos.Runtime, name: :sv_cond, unsigned_policy: :strict})
       assert {:error, err} = Anemos.Runtime.load(:sv_cond, conditions_only)

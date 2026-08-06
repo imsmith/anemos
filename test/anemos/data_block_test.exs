@@ -183,12 +183,18 @@ defmodule Anemos.DataBlockTest do
     :ok = Anemos.Runtime.Dispatcher.load(dispatcher, compiled)
 
     # Bad IP — should be blocked
-    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "CONN", %{context_data: %{"ip" => "badhost"}})
+    results =
+      Anemos.Runtime.Dispatcher.dispatch(dispatcher, "CONN", %{context_data: %{"ip" => "badhost"}})
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     assert Enum.any?(ops, &(&1.type == :log && &1.value == "blocked"))
 
     # Good IP — should be allowed
-    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "CONN", %{context_data: %{"ip" => "goodhost"}})
+    results =
+      Anemos.Runtime.Dispatcher.dispatch(dispatcher, "CONN", %{
+        context_data: %{"ip" => "goodhost"}
+      })
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     assert Enum.any?(ops, &(&1.type == :log && &1.value == "allowed"))
   end
@@ -261,7 +267,8 @@ defmodule Anemos.DataBlockTest do
 
     # Should not crash even though no handler is registered, but the block
     # is inert and load/2 must say so rather than reporting :ok.
-    assert {:error, [{:data_block, "missing-handler", {:no_subscribable_handler, "unknown-proto"}}]} =
+    assert {:error,
+            [{:data_block, "missing-handler", {:no_subscribable_handler, "unknown-proto"}}]} =
              Dispatcher.load(dispatcher, compiled)
 
     # Data block exists but is empty
@@ -338,12 +345,20 @@ defmodule Anemos.DataBlockTest do
     :ok = Anemos.Runtime.Dispatcher.load(dispatcher, compiled)
 
     # Japan is in asia
-    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "REQUEST", %{context_data: %{"country" => "japan"}})
+    results =
+      Anemos.Runtime.Dispatcher.dispatch(dispatcher, "REQUEST", %{
+        context_data: %{"country" => "japan"}
+      })
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     assert Enum.any?(ops, &(&1.type == :log && &1.value == "allowed-region"))
 
     # brazil is in neither
-    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "REQUEST", %{context_data: %{"country" => "brazil"}})
+    results =
+      Anemos.Runtime.Dispatcher.dispatch(dispatcher, "REQUEST", %{
+        context_data: %{"country" => "brazil"}
+      })
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     assert Enum.any?(ops, &(&1.type == :log && &1.value == "blocked-region"))
   end
@@ -390,14 +405,18 @@ defmodule Anemos.DataBlockTest do
     :ok = Anemos.Runtime.Dispatcher.load(dispatcher, compiled)
 
     # "alpha" is in rule-a's my-set but not rule-b's
-    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"val" => "alpha"}})
+    results =
+      Anemos.Runtime.Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"val" => "alpha"}})
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     log_values = for %{type: :log, value: v} <- ops, do: v
     assert "rule-a-hit" in log_values
     assert "rule-b-miss" in log_values
 
     # "bravo" is in rule-b's my-set but not rule-a's
-    results = Anemos.Runtime.Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"val" => "bravo"}})
+    results =
+      Anemos.Runtime.Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"val" => "bravo"}})
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     log_values = for %{type: :log, value: v} <- ops, do: v
     assert "rule-a-miss" in log_values

@@ -67,6 +67,7 @@ defmodule Anemos.Runtime.CapabilityServer do
       context: Keyword.fetch!(opts, :context),
       handler: Keyword.fetch!(opts, :handler)
     }
+
     {:ok, state}
   end
 

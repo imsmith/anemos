@@ -58,7 +58,8 @@ defmodule Anemos.Runtime.RuleSupervisor do
   The returned pid is a plain `Supervisor` with no children; rule-scoped
   stores are added to it with `Supervisor.start_child/2`.
   """
-  @spec ensure_scope(DynamicSupervisor.supervisor(), String.t()) :: {:ok, pid()} | {:error, term()}
+  @spec ensure_scope(DynamicSupervisor.supervisor(), String.t()) ::
+          {:ok, pid()} | {:error, term()}
   def ensure_scope(sup, rule_name) do
     case scope(sup, rule_name) do
       nil ->

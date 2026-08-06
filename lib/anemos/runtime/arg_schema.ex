@@ -107,11 +107,14 @@ defmodule Anemos.Runtime.ArgSchema do
     {min, max} = arity_bounds(schema)
 
     cond do
-      given < min -> {:error, "verb '#{verb}': expected #{describe(min, max)}, got #{given}"}
+      given < min ->
+        {:error, "verb '#{verb}': expected #{describe(min, max)}, got #{given}"}
+
       max != :infinity and given > max ->
         {:error, "verb '#{verb}': expected #{describe(min, max)}, got #{given}"}
 
-      true -> :ok
+      true ->
+        :ok
     end
   end
 
@@ -187,7 +190,8 @@ defmodule Anemos.Runtime.ArgSchema do
   defp check_type(:atom, arg, _v, _p) when is_atom(arg), do: :ok
 
   defp check_type(type, arg, verb, position) do
-    {:error, "verb '#{verb}' argument #{position}: expected #{type}, got #{Redact.summarize(arg)}"}
+    {:error,
+     "verb '#{verb}' argument #{position}: expected #{type}, got #{Redact.summarize(arg)}"}
   end
 
   defp check_max_bytes(nil, _arg, _verb, _position), do: :ok

@@ -65,14 +65,21 @@ defmodule Anemos.Runtime.Demand do
 
   defp eval_stack([demand | rest], registry, context, results, deferred_error) do
     case Map.get(registry, demand.capability) do
-      nil -> handle_missing(demand)
+      nil ->
+        handle_missing(demand)
+
       pid ->
         case CapabilityServer.execute(pid, context, demanding_context(context)) do
-          {:ok, ops} -> handle_success(demand, ops, rest, registry, context, results, deferred_error)
+          {:ok, ops} ->
+            handle_success(demand, ops, rest, registry, context, results, deferred_error)
+
           # Fatal regardless of flag, and regardless of what else the stack
           # would have gone on to authorize.
-          {:error, {:context_denied, error}} -> {:error, error}
-          {:error, reason} -> handle_failure(demand, reason, rest, registry, context, results, deferred_error)
+          {:error, {:context_denied, error}} ->
+            {:error, error}
+
+          {:error, reason} ->
+            handle_failure(demand, reason, rest, registry, context, results, deferred_error)
         end
     end
   end
@@ -106,6 +113,7 @@ defmodule Anemos.Runtime.Demand do
 
   defp handle_failure(demand, reason, rest, registry, context, results, deferred_error) do
     error = {:error, {:demand_failed, demand.capability, reason}}
+
     case demand.flag do
       :requisite -> error
       :required -> eval_stack(rest, registry, context, results, deferred_error || error)

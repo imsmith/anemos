@@ -47,7 +47,7 @@ defmodule Anemos.Runtime.Modules.Example do
     use Anemos.Module, name: "FILE"
 
     verb(:extension, fn args, ctx -> {:ok, extension(args, ctx)} end)
-    verb(:basename, fn args, ctx -> {:ok, Path.basename(path(args, ctx)) } end)
+    verb(:basename, fn args, ctx -> {:ok, Path.basename(path(args, ctx))} end)
     verb(:read, fn args, _ctx -> {:ok, %{module: "FILE", verb: "read", args: args}} end)
     verb(:write, fn args, _ctx -> {:ok, %{module: "FILE", verb: "write", args: args}} end)
     verb(:rename, fn args, _ctx -> {:ok, %{module: "FILE", verb: "rename", args: args}} end)
@@ -118,6 +118,7 @@ defmodule Anemos.Runtime.Modules.Example do
     use Anemos.Module, name: "STRING"
 
     verb(:slugify, fn args, _ctx -> {:ok, slugify(args)} end)
+
     verb(:downcase, fn args, _ctx -> {:ok, args |> first_string() |> Elixir.String.downcase()} end)
 
     @doc """

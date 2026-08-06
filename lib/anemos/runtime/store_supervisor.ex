@@ -41,7 +41,13 @@ defmodule Anemos.Runtime.StoreSupervisor do
 
   use Supervisor
 
-  alias Anemos.Runtime.{CapabilityServer, ConditionServer, DataStore, SubscribableRegistry, TripleStore}
+  alias Anemos.Runtime.{
+    CapabilityServer,
+    ConditionServer,
+    DataStore,
+    SubscribableRegistry,
+    TripleStore
+  }
 
   @doc """
   Starts the store supervisor.
@@ -104,13 +110,26 @@ defmodule Anemos.Runtime.StoreSupervisor do
     sup
     |> Supervisor.which_children()
     |> Enum.reduce(empty, fn
-      {_id, pid, _t, _m}, acc when not is_pid(pid) -> acc
-      {:triple_store, pid, _t, _m}, acc -> %{acc | triple_store: pid}
-      {:data_store, pid, _t, _m}, acc -> %{acc | data_store: pid}
-      {:subscribable_registry, pid, _t, _m}, acc -> %{acc | subscribable_registry: pid}
-      {{:condition, name}, pid, _t, _m}, acc -> %{acc | conditions: Map.put(acc.conditions, name, pid)}
-      {{:capability, name}, pid, _t, _m}, acc -> %{acc | capabilities: Map.put(acc.capabilities, name, pid)}
-      _other, acc -> acc
+      {_id, pid, _t, _m}, acc when not is_pid(pid) ->
+        acc
+
+      {:triple_store, pid, _t, _m}, acc ->
+        %{acc | triple_store: pid}
+
+      {:data_store, pid, _t, _m}, acc ->
+        %{acc | data_store: pid}
+
+      {:subscribable_registry, pid, _t, _m}, acc ->
+        %{acc | subscribable_registry: pid}
+
+      {{:condition, name}, pid, _t, _m}, acc ->
+        %{acc | conditions: Map.put(acc.conditions, name, pid)}
+
+      {{:capability, name}, pid, _t, _m}, acc ->
+        %{acc | capabilities: Map.put(acc.capabilities, name, pid)}
+
+      _other, acc ->
+        acc
     end)
   end
 

@@ -12,21 +12,23 @@ defmodule Anemos.Runtime.SchedulerTest do
   test "interval schedule fires repeatedly" do
     test_pid = self()
 
-    {:ok, pid} = Scheduler.start_link(
-      runtime_name: :test_sched_interval,
-      min_interval_ms: 10,
-      dispatch_fn: fn event_name, _context ->
-        send(test_pid, {:dispatched, event_name})
-      end
-    )
+    {:ok, pid} =
+      Scheduler.start_link(
+        runtime_name: :test_sched_interval,
+        min_interval_ms: 10,
+        dispatch_fn: fn event_name, _context ->
+          send(test_pid, {:dispatched, event_name})
+        end
+      )
 
-    assert :ok = Scheduler.schedule(pid, [
-      %Anemos.CompiledSchedule{
-        event_name: "AT_INTERVAL_test",
-        time_spec: {:interval, {50, :ms}},
-        recurrence: :interval
-      }
-    ])
+    assert :ok =
+             Scheduler.schedule(pid, [
+               %Anemos.CompiledSchedule{
+                 event_name: "AT_INTERVAL_test",
+                 time_spec: {:interval, {50, :ms}},
+                 recurrence: :interval
+               }
+             ])
 
     assert_receive {:dispatched, "AT_INTERVAL_test"}, 200
     assert_receive {:dispatched, "AT_INTERVAL_test"}, 200
@@ -35,12 +37,13 @@ defmodule Anemos.Runtime.SchedulerTest do
   test "one-shot delay fires once" do
     test_pid = self()
 
-    {:ok, pid} = Scheduler.start_link(
-      runtime_name: :test_sched_oneshot,
-      dispatch_fn: fn event_name, _context ->
-        send(test_pid, {:dispatched, event_name})
-      end
-    )
+    {:ok, pid} =
+      Scheduler.start_link(
+        runtime_name: :test_sched_oneshot,
+        dispatch_fn: fn event_name, _context ->
+          send(test_pid, {:dispatched, event_name})
+        end
+      )
 
     Scheduler.schedule(pid, [
       %Anemos.CompiledSchedule{
@@ -57,12 +60,13 @@ defmodule Anemos.Runtime.SchedulerTest do
   test "multiple schedules can be loaded" do
     test_pid = self()
 
-    {:ok, pid} = Scheduler.start_link(
-      runtime_name: :test_sched_multi,
-      dispatch_fn: fn event_name, _context ->
-        send(test_pid, {:dispatched, event_name})
-      end
-    )
+    {:ok, pid} =
+      Scheduler.start_link(
+        runtime_name: :test_sched_multi,
+        dispatch_fn: fn event_name, _context ->
+          send(test_pid, {:dispatched, event_name})
+        end
+      )
 
     Scheduler.schedule(pid, [
       %Anemos.CompiledSchedule{
@@ -174,7 +178,8 @@ defmodule Anemos.Runtime.SchedulerTest do
     end
 
     test "the cap is enforced across separate schedule calls" do
-      {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_cap_cumulative, max_schedules: 1)
+      {:ok, pid} =
+        Scheduler.start_link(runtime_name: :test_sched_cap_cumulative, max_schedules: 1)
 
       spec = fn name ->
         %Anemos.CompiledSchedule{

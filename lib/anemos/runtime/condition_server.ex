@@ -57,7 +57,8 @@ defmodule Anemos.Runtime.ConditionServer do
   the `on_transition` callback.
   """
   @spec handle_event(pid() | atom(), String.t(), map()) :: :ok
-  def handle_event(server, event_name, context), do: GenServer.cast(server, {:event, event_name, context})
+  def handle_event(server, event_name, context),
+    do: GenServer.cast(server, {:event, event_name, context})
 
   @impl true
   def init(opts) do
@@ -71,6 +72,7 @@ defmodule Anemos.Runtime.ConditionServer do
       on_transition: Keyword.get(opts, :on_transition),
       value: false
     }
+
     {:ok, state}
   end
 
@@ -81,11 +83,13 @@ defmodule Anemos.Runtime.ConditionServer do
   def handle_cast({:event, event_name, context}, state) do
     if MapSet.member?(state.subscriptions, event_name) do
       new_value = state.evaluator.(event_name, context)
+
       case {state.value, new_value} do
         {false, true} ->
           run_side_effects(state, context)
           if state.on_transition, do: state.on_transition.(state.name)
           {:noreply, %{state | value: true}}
+
         {_old, new_val} ->
           {:noreply, %{state | value: new_val}}
       end

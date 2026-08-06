@@ -36,7 +36,8 @@ defmodule Anemos.AtomExhaustionTest do
 
   # DAY_ literals accept lowercase letters only, so counters must be spelled
   # out rather than written as digits.
-  defp letters(n), do: n |> Integer.to_string() |> String.replace(~r/\d/, &<<?a + String.to_integer(&1)>>)
+  defp letters(n),
+    do: n |> Integer.to_string() |> String.replace(~r/\d/, &<<?a + String.to_integer(&1)>>)
 
   defp novel_letter_prefix, do: "zq#{letters(:erlang.unique_integer([:positive]))}x"
 

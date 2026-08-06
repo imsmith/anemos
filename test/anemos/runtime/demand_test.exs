@@ -12,11 +12,13 @@ defmodule Anemos.Runtime.DemandTest do
   # a flag was ever consulted. Context scoping has its own tests in
   # Anemos.Runtime.TrustBoundaryTest.
   defp start_capability(name, result) do
-    {:ok, pid} = CapabilityServer.start_link(
-      name_str: name,
-      context: nil,
-      handler: fn _ctx -> result end
-    )
+    {:ok, pid} =
+      CapabilityServer.start_link(
+        name_str: name,
+        context: nil,
+        handler: fn _ctx -> result end
+      )
+
     pid
   end
 
@@ -86,10 +88,12 @@ defmodule Anemos.Runtime.DemandTest do
     fail_pid = start_capability("optional-key", {:error, :unavailable})
     ok_pid = start_capability("main-key", {:ok, [%{type: :emit, value: "done"}]})
     registry = %{"optional-key" => fail_pid, "main-key" => ok_pid}
+
     demands = [
       %{capability: "optional-key", flag: :optional},
       %{capability: "main-key", flag: :requisite}
     ]
+
     assert {:ok, results} = Demand.evaluate(demands, registry, %{})
     assert [%{type: :emit, value: "done"}] = results
   end
@@ -98,20 +102,25 @@ defmodule Anemos.Runtime.DemandTest do
     fail_pid = start_capability("req-key", {:error, :denied})
     ok_pid = start_capability("other-key", {:ok, [%{type: :emit, value: "ok"}]})
     registry = %{"req-key" => fail_pid, "other-key" => ok_pid}
+
     demands = [
       %{capability: "req-key", flag: :required},
       %{capability: "other-key", flag: :requisite}
     ]
-    assert {:error, {:demand_failed, "req-key", :denied}} = Demand.evaluate(demands, registry, %{})
+
+    assert {:error, {:demand_failed, "req-key", :denied}} =
+             Demand.evaluate(demands, registry, %{})
   end
 
   test "sufficient demand — success skips rest of stack" do
     ok_pid = start_capability("suf-key", {:ok, [%{type: :emit, value: "enough"}]})
     registry = %{"suf-key" => ok_pid}
+
     demands = [
       %{capability: "suf-key", flag: :sufficient},
       %{capability: "nonexistent", flag: :requisite}
     ]
+
     assert {:ok, results} = Demand.evaluate(demands, registry, %{})
     assert [%{type: :emit, value: "enough"}] = results
   end

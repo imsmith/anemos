@@ -18,22 +18,45 @@ defmodule Anemos.Parser do
 
   alias Anemos.AST
 
-  # Operator precedence table (higher number = tighter binding)
-  # From spec section 7.1, inverted so higher = tighter
-  @precedence %{
-    |>: 0,
-    in: 1, notin: 1, contains: 1, starts_with: 1, ends_with: 1, matches_glob: 1, matches_regex: 1, memberof: 1,
-    ||: 2, or: 2,
-    &&: 3, and: 3,
-    |: 4,
-    ^: 5,
-    &: 6,
-    ==: 7, !=: 7, ===: 7, !==: 7, eq: 7, ne: 7,
-    <: 8, <=: 8, >: 8, >=: 8, lt: 8, le: 8, gt: 8, ge: 8,
-    "<<": 9, ">>": 9,
-    +: 10, -: 10,
-    *: 11, /: 11, %: 11
-  }
+  # Operator precedence, from spec section 7.1, inverted so higher = tighter binding.
+  #
+  # Declared one level per entry so the grouping is data rather than typography;
+  # `@precedence` (operator => level) is derived from it at compile time. Add an
+  # operator by putting it in its level's list — nothing else needs to change.
+  @precedence_levels [
+    {0, [:|>]},
+    {1,
+     [:in, :notin, :contains, :starts_with, :ends_with, :matches_glob, :matches_regex, :memberof]},
+    {2, [:||, :or]},
+    {3, [:&&, :and]},
+    {4, [:|]},
+    {5, [:^]},
+    {6, [:&]},
+    {7, [:==, :!=, :===, :!==, :eq, :ne]},
+    {8, [:<, :<=, :>, :>=, :lt, :le, :gt, :ge]},
+    {9, [:"<<", :">>"]},
+    {10, [:+, :-]},
+    {11, [:*, :/, :%]}
+  ]
+
+  @precedence Map.new(
+                for {level, operators} <- @precedence_levels,
+                    operator <- operators,
+                    do: {operator, level}
+              )
+
+  # An operator listed at two levels would be silently resolved by map-build
+  # order, which is exactly the kind of transcription slip a precedence table
+  # must not tolerate. Fail the build instead.
+  @operator_count Enum.sum(for {_level, operators} <- @precedence_levels, do: length(operators))
+  if @operator_count != map_size(@precedence) do
+    raise "@precedence_levels lists an operator at more than one precedence level"
+  end
+
+  @doc false
+  # Exposed for tests: the derived operator => precedence-level map.
+  @spec precedence_table() :: %{atom() => non_neg_integer()}
+  def precedence_table, do: @precedence
 
   # --- Public API ---
 
@@ -71,7 +94,7 @@ defmodule Anemos.Parser do
         {:ok, %AST.Program{declarations: Enum.reverse(declarations)}}
 
       {:ok, _declarations, remaining} ->
-        line = token_line(hd(remaining))
+        line = tokens_line(remaining)
         {:error, "Unexpected token #{inspect(elem(hd(remaining), 0))} on line #{line}"}
 
       {:error, _} = err ->
@@ -134,7 +157,9 @@ defmodule Anemos.Parser do
          {:ok, body, rest} <- parse_rule_body(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       rule_meta = if rule_meta == %{}, do: nil, else: rule_meta
-      {:ok, %AST.Rule{name: name, body: Enum.reverse(body), meta: rule_meta, line: meta[:line]}, rest}
+
+      {:ok, %AST.Rule{name: name, body: Enum.reverse(body), meta: rule_meta, line: meta[:line]},
+       rest}
     end
   end
 
@@ -264,8 +289,13 @@ defmodule Anemos.Parser do
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
-       %AST.When{event: event, duration: duration, guard: guard, body: Enum.reverse(body), line: meta[:line]},
-       rest}
+       %AST.When{
+         event: event,
+         duration: duration,
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -278,8 +308,13 @@ defmodule Anemos.Parser do
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
-       %AST.When{event: event, duration: duration, guard: guard, body: Enum.reverse(body), line: meta[:line]},
-       rest}
+       %AST.When{
+         event: event,
+         duration: duration,
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -292,8 +327,13 @@ defmodule Anemos.Parser do
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
-       %AST.When{event: event, duration: duration, guard: guard, body: Enum.reverse(body), line: meta[:line]},
-       rest}
+       %AST.When{
+         event: event,
+         duration: duration,
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -402,8 +442,13 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:interval, dur}, guard: guard, body: Enum.reverse(body), line: meta[:line]},
-       rest}
+      {:ok,
+       %AST.At{
+         time_spec: {:interval, dur},
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -431,7 +476,13 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:time, time}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok,
+       %AST.At{
+         time_spec: {:time, time},
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -442,7 +493,13 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:date, date}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok,
+       %AST.At{
+         time_spec: {:date, date},
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -453,7 +510,13 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:nld, text}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok,
+       %AST.At{
+         time_spec: {:nld, text},
+         guard: guard,
+         body: Enum.reverse(body),
+         line: meta[:line]
+       }, rest}
     end
   end
 
@@ -464,7 +527,9 @@ defmodule Anemos.Parser do
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, %AST.At{time_spec: {:day, day}, guard: guard, body: Enum.reverse(body), line: meta[:line]}, rest}
+      {:ok,
+       %AST.At{time_spec: {:day, day}, guard: guard, body: Enum.reverse(body), line: meta[:line]},
+       rest}
     end
   end
 
@@ -548,6 +613,7 @@ defmodule Anemos.Parser do
   defp parse_inline_data([{:keyword, _, :global}, {name_type, meta, name} | rest])
        when name_type in [:identifier, :keyword] do
     name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, source, content, transclude, rest} <- parse_data_body(rest),
          {:ok, rest} <- expect(rest, :rbrace) do
@@ -594,8 +660,10 @@ defmodule Anemos.Parser do
   defp parse_inline_query([{:keyword, _, :global}, {name_type, meta, name} | rest])
        when name_type in [:identifier, :keyword] do
     name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+
     with {:ok, rest} <- expect(rest, :lbrace),
-         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name_str, :global, meta[:line], rest),
+         {:ok, expect_list, engine, body, return_var, rest} <-
+           parse_query_body(name_str, :global, meta[:line], rest),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
        %AST.QueryDecl{
@@ -612,7 +680,8 @@ defmodule Anemos.Parser do
 
   defp parse_inline_query([{:identifier, meta, name} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace),
-         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name, :local, meta[:line], rest),
+         {:ok, expect_list, engine, body, return_var, rest} <-
+           parse_query_body(name, :local, meta[:line], rest),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
        %AST.QueryDecl{
@@ -688,7 +757,7 @@ defmodule Anemos.Parser do
   # --- Log ---
 
   defp parse_log(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     case parse_expression(tokens) do
       {:ok, expr, rest} ->
@@ -704,7 +773,7 @@ defmodule Anemos.Parser do
   @emit_types [:state, :effect, :stream]
 
   defp parse_emit(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     # Check for optional emit type (state/effect/stream)
     {type, tokens} =
@@ -892,7 +961,7 @@ defmodule Anemos.Parser do
   # --- If ---
 
   defp parse_if(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     with {:ok, condition, rest} <- parse_expression(tokens) do
       {guard, rest} = parse_optional_guard(rest)
@@ -951,7 +1020,7 @@ defmodule Anemos.Parser do
   # --- While ---
 
   defp parse_while(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     with {:ok, condition, rest} <- parse_expression(tokens),
          {:ok, rest} <- expect(rest, :lbrace),
@@ -964,7 +1033,7 @@ defmodule Anemos.Parser do
   # --- For ---
 
   defp parse_for(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     case tokens do
       [{:identifier, _, var}, {:word_operator, _, :in} | rest] ->
@@ -972,7 +1041,14 @@ defmodule Anemos.Parser do
              {:ok, rest} <- expect(rest, :lbrace),
              {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
              {:ok, rest} <- expect(rest, :rbrace) do
-          {:ok, %AST.For{var: var, iterable: iterable, body: Enum.reverse(body), keyword: :for, line: line}, rest}
+          {:ok,
+           %AST.For{
+             var: var,
+             iterable: iterable,
+             body: Enum.reverse(body),
+             keyword: :for,
+             line: line
+           }, rest}
         end
 
       [{_, meta, _} | _] ->
@@ -986,7 +1062,7 @@ defmodule Anemos.Parser do
   # --- Each / Every ---
 
   defp parse_each(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     case tokens do
       [{:identifier, _, var}, {:word_operator, _, :in} | rest] ->
@@ -994,7 +1070,14 @@ defmodule Anemos.Parser do
              {:ok, rest} <- expect(rest, :lbrace),
              {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
              {:ok, rest} <- expect(rest, :rbrace) do
-          {:ok, %AST.For{var: var, iterable: iterable, body: Enum.reverse(body), keyword: :each, line: line}, rest}
+          {:ok,
+           %AST.For{
+             var: var,
+             iterable: iterable,
+             body: Enum.reverse(body),
+             keyword: :each,
+             line: line
+           }, rest}
         end
 
       [{:identifier, _, var}, {:lbrace, _, _} | _] = all ->
@@ -1003,7 +1086,14 @@ defmodule Anemos.Parser do
         with {:ok, rest} <- expect(rest, :lbrace),
              {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
              {:ok, rest} <- expect(rest, :rbrace) do
-          {:ok, %AST.For{var: var, iterable: nil, body: Enum.reverse(body), keyword: :each, line: line}, rest}
+          {:ok,
+           %AST.For{
+             var: var,
+             iterable: nil,
+             body: Enum.reverse(body),
+             keyword: :each,
+             line: line
+           }, rest}
         end
 
       [{_, meta, _} | _] ->
@@ -1017,7 +1107,7 @@ defmodule Anemos.Parser do
   # --- Foreach ---
 
   defp parse_foreach(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     case tokens do
       [{:module_id, meta, mod}, {:double_colon, _, _} | rest] ->
@@ -1026,7 +1116,15 @@ defmodule Anemos.Parser do
              {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
              {:ok, rest} <- expect(rest, :rbrace) do
           cmd = %AST.Command{module: mod, verb: verb, args: [], line: meta[:line]}
-          {:ok, %AST.For{var: "item", iterable: cmd, body: Enum.reverse(body), keyword: :foreach, line: line}, rest}
+
+          {:ok,
+           %AST.For{
+             var: "item",
+             iterable: cmd,
+             body: Enum.reverse(body),
+             keyword: :foreach,
+             line: line
+           }, rest}
         end
 
       [{_, meta, _} | _] ->
@@ -1040,19 +1138,38 @@ defmodule Anemos.Parser do
   # --- Return ---
 
   defp parse_return([{:rbrace, _, _} | _] = tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
     {:ok, %AST.Return{value: nil, line: line}, tokens}
   end
 
   defp parse_return([{:keyword, _, next_kw} | _] = tokens)
-       when next_kw in [:when, :if, :at, :let, :set, :log, :emit, :demand, :return, :done,
-                        :nextevent, :nextrule, :while, :for, :each, :every, :foreach, :else, :elseif] do
-    line = token_line(hd(tokens))
+       when next_kw in [
+              :when,
+              :if,
+              :at,
+              :let,
+              :set,
+              :log,
+              :emit,
+              :demand,
+              :return,
+              :done,
+              :nextevent,
+              :nextrule,
+              :while,
+              :for,
+              :each,
+              :every,
+              :foreach,
+              :else,
+              :elseif
+            ] do
+    line = tokens_line(tokens)
     {:ok, %AST.Return{value: nil, line: line}, tokens}
   end
 
   defp parse_return(tokens) do
-    line = token_line(hd(tokens))
+    line = tokens_line(tokens)
 
     case parse_expression(tokens) do
       {:ok, expr, rest} ->
@@ -1184,7 +1301,7 @@ defmodule Anemos.Parser do
         end
 
       # Triple assertion: [:s -> :p -> :o]
-      [{type, meta, _}, {:operator, _, :"->"} | _] = triple_rest when type in [:atom, :query_var] ->
+      [{type, meta, _}, {:operator, _, :->} | _] = triple_rest when type in [:atom, :query_var] ->
         parse_triple_assertion(triple_rest, meta)
 
       # Triple query: [:s :p :o] or [?s :p ?o]
@@ -1202,12 +1319,14 @@ defmodule Anemos.Parser do
   # Triple assertion: subject -> predicate -> object
   defp parse_triple_assertion(tokens, meta) do
     with {:ok, subject, rest} <- parse_triple_element(tokens),
-         {:ok, rest} <- expect_operator(rest, :"->"),
+         {:ok, rest} <- expect_operator(rest, :->),
          {:ok, predicate, rest} <- parse_triple_element(rest),
-         {:ok, rest} <- expect_operator(rest, :"->"),
+         {:ok, rest} <- expect_operator(rest, :->),
          {:ok, object, rest} <- parse_triple_element(rest),
          {:ok, rest} <- expect(rest, :rbracket) do
-      {:ok, %AST.Triple{subject: subject, predicate: predicate, object: object, line: meta[:line]}, rest}
+      {:ok,
+       %AST.Triple{subject: subject, predicate: predicate, object: object, line: meta[:line]},
+       rest}
     end
   end
 
@@ -1217,7 +1336,9 @@ defmodule Anemos.Parser do
          {:ok, predicate, rest} <- parse_triple_element(rest),
          {:ok, object, rest} <- parse_triple_element(rest),
          {:ok, rest} <- expect(rest, :rbracket) do
-      {:ok, %AST.Triple{subject: subject, predicate: predicate, object: object, line: meta[:line]}, rest}
+      {:ok,
+       %AST.Triple{subject: subject, predicate: predicate, object: object, line: meta[:line]},
+       rest}
     end
   end
 
@@ -1297,8 +1418,10 @@ defmodule Anemos.Parser do
     end
   end
 
-  defp climb(left, [{:keyword, meta, :memberof}, {:lparen, _, _} | rest], min_prec) when 1 >= min_prec do
+  defp climb(left, [{:keyword, meta, :memberof}, {:lparen, _, _} | rest], min_prec)
+       when 1 >= min_prec do
     {names, rest} = collect_memberof_names(rest, [])
+
     with {:ok, rest} <- expect(rest, :rparen) do
       right = %AST.Literal{type: :list, value: names, line: meta[:line]}
       node = %AST.BinaryOp{op: :memberof, left: left, right: right, line: meta[:line]}
@@ -1408,8 +1531,11 @@ defmodule Anemos.Parser do
   defp parse_atom_expression([{:keyword, meta, :filter}, {:query_var, _, var_name} | rest]) do
     case parse_atom_expression(rest) do
       {:ok, predicate, rest} ->
-        {:ok, %AST.BuiltinCall{name: :filter, args: [var_name, predicate], line: meta[:line]}, rest}
-      {:error, _} = err -> err
+        {:ok, %AST.BuiltinCall{name: :filter, args: [var_name, predicate], line: meta[:line]},
+         rest}
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -1417,7 +1543,9 @@ defmodule Anemos.Parser do
     case parse_atom_expression(rest) do
       {:ok, transform, rest} ->
         {:ok, %AST.BuiltinCall{name: :map, args: [var_name, transform], line: meta[:line]}, rest}
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -1426,15 +1554,22 @@ defmodule Anemos.Parser do
       {:ok, initial, [{:query_var, _, var_name} | rest2]} ->
         case parse_atom_expression(rest2) do
           {:ok, body, rest3} ->
-            {:ok, %AST.BuiltinCall{
-              name: :reduce,
-              args: [acc_name, initial, var_name, body],
-              line: meta[:line]
-            }, rest3}
-          {:error, _} = err -> err
+            {:ok,
+             %AST.BuiltinCall{
+               name: :reduce,
+               args: [acc_name, initial, var_name, body],
+               line: meta[:line]
+             }, rest3}
+
+          {:error, _} = err ->
+            err
         end
-      {:ok, _, _} -> {:error, "Expected query variable after reduce initial value on line #{meta[:line]}"}
-      {:error, _} = err -> err
+
+      {:ok, _, _} ->
+        {:error, "Expected query variable after reduce initial value on line #{meta[:line]}"}
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -1442,7 +1577,9 @@ defmodule Anemos.Parser do
     case parse_atom_expression(rest) do
       {:ok, command, rest} ->
         {:ok, %AST.BuiltinCall{name: :emit, args: [command], line: meta[:line]}, rest}
-      {:error, _} = err -> err
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -1467,13 +1604,7 @@ defmodule Anemos.Parser do
         case parse_paren_contents(rest, []) do
           {:ok, elements, rest} ->
             with {:ok, rest} <- expect(rest, :rparen) do
-              expr =
-                case elements do
-                  [single] -> single
-                  multiple -> %AST.ListLiteral{elements: multiple, line: meta[:line]}
-                end
-
-              {:ok, expr, rest}
+              {:ok, paren_expression(elements, meta[:line]), rest}
             end
 
           {:error, _} = err ->
@@ -1520,6 +1651,11 @@ defmodule Anemos.Parser do
     {:error, "Unexpected end of input, expected expression"}
   end
 
+  # `( e )` is a grouping — the parens carry no meaning and the inner
+  # expression stands alone. `( a, b, ... )` is a list literal.
+  defp paren_expression([single], _line), do: single
+  defp paren_expression(multiple, line), do: %AST.ListLiteral{elements: multiple, line: line}
+
   # --- Data declaration ---
 
   # data global <name> { ... } — explicit global scope
@@ -1529,8 +1665,10 @@ defmodule Anemos.Parser do
   defp parse_query([{:keyword, meta, :global}, {name_type, _, name} | rest])
        when name_type in [:identifier, :keyword] do
     name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+
     with {:ok, rest} <- expect(rest, :lbrace),
-         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name_str, :global, meta[:line], rest),
+         {:ok, expect_list, engine, body, return_var, rest} <-
+           parse_query_body(name_str, :global, meta[:line], rest),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
        %AST.QueryDecl{
@@ -1548,7 +1686,8 @@ defmodule Anemos.Parser do
   # query <name> { ... } — implicit global scope
   defp parse_query([{:identifier, meta, name} | rest]) do
     with {:ok, rest} <- expect(rest, :lbrace),
-         {:ok, expect_list, engine, body, return_var, rest} <- parse_query_body(name, :global, meta[:line], rest),
+         {:ok, expect_list, engine, body, return_var, rest} <-
+           parse_query_body(name, :global, meta[:line], rest),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
        %AST.QueryDecl{
@@ -1615,6 +1754,7 @@ defmodule Anemos.Parser do
       [{:comma, _, _} | rest2] ->
         {more, rest2} = collect_atom_list(rest2)
         {[val | more], rest2}
+
       _ ->
         {[val], rest}
     end
@@ -1652,6 +1792,7 @@ defmodule Anemos.Parser do
   defp parse_data([{:keyword, meta, :global}, {name_type, _, name} | rest])
        when name_type in [:identifier, :keyword] do
     name_str = if name_type == :keyword, do: Atom.to_string(name), else: name
+
     with {:ok, rest} <- expect(rest, :lbrace),
          {:ok, source, content, transclude, rest} <- parse_data_body(rest),
          {:ok, rest} <- expect(rest, :rbrace) do
@@ -1845,11 +1986,11 @@ defmodule Anemos.Parser do
 
   # transclude to shape(<dotted-id>) with <dotted-id> as <identifier>
   defp parse_optional_transclude([
-    {:keyword, _, :transclude},
-    {:keyword, _, :to},
-    {:identifier, _, "shape"},
-    {:lparen, _, _} | rest
-  ]) do
+         {:keyword, _, :transclude},
+         {:keyword, _, :to},
+         {:identifier, _, "shape"},
+         {:lparen, _, _} | rest
+       ]) do
     with {shape, [{:rparen, _, _} | rest]} <- collect_dotted_identifier(rest),
          {:ok, rest} <- expect(rest, :keyword, :with),
          {transducer, rest} <- collect_dotted_identifier(rest),
@@ -2024,6 +2165,18 @@ defmodule Anemos.Parser do
   end
 
   defp token_line({_, meta, _}), do: meta[:line]
+
+  # The line of the next token, or nil when the stream is exhausted.
+  #
+  # Total on purpose. Callers record the line *before* they know whether the
+  # tokens they need are actually there, so `token_line(hd(tokens))` used to
+  # raise ArgumentError on truncated input — crashing out of `parse/1` past the
+  # `[] -> {:error, "...but got end of input"}` branch that was written to
+  # handle exactly that case, and past the `{:error, String.t()}` half of
+  # `parse/1`'s contract. A nil line on an input that is about to be rejected
+  # costs nothing; the raise cost the caller its error handling.
+  defp tokens_line([token | _]), do: token_line(token)
+  defp tokens_line([]), do: nil
 
   defp node_line(%{line: line}), do: line
   defp node_line(_), do: nil

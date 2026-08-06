@@ -68,7 +68,12 @@ defmodule Anemos.CompilationResult do
   All fields default to empty lists — no fields are required at construction.
   """
   @enforce_keys []
-  defstruct rules: [], conditions: [], capabilities: [], schedules: [], data_blocks: [], query_blocks: []
+  defstruct rules: [],
+            conditions: [],
+            capabilities: [],
+            schedules: [],
+            data_blocks: [],
+            query_blocks: []
 
   @type t :: %__MODULE__{
           rules: [Anemos.CompiledRule.t()],
@@ -152,18 +157,28 @@ defmodule Anemos.Compiler do
         Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
           case compile_declaration(decl) do
             {:rule, rules, schedules, inline_data, inline_queries} ->
-              %{acc |
-                rules: acc.rules ++ rules,
-                schedules: acc.schedules ++ schedules,
-                data_blocks: acc.data_blocks ++ inline_data,
-                query_blocks: acc.query_blocks ++ inline_queries
+              %{
+                acc
+                | rules: acc.rules ++ rules,
+                  schedules: acc.schedules ++ schedules,
+                  data_blocks: acc.data_blocks ++ inline_data,
+                  query_blocks: acc.query_blocks ++ inline_queries
               }
+
             {:condition, cond, schedules} ->
               %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
-            {:capability, cap} -> %{acc | capabilities: acc.capabilities ++ [cap]}
-            {:data, compiled_data} -> %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
-            {:query, compiled_query} -> %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
-            :skip -> acc
+
+            {:capability, cap} ->
+              %{acc | capabilities: acc.capabilities ++ [cap]}
+
+            {:data, compiled_data} ->
+              %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
+
+            {:query, compiled_query} ->
+              %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
+
+            :skip ->
+              acc
           end
         end)
 
@@ -329,7 +344,13 @@ defmodule Anemos.Compiler do
 
   # --- Data compilation ---
 
-  defp compile_data(%AST.DataDecl{name: name, source: source, content: content, transclude: transclude, scope: scope}) do
+  defp compile_data(%AST.DataDecl{
+         name: name,
+         source: source,
+         content: content,
+         transclude: transclude,
+         scope: scope
+       }) do
     case content do
       {:simple_list, values} ->
         %Anemos.CompiledData{
@@ -363,7 +384,14 @@ defmodule Anemos.Compiler do
 
   # --- Query compilation ---
 
-  defp compile_query(%AST.QueryDecl{name: name, expect: expect, engine: engine, body: body, return: ret, scope: scope}) do
+  defp compile_query(%AST.QueryDecl{
+         name: name,
+         expect: expect,
+         engine: engine,
+         body: body,
+         return: ret,
+         scope: scope
+       }) do
     handler = fn bindings, context ->
       {:ok, %{engine: engine, body: body, bindings: bindings, context: context}}
     end
@@ -410,7 +438,12 @@ defmodule Anemos.Compiler do
     compiled_meta = Map.merge(rule_meta || %{}, %{context_path: context_path})
 
     when_rules =
-      Enum.map(when_blocks, fn %AST.When{event: event, body: when_body, guard: guard, duration: duration} ->
+      Enum.map(when_blocks, fn %AST.When{
+                                 event: event,
+                                 body: when_body,
+                                 guard: guard,
+                                 duration: duration
+                               } ->
         subscriptions = event_to_subscriptions(event)
         handler = build_guarded_handler(when_body, guard)
         dwell_ms = duration_to_dwell_ms(duration)
@@ -452,8 +485,12 @@ defmodule Anemos.Compiler do
         # For local scope, use rule name as discriminator
         scope = if compiled.scope == :local, do: {:local, rule_name}, else: compiled.scope
         [%{compiled | scope: scope}]
-      %AST.Context{body: ctx_body} -> extract_inline_data(ctx_body, rule_name)
-      _other -> []
+
+      %AST.Context{body: ctx_body} ->
+        extract_inline_data(ctx_body, rule_name)
+
+      _other ->
+        []
     end)
   end
 
@@ -512,7 +549,11 @@ defmodule Anemos.Compiler do
   # `Scheduler.unschedule/2` still disarms a *time*, not a rule, and cannot
   # disarm rule A's `at 08:00` while leaving rule B's. That belongs in
   # scheduler.ex and is deliberately not attempted here.
-  defp compile_at_block(%AST.At{time_spec: time_spec, body: body, guard: guard}, name, compiled_meta) do
+  defp compile_at_block(
+         %AST.At{time_spec: time_spec, body: body, guard: guard},
+         name,
+         compiled_meta
+       ) do
     {event_name, parsed_spec, recurrence} = at_spec_to_event(time_spec)
     handler = build_guarded_handler(body, guard)
     context_path = Map.get(compiled_meta, :context_path)
@@ -563,7 +604,9 @@ defmodule Anemos.Compiler do
   end
 
   defp at_spec_to_event({:date, {y, m, d} = date}) do
-    name = "AT_DATE_#{y}_#{String.pad_leading("#{m}", 2, "0")}_#{String.pad_leading("#{d}", 2, "0")}"
+    name =
+      "AT_DATE_#{y}_#{String.pad_leading("#{m}", 2, "0")}_#{String.pad_leading("#{d}", 2, "0")}"
+
     {name, {:date, date}, nil}
   end
 
@@ -636,10 +679,15 @@ defmodule Anemos.Compiler do
         try do
           eval_body(body, context, persistent_bindings)
         catch
-          {:anemos_return, ops, bindings} -> {ops, bindings}
-          {:anemos_done, ops, bindings} -> {ops, bindings}
+          {:anemos_return, ops, bindings} ->
+            {ops, bindings}
+
+          {:anemos_done, ops, bindings} ->
+            {ops, bindings}
+
           {:anemos_nextevent, target, ops, bindings} ->
             {ops ++ [%{type: :nextevent, target: target}], bindings}
+
           {:anemos_nextrule, target, args, ops, bindings} ->
             {ops ++ [%{type: :nextrule, target: target, args: args}], bindings}
         end
@@ -647,7 +695,10 @@ defmodule Anemos.Compiler do
       # Extract set bindings to persist across firings
       updated_persistent =
         final_bindings
-        |> Enum.filter(fn {{:set, _}, _} -> true; _ -> false end)
+        |> Enum.filter(fn
+          {{:set, _}, _} -> true
+          _ -> false
+        end)
         |> Map.new()
 
       {:ok, ops, updated_persistent}
@@ -830,11 +881,14 @@ defmodule Anemos.Compiler do
   end
 
   defp eval_statement(%AST.NextRule{target: target, args: args}, context, bindings) do
-    resolved_args = case args do
-      %AST.BlockArgs{pairs: pairs} ->
-        Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
-      _ -> nil
-    end
+    resolved_args =
+      case args do
+        %AST.BlockArgs{pairs: pairs} ->
+          Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
+
+        _ ->
+          nil
+      end
 
     throw({:anemos_nextrule, target, resolved_args, [], bindings})
   end
@@ -934,8 +988,13 @@ defmodule Anemos.Compiler do
   defp resolve_expr(other, _context, _bindings), do: other
 
   defp resolve_triple_element(%AST.Literal{value: value}, _context, _bindings), do: value
-  defp resolve_triple_element(%AST.VarRef{sigil: "?", name: name}, _context, _bindings), do: {:var, name}
-  defp resolve_triple_element(%AST.VarRef{} = ref, context, bindings), do: resolve_expr(ref, context, bindings)
+
+  defp resolve_triple_element(%AST.VarRef{sigil: "?", name: name}, _context, _bindings),
+    do: {:var, name}
+
+  defp resolve_triple_element(%AST.VarRef{} = ref, context, bindings),
+    do: resolve_expr(ref, context, bindings)
+
   defp resolve_triple_element(other, _context, _bindings), do: other
 
   # --- Condition evaluation ---
@@ -960,25 +1019,54 @@ defmodule Anemos.Compiler do
         warn_boolean_mismatch(op, l, r)
         l != r
 
-      :=== -> l === r
-      :!== -> l !== r
-      op when op in [:gt, :>] -> l > r
-      op when op in [:lt, :<] -> l < r
-      op when op in [:ge, :>=] -> l >= r
-      op when op in [:le, :<=] -> l <= r
+      :=== ->
+        l === r
+
+      :!== ->
+        l !== r
+
+      op when op in [:gt, :>] ->
+        l > r
+
+      op when op in [:lt, :<] ->
+        l < r
+
+      op when op in [:ge, :>=] ->
+        l >= r
+
+      op when op in [:le, :<=] ->
+        l <= r
+
       # Logical
-      op when op in [:and, :&&] -> l && r
-      op when op in [:or, :||] -> l || r
+      op when op in [:and, :&&] ->
+        l && r
+
+      op when op in [:or, :||] ->
+        l || r
+
       # Membership / string
-      :in -> l in List.wrap(r)
-      :notin -> l not in List.wrap(r)
-      :contains -> String.contains?(to_string(l), to_string(r))
-      :starts_with -> String.starts_with?(to_string(l), to_string(r))
-      :ends_with -> String.ends_with?(to_string(l), to_string(r))
-      :matches_regex -> String.match?(to_string(l), Regex.compile!(to_string(r)))
+      :in ->
+        l in List.wrap(r)
+
+      :notin ->
+        l not in List.wrap(r)
+
+      :contains ->
+        String.contains?(to_string(l), to_string(r))
+
+      :starts_with ->
+        String.starts_with?(to_string(l), to_string(r))
+
+      :ends_with ->
+        String.ends_with?(to_string(l), to_string(r))
+
+      :matches_regex ->
+        String.match?(to_string(l), Regex.compile!(to_string(r)))
+
       :memberof ->
         names = if is_list(r), do: r, else: [r]
         data_store = Map.get(context, :data_store)
+
         if data_store do
           rule_name = Map.get(context, :_rule_name)
           opts = if rule_name, do: [scope_hint: rule_name], else: []
@@ -986,19 +1074,41 @@ defmodule Anemos.Compiler do
         else
           false
         end
+
       # Arithmetic
-      :+ -> l + r
-      :- -> l - r
-      :* -> l * r
-      :/ -> l / r
-      :% -> rem(l, r)
+      :+ ->
+        l + r
+
+      :- ->
+        l - r
+
+      :* ->
+        l * r
+
+      :/ ->
+        l / r
+
+      :% ->
+        rem(l, r)
+
       # Bitwise
-      :& -> Bitwise.band(l, r)
-      :| -> Bitwise.bor(l, r)
-      :^ -> Bitwise.bxor(l, r)
-      :"<<" -> Bitwise.bsl(l, r)
-      :">>" -> Bitwise.bsr(l, r)
-      _ -> false
+      :& ->
+        Bitwise.band(l, r)
+
+      :| ->
+        Bitwise.bor(l, r)
+
+      :^ ->
+        Bitwise.bxor(l, r)
+
+      :"<<" ->
+        Bitwise.bsl(l, r)
+
+      :">>" ->
+        Bitwise.bsr(l, r)
+
+      _ ->
+        false
     end
   end
 
@@ -1041,20 +1151,44 @@ defmodule Anemos.Compiler do
 
   # --- Pipe evaluation ---
 
-  defp eval_pipe(collection, %AST.BuiltinCall{name: :filter, args: [var_name, predicate]}, context, bindings) do
+  defp eval_pipe(
+         collection,
+         %AST.BuiltinCall{name: :filter, args: [var_name, predicate]},
+         context,
+         bindings
+       ) do
     predicate_fn = fn ctx, bnd -> eval_condition(predicate, ctx, bnd) end
     Anemos.Runtime.Builtins.filter(collection, var_name, predicate_fn, context, bindings)
   end
 
-  defp eval_pipe(collection, %AST.BuiltinCall{name: :map, args: [var_name, transform]}, context, bindings) do
+  defp eval_pipe(
+         collection,
+         %AST.BuiltinCall{name: :map, args: [var_name, transform]},
+         context,
+         bindings
+       ) do
     transform_fn = fn ctx, bnd -> resolve_expr(transform, ctx, bnd) end
     Anemos.Runtime.Builtins.map(collection, var_name, transform_fn, context, bindings)
   end
 
-  defp eval_pipe(collection, %AST.BuiltinCall{name: :reduce, args: [acc_name, initial_expr, var_name, body]}, context, bindings) do
+  defp eval_pipe(
+         collection,
+         %AST.BuiltinCall{name: :reduce, args: [acc_name, initial_expr, var_name, body]},
+         context,
+         bindings
+       ) do
     initial = resolve_expr(initial_expr, context, bindings)
     body_fn = fn ctx, bnd -> resolve_expr(body, ctx, bnd) end
-    Anemos.Runtime.Builtins.reduce(collection, acc_name, initial, var_name, body_fn, context, bindings)
+
+    Anemos.Runtime.Builtins.reduce(
+      collection,
+      acc_name,
+      initial,
+      var_name,
+      body_fn,
+      context,
+      bindings
+    )
   end
 
   defp eval_pipe(collection, %AST.BuiltinCall{name: :emit, args: [command]}, context, bindings) do

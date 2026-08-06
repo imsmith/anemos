@@ -10,7 +10,9 @@ defmodule Anemos.Runtime.RecursionTest do
 
   @moduletag timeout: 60_000
 
-  defp recursion_error?({:error, %{code: code}}), do: code == "anemos.runtime/event_recursion_limit"
+  defp recursion_error?({:error, %{code: code}}),
+    do: code == "anemos.runtime/event_recursion_limit"
+
   defp recursion_error?(_), do: false
 
   test "mutual nextevent terminates with a structured error" do

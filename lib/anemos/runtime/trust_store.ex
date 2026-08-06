@@ -109,7 +109,9 @@ defmodule Anemos.Runtime.TrustStore do
   `{:error, :no_trust_store}` when the runtime has none — which a caller
   on the load path must treat as a refusal, not as an absence of policy.
   """
-  @spec fetch(atom()) :: {:ok, %{keyring: keyring(), unsigned_policy: unsigned_policy()}} | {:error, :no_trust_store}
+  @spec fetch(atom()) ::
+          {:ok, %{keyring: keyring(), unsigned_policy: unsigned_policy()}}
+          | {:error, :no_trust_store}
   def fetch(runtime) do
     case Process.whereis(name_for(runtime)) do
       nil -> {:error, :no_trust_store}
@@ -202,7 +204,8 @@ defmodule Anemos.Runtime.TrustStore do
   end
 
   defp normalize_keyring!(other) do
-    raise ArgumentError, ":keyring must be a map of signer name to Comn.Secrets.Key, got: #{inspect(other)}"
+    raise ArgumentError,
+          ":keyring must be a map of signer name to Comn.Secrets.Key, got: #{inspect(other)}"
   end
 
   defp validate_key!(_signer, %Key{private: nil} = key), do: key

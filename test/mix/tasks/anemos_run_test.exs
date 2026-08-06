@@ -18,7 +18,9 @@ defmodule Mix.Tasks.Anemos.RunTest do
   defp text(lines), do: Enum.map_join(lines, "\n", fn {_level, line} -> line end)
 
   defp write_rule(source) do
-    path = Path.join(System.tmp_dir!(), "anemos_run_test_#{System.unique_integer([:positive])}.rule")
+    path =
+      Path.join(System.tmp_dir!(), "anemos_run_test_#{System.unique_integer([:positive])}.rule")
+
     File.write!(path, source)
     on_exit(fn -> File.rm(path) end)
     path
@@ -100,7 +102,13 @@ defmodule Mix.Tasks.Anemos.RunTest do
     end
 
     test "a context beneath the declared one is admitted" do
-      argv = [@garage, "--event", "SENSOR_MOTION_DETECTED", "--context", @garage_context <> ".zone1"]
+      argv = [
+        @garage,
+        "--event",
+        "SENSOR_MOTION_DETECTED",
+        "--context",
+        @garage_context <> ".zone1"
+      ]
 
       assert {:ok, lines} = Run.execute(argv)
       assert text(lines) =~ "DEVICE::set"
@@ -111,7 +119,9 @@ defmodule Mix.Tasks.Anemos.RunTest do
     test "supplies values that ?var resolves against" do
       path = write_rule(~S|rule r { when EV { log ?greeting } }|)
 
-      assert {:ok, lines} = Run.execute([path, "--event", "EV", "--context-data", "greeting=hello"])
+      assert {:ok, lines} =
+               Run.execute([path, "--event", "EV", "--context-data", "greeting=hello"])
+
       assert text(lines) =~ ~s(log "hello")
     end
 
@@ -205,7 +215,12 @@ defmodule Mix.Tasks.Anemos.RunTest do
 
     test "describe/1 keeps message, field and suggestion and drops the rest" do
       err =
-        Comn.Errors.ErrorStruct.new("validation", "module", "Module PDF not found", "Pass --stub-modules")
+        Comn.Errors.ErrorStruct.new(
+          "validation",
+          "module",
+          "Module PDF not found",
+          "Pass --stub-modules"
+        )
 
       rendered = Run.describe(%{err | trace_id: "trace-abc", request_id: "req-1"})
 

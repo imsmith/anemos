@@ -6,7 +6,14 @@ defmodule Anemos.Runtime.DataStoreTest do
 
   test "register and member? for simple list" do
     {:ok, store} = DataStore.start_link()
-    :ok = DataStore.register(store, "reserved-ips", :global, MapSet.new(["10.0.0.0/8", "192.168.0.0/16"]))
+
+    :ok =
+      DataStore.register(
+        store,
+        "reserved-ips",
+        :global,
+        MapSet.new(["10.0.0.0/8", "192.168.0.0/16"])
+      )
 
     assert DataStore.member?(store, "reserved-ips", "10.0.0.0/8")
     refute DataStore.member?(store, "reserved-ips", "8.8.8.8")
@@ -73,6 +80,7 @@ defmodule Anemos.Runtime.DataStoreTest do
         :ok = DataStore.register(store, "local-data", {:local, self()}, MapSet.new(["secret"]))
         # Confirm visible from within the child process
         send(test_pid, {:registered, DataStore.member?(store, "local-data", "secret")})
+
         receive do
           :stop -> :ok
         end

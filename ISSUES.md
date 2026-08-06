@@ -33,6 +33,11 @@ than removed.
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
 | A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
+| A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
+| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | Open |
+| A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | In progress |
+| A-68 | MEDIUM | A secret-redaction assertion passes vacuously | In progress |
+| A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
@@ -61,7 +66,7 @@ than removed.
 | A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | **Fixed** — `dispatch_rules/5` is now the only path into a handler |
 | A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | **Fixed** — syntax is `nextrule t with { k: v }`; needed a lexer fix too |
 | A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | Open — decision needed |
-| A-56 | HIGH | Module calls in expression position are never dispatched | Open — design decision needed |
+| A-56 | HIGH | Module calls in expression position are never dispatched | Decided 2026-08-06 — resolve and substitute; implementation queued |
 | A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
 | A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
@@ -1909,9 +1914,49 @@ That is a misdiagnosis. An example-only `FILE::extension` returning a genuine `"
 written and unit-tested, and the guard is **still** false, because the call is never made.
 Replacing the stub cannot fix the example.
 
-### Design decision required before implementing
+### DECIDED 2026-08-06 — resolve during evaluation
 
-Three shapes, and this needs deciding rather than guessing:
+**When `[MODULE::verb]` occupies a value position, dispatch the command and substitute its
+output as the value.** Option 1 below. This is what the README, both shipped examples, and
+the spec already assume.
+
+Consequences to build to:
+
+1. **Do not also emit the command as a separate operation.** Today `let x = [MOD::verb]`
+   emits the op *and* binds the descriptor, so the real return value is discarded into the
+   top-level result list. After this change the call happens once, in expression position,
+   and no stray operation leaks into the results.
+2. **Expression evaluation acquires side effects.** That is the accepted cost of the
+   decision, not an oversight. It should be stated in the compiler moduledoc so nobody
+   "optimises" by reordering or memoising expression evaluation later.
+3. **The evaluator needs the module registry.** The dispatcher already enriches the
+   evaluation context with `:data_store` for `memberof()`; this is the same shape. Note the
+   registry must reach the *closure*, not the verb-handler context — A-11's paragraph about
+   `:data_store` leaking to `handle_verb/3` was struck as false precisely because those two
+   contexts are distinct, and that distinction must survive.
+
+### The hazard this creates, which must not be repeated
+
+**Argument-schema validation is currently enforced in `Dispatcher.execute_op/4`, on the
+statement path.** If the compiled closure calls `handle_verb/3` directly for the expression
+path, then expression-position calls **bypass A-11's validation, path confinement and
+argument bounds entirely.**
+
+That would be the fourth instance of this branch's dominant defect shape:
+
+| | |
+| --- | --- |
+| A-39 | `nextrule` reimplemented a subset of dispatch, skipping the context filter |
+| A-59 | `Anemos.run/2` reimplemented a subset of load, skipping the authority |
+| `gate/3` | the gate assembled twice, one field addition from diverging |
+| **A-56** | **expression-position verb calls skipping argument validation** |
+
+The fix in every prior case was to make one path the only path. Whatever function validates
+and dispatches a verb must be shared by both positions — extracted, not copied. `run_ops/5`
+was extracted for exactly this reason when condition side effects were wired (A-50); follow
+that precedent.
+
+### The three shapes originally considered
 
 1. **Resolve during evaluation.** The closure calls the registry synchronously when it
    meets a `%AST.Command{}` in expression position, and does *not* also emit it as a

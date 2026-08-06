@@ -16,7 +16,12 @@ defmodule Anemos.AST do
   defmodule Rule do
     @moduledoc "A named rule declaration with a body, optional metadata, and source line."
     @enforce_keys []
-    @type t :: %__MODULE__{name: String.t() | nil, body: list(), meta: map() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            name: String.t() | nil,
+            body: list(),
+            meta: map() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:name, :body, :meta, :line]
   end
 
@@ -30,7 +35,12 @@ defmodule Anemos.AST do
   defmodule Capability do
     @moduledoc "A named capability declaration with context, body, and source line."
     @enforce_keys []
-    @type t :: %__MODULE__{name: String.t() | nil, context: String.t() | nil, body: list(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            name: String.t() | nil,
+            context: String.t() | nil,
+            body: list(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:name, :context, :body, :line]
   end
 
@@ -44,21 +54,38 @@ defmodule Anemos.AST do
   defmodule When do
     @moduledoc "A `when` trigger block: fires on an event, with optional duration, guard, and body."
     @enforce_keys []
-    @type t :: %__MODULE__{event: String.t() | nil, duration: term(), guard: term(), body: list(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            event: String.t() | nil,
+            duration: term(),
+            guard: term(),
+            body: list(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:event, :duration, :guard, :body, :line]
   end
 
   defmodule If do
     @moduledoc "A conditional `if` block with an optional guard, body, and else branch."
     @enforce_keys []
-    @type t :: %__MODULE__{condition: term(), guard: term(), body: list(), else_body: list() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            condition: term(),
+            guard: term(),
+            body: list(),
+            else_body: list() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:condition, :guard, :body, :else_body, :line]
   end
 
   defmodule At do
     @moduledoc "A time-triggered `at` block with a time spec, optional guard, and body."
     @enforce_keys []
-    @type t :: %__MODULE__{time_spec: term(), guard: term(), body: list(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            time_spec: term(),
+            guard: term(),
+            body: list(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:time_spec, :guard, :body, :line]
   end
 
@@ -100,21 +127,36 @@ defmodule Anemos.AST do
   defmodule Command do
     @moduledoc "A module command expression with a verb and arguments."
     @enforce_keys []
-    @type t :: %__MODULE__{module: String.t() | nil, verb: String.t() | nil, args: list(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            module: String.t() | nil,
+            verb: String.t() | nil,
+            args: list(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:module, :verb, :args, :line]
   end
 
   defmodule Emit do
     @moduledoc "An `emit` expression that produces a typed value to an optional destination."
     @enforce_keys []
-    @type t :: %__MODULE__{type: atom() | nil, value: term(), destination: term(), label: term(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            type: atom() | nil,
+            value: term(),
+            destination: term(),
+            label: term(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:type, :value, :destination, :label, :line]
   end
 
   defmodule Demand do
     @moduledoc "A `demand` expression referencing a capability with a PAM-style control flag."
     @enforce_keys []
-    @type t :: %__MODULE__{capability: String.t() | nil, flag: atom() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            capability: String.t() | nil,
+            flag: atom() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:capability, :flag, :line]
   end
 
@@ -128,7 +170,12 @@ defmodule Anemos.AST do
   defmodule BinaryOp do
     @moduledoc "A binary operator expression."
     @enforce_keys []
-    @type t :: %__MODULE__{op: atom() | nil, left: term(), right: term(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            op: atom() | nil,
+            left: term(),
+            right: term(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:op, :left, :right, :line]
   end
 
@@ -149,14 +196,23 @@ defmodule Anemos.AST do
   defmodule VarRef do
     @moduledoc "A variable reference with an optional sigil prefix."
     @enforce_keys []
-    @type t :: %__MODULE__{sigil: String.t() | nil, name: String.t() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            sigil: String.t() | nil,
+            name: String.t() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:sigil, :name, :line]
   end
 
   defmodule Triple do
     @moduledoc "An RDF-style triple with subject, predicate, and object."
     @enforce_keys []
-    @type t :: %__MODULE__{subject: term(), predicate: term(), object: term(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            subject: term(),
+            predicate: term(),
+            object: term(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:subject, :predicate, :object, :line]
   end
 
@@ -184,7 +240,13 @@ defmodule Anemos.AST do
   defmodule For do
     @moduledoc "A `for` loop: iterates `var` over `iterable`, executing body each time. Covers `for`, `each`, `every`, `foreach`."
     @enforce_keys []
-    @type t :: %__MODULE__{var: String.t() | nil, iterable: term(), body: list(), keyword: atom() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            var: String.t() | nil,
+            iterable: term(),
+            body: list(),
+            keyword: atom() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:var, :iterable, :body, :keyword, :line]
   end
 
@@ -205,14 +267,22 @@ defmodule Anemos.AST do
   defmodule NextEvent do
     @moduledoc "A `nextevent` statement: transitions to another `when` block within the same rule."
     @enforce_keys []
-    @type t :: %__MODULE__{target: String.t() | nil, args: map() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            target: String.t() | nil,
+            args: map() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:target, :args, :line]
   end
 
   defmodule NextRule do
     @moduledoc "A `nextrule` statement: dispatches to a different rule's pipeline."
     @enforce_keys []
-    @type t :: %__MODULE__{target: String.t() | nil, args: map() | nil, line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            target: String.t() | nil,
+            args: map() | nil,
+            line: non_neg_integer() | nil
+          }
     defstruct [:target, :args, :line]
   end
 
@@ -220,13 +290,16 @@ defmodule Anemos.AST do
     @moduledoc "A named data declaration with content, optional source/transclude, scope, and source line."
     @enforce_keys []
     @type t :: %__MODULE__{
-      name: String.t() | nil,
-      source: String.t() | nil,
-      content: {:simple_list, list()} | {:format_block, String.t(), String.t()} | {:dynamic, tuple(), String.t() | nil},
-      transclude: {:transclude, String.t(), String.t(), String.t()} | nil,
-      scope: :local | :global,
-      line: non_neg_integer() | nil
-    }
+            name: String.t() | nil,
+            source: String.t() | nil,
+            content:
+              {:simple_list, list()}
+              | {:format_block, String.t(), String.t()}
+              | {:dynamic, tuple(), String.t() | nil},
+            transclude: {:transclude, String.t(), String.t(), String.t()} | nil,
+            scope: :local | :global,
+            line: non_neg_integer() | nil
+          }
     defstruct [:name, :source, :content, :transclude, :scope, :line]
   end
 
@@ -234,10 +307,10 @@ defmodule Anemos.AST do
     @moduledoc "A built-in function call (filter, map, reduce, emit)."
     @enforce_keys []
     @type t :: %__MODULE__{
-      name: :filter | :map | :reduce | :emit,
-      args: list(),
-      line: non_neg_integer() | nil
-    }
+            name: :filter | :map | :reduce | :emit,
+            args: list(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:name, :args, :line]
   end
 
@@ -245,17 +318,17 @@ defmodule Anemos.AST do
     @moduledoc "A named query declaration with expect/engine/body/return, scope, and source line."
     @enforce_keys []
     @type t :: %__MODULE__{
-      name: String.t() | nil,
-      # Binaries, not atoms: `expect` names are arbitrary query bindings the
-      # policy author invents, so there is no closed set to validate against
-      # and interning them from untrusted source text is unbounded (A-08).
-      expect: [String.t()],
-      engine: String.t() | nil,
-      body: String.t() | nil,
-      return: String.t() | nil,
-      scope: :local | :global,
-      line: non_neg_integer() | nil
-    }
+            name: String.t() | nil,
+            # Binaries, not atoms: `expect` names are arbitrary query bindings the
+            # policy author invents, so there is no closed set to validate against
+            # and interning them from untrusted source text is unbounded (A-08).
+            expect: [String.t()],
+            engine: String.t() | nil,
+            body: String.t() | nil,
+            return: String.t() | nil,
+            scope: :local | :global,
+            line: non_neg_integer() | nil
+          }
     defstruct [:name, :expect, :engine, :body, :return, :scope, :line]
   end
 end

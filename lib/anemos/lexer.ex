@@ -339,7 +339,7 @@ defmodule Anemos.Lexer do
       string("=") |> replace(:=),
       string(">") |> replace(:>),
       string("<") |> replace(:<),
-      string("->") |> replace(:"->"),
+      string("->") |> replace(:->),
       string("+") |> replace(:+),
       string("-") |> replace(:-),
       string("*") |> replace(:*),

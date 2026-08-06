@@ -69,7 +69,8 @@ defmodule Anemos.ChannelTest do
 
     Anemos.Runtime.register(:test_chan_src, "EVENT", Anemos.Runtime.Modules.Device)
 
-    {:ok, _} = Anemos.Runtime.dispatch(:test_chan_src, "ALERT", %{context_path: "infra.networking"})
+    {:ok, _} =
+      Anemos.Runtime.dispatch(:test_chan_src, "ALERT", %{context_path: "infra.networking"})
 
     assert_receive {:published, "alerts", envelope}
     assert envelope.source == "scoped-notify@infra.networking"

@@ -169,9 +169,16 @@ defmodule Mix.Tasks.Anemos.Run do
     header = {:info, "Parsed #{file}."}
 
     case {report.operations, report.errors} do
-      {[], _} -> {:ok, [header, {:info, empty_reason(report)}]}
-      {ops, []} -> {:ok, [header, {:info, summary(report, ops)} | Enum.map(ops, &operation/1)]}
-      {ops, errs} -> {:error, [header, {:info, summary(report, ops)} | Enum.map(ops, &operation/1)] ++ failure_note(errs)}
+      {[], _} ->
+        {:ok, [header, {:info, empty_reason(report)}]}
+
+      {ops, []} ->
+        {:ok, [header, {:info, summary(report, ops)} | Enum.map(ops, &operation/1)]}
+
+      {ops, errs} ->
+        {:error,
+         [header, {:info, summary(report, ops)} | Enum.map(ops, &operation/1)] ++
+           failure_note(errs)}
     end
   end
 

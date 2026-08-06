@@ -595,7 +595,9 @@ defmodule Anemos.CompilerTest do
     {:ok, compiled} = Compiler.compile(ast)
 
     [sched] = compiled.schedules
-    assert sched.event_name == "AT_09_00"
+    # A-61: recurrence is encoded in the event name, so `at 09:00` and
+    # `at 09:00 every day` no longer share a timer key.
+    assert sched.event_name == "AT_09_00_EVERY_DAY"
     assert sched.time_spec == {:time, {9, 0}}
     assert sched.recurrence == :day
   end
@@ -613,7 +615,7 @@ defmodule Anemos.CompilerTest do
 
     assert length(compiled.schedules) == 1
     [sched] = compiled.schedules
-    assert sched.event_name == "AT_11_00"
+    assert sched.event_name == "AT_11_00_EVERY_WEEKDAY"
     assert sched.recurrence == :weekday
   end
 

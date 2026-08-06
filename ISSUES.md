@@ -31,7 +31,8 @@ than removed.
 | A-13 | MEDIUM | Demand fails open on unknown capabilities | Fixed — pending suite verification |
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | Fixed — pending suite verification |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
-| A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | Open |
+| A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
+| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
@@ -2118,6 +2119,39 @@ behaviour — collide on one key, and whichever loads second silently converts t
 `compile_at_block/2` should derive both names from the rule name **and** the time spec (e.g.
 `AT_<rule>_08_00`), and `at_spec_to_event/1` should encode recurrence. Small change, in
 `compiler.ex`; it is the prerequisite for three separate fixes above.
+
+---
+
+## A-64 — "redefining rule(s)" cannot distinguish redefinition from name collision
+
+**Filed:** 2026-08-06 · **Severity:** LOW
+
+A-15 added an `:info` log when a load replaces an existing rule name, because silently
+changing what a rule name means deserves a line. Correct — but the line says
+*redefinition*, and it fires for two different situations:
+
+1. An author genuinely redefined a rule, reloading an edited policy. Expected.
+2. Two unrelated policies collided on a **generated** name. Not a redefinition at all.
+
+Observed during the A-61 work, before that fix landed:
+
+```text
+[info] [anemos] redefining rule(s) at_AT_08_00 — the previous definition is no longer loaded
+```
+
+...while loading a policy that redefined nothing. The rule the author wrote was called
+`backup`; `at_AT_08_00` was generated for them.
+
+A-61 removed the specific collision by putting rule identity into generated `at` names, so
+this is not currently reachable. But the log line still cannot tell the two apart, and any
+future generated-name scheme — per-rule dwell servers, compiled sub-rules, anything that
+synthesises a name — can reintroduce the ambiguity.
+
+### What should change
+
+Distinguish author-written names from generated ones, and say which happened. A
+`CompiledRule` field marking a generated name would do it, and would also let the error
+path stop showing users a name they never wrote (`"Rule at_AT_08_00 raised: ..."`).
 
 ---
 

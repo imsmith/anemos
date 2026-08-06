@@ -215,7 +215,7 @@ defmodule Anemos.Compiler do
       if at_blocks == [] do
         {[], []}
       else
-        {scheds, _rules} = at_blocks |> Enum.map(&compile_at_block(&1, %{})) |> Enum.unzip()
+        {scheds, _rules} = at_blocks |> Enum.map(&compile_at_block(&1, name, %{})) |> Enum.unzip()
         {scheds, Enum.map(scheds, & &1.event_name)}
       end
 
@@ -429,7 +429,7 @@ defmodule Anemos.Compiler do
         {[], []}
       else
         at_blocks
-        |> Enum.map(&compile_at_block(&1, compiled_meta))
+        |> Enum.map(&compile_at_block(&1, name, compiled_meta))
         |> Enum.unzip()
       end
 
@@ -487,7 +487,32 @@ defmodule Anemos.Compiler do
 
   # --- Compile a single at block into {schedule, rule} ---
 
-  defp compile_at_block(%AST.At{time_spec: time_spec, body: body, guard: guard}, compiled_meta) do
+  # A-61. The schedule's event name and the generated rule's name are two
+  # different identities and only one of them may carry the rule.
+  #
+  #   * The **event** is the wall-clock moment, and it is genuinely shared.
+  #     `at 08:00` in two unrelated policies is one time, and the scheduler
+  #     deliberately keys its timers by event name so a second arming replaces
+  #     the first rather than leaving an orphan timer armed (A-19). One
+  #     `AT_08_00` dispatch already reaches every rule subscribed to it, so
+  #     making the event name per-rule would arm N timers for one moment and
+  #     fire every one of those rules N times. The event name therefore
+  #     encodes the time spec *and its recurrence* — recurrence is part of
+  #     which moments the event denotes, so `at 08:00` and
+  #     `at 08:00 every weekday` are different events — but never the rule.
+  #
+  #   * The **rule** is this `at` block in this rule, and nothing else. Before
+  #     A-61 it was named from the time spec alone, so two `at 08:00` blocks in
+  #     unrelated policies both compiled to `at_AT_08_00` and load's
+  #     replace-by-name (A-15) silently dropped whichever loaded first. The
+  #     rule name therefore carries the enclosing rule's name.
+  #
+  # Note for A-19's remaining half: with the enclosing rule now in the rule
+  # name, a per-rule unschedule becomes expressible for the first time —
+  # `Scheduler.unschedule/2` still disarms a *time*, not a rule, and cannot
+  # disarm rule A's `at 08:00` while leaving rule B's. That belongs in
+  # scheduler.ex and is deliberately not attempted here.
+  defp compile_at_block(%AST.At{time_spec: time_spec, body: body, guard: guard}, name, compiled_meta) do
     {event_name, parsed_spec, recurrence} = at_spec_to_event(time_spec)
     handler = build_guarded_handler(body, guard)
     context_path = Map.get(compiled_meta, :context_path)
@@ -500,7 +525,7 @@ defmodule Anemos.Compiler do
     }
 
     rule = %Anemos.CompiledRule{
-      name: "at_#{event_name}",
+      name: at_rule_name(name, event_name),
       subscriptions: [event_name],
       handler: handler,
       meta: compiled_meta
@@ -508,6 +533,11 @@ defmodule Anemos.Compiler do
 
     {schedule, rule}
   end
+
+  # Rule names are user-visible — error messages, `rule_bindings` keys, dwell
+  # state — so the generated name reads as what it is: `at_<rule>_08_00`,
+  # `at_<rule>_08_00_every_weekday`, `at_<rule>_interval_5min`.
+  defp at_rule_name(name, "AT_" <> spec_suffix), do: "at_#{name}_#{String.downcase(spec_suffix)}"
 
   # --- at time_spec → {event_name, parsed_spec, recurrence} ---
 
@@ -520,8 +550,15 @@ defmodule Anemos.Compiler do
     {"AT_INTERVAL_#{amount}#{unit}", {:interval, dur}, :interval}
   end
 
+  # A-61. Recurrence is part of the event's identity: `at 08:00` fires once and
+  # `at 08:00 every weekday` fires on weekdays, so they are different moments
+  # and must not share a timer key. Left unencoded, whichever loaded second
+  # silently converted the other.
   defp at_spec_to_event({:recurring, {:time, {h, m}}, recurrence}) do
-    name = "AT_#{String.pad_leading("#{h}", 2, "0")}_#{String.pad_leading("#{m}", 2, "0")}"
+    name =
+      "AT_#{String.pad_leading("#{h}", 2, "0")}_#{String.pad_leading("#{m}", 2, "0")}" <>
+        "_EVERY_#{recurrence |> to_string() |> String.upcase()}"
+
     {name, {:time, {h, m}}, recurrence}
   end
 

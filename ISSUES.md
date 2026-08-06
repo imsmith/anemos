@@ -23,7 +23,7 @@ than removed.
 | A-05 | HIGH | `signed_by` parsed and never verified | Open |
 | A-06 | HIGH | Context isolation fails open, two ways | Open |
 | A-07 | HIGH | Capability context scoping is decorative | Open |
-| A-08 | HIGH | Unbounded atom creation can kill the node | In progress |
+| A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
 | A-09 | HIGH | Default connector logs secrets in plaintext | Open |
 | A-10 | HIGH | `ModuleRegistry` verb routing can be hijacked | Open |
 | A-11 | HIGH | No input validation between DSL and host verbs | Open |

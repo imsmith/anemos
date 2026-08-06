@@ -115,6 +115,66 @@ defmodule Anemos.Compiler do
   both operands, and then answers as the values dictate — `==` false, `!=`
   true. The author gets told the shapes disagree rather than reading a guard
   that never fires.
+
+  ## Expression position invokes modules (A-56)
+
+  A `[MODULE::verb]` written where a *value* is expected — `if
+  [FILE::extension] eq "pdf"`, `let x = [PDF::title]`, `emit [EVENT::fire]`,
+  an argument of another call — is dispatched at the moment the expression is
+  evaluated, and the verb's return value *is* the value of the expression.
+  It is not also emitted as a separate operation; the call happens once.
+
+  **Evaluating an expression therefore has side effects, and that is
+  deliberate, not an oversight.** It follows directly from the decision that a
+  module call must have a usable return value: the value can only be had by
+  making the call, and the call is host code that may write to a device, a
+  file or a socket. The consequences bind anyone changing this module:
+
+    * **Do not reorder expression evaluation.** Operand order is the order
+      the calls happen in.
+    * **Do not memoise or common-subexpression it.** Two occurrences of the
+      same call are two calls. A call in a `while` condition is one call per
+      iteration, including the final iteration that ends the loop. A call in
+      a `for` body is one call per element.
+    * **Do not short-circuit around it.** `and`/`or` here resolve both
+      operands before combining them, so both sides' calls happen.
+
+  Dispatch goes through `Anemos.Runtime.Dispatcher.invoke_verb/5`, which is
+  the same function the statement path uses. That is the whole point of it
+  being shared: argument-schema validation, bounds, allow-lists and path
+  confinement (A-11) apply to a call in expression position exactly as they
+  do to one written as a statement. Calling `handle_verb/3` from here
+  instead would have been a fourth way to reach host code around a check.
+
+  The registry arrives in the evaluation context as `:registry`, and the
+  context to hand host code as `:_verb_context` — the same shape by which
+  `:data_store` already arrives for `memberof()`. Those keys are authority
+  for *evaluation*; they are not in `:_verb_context` and must never be
+  forwarded to a verb.
+
+  ### When the verb fails
+
+  A failed call in expression position **aborts the rule body** and appends a
+  `%{type: :verb_error, error: error}` operation, which the dispatcher turns
+  into `{:error, error}` in the results list — the same place a
+  statement-position failure lands.
+
+  Substituting `nil` and carrying on was rejected. That is precisely the
+  A-25 shape: a guard comparing `nil` is merely false, so a `SECRET::unlock`
+  that refused and an unlocked secret that did not match would be
+  indistinguishable, and the rule would take its `else` branch as though it
+  had asked a question and got an answer. There is no value that honestly
+  represents "the call did not happen", so evaluation stops instead of
+  inventing one.
+
+  Aborting is also why operations the body computed *before* the failure are
+  kept: they are returned along with the error rather than discarded, so the
+  results list shows how far the rule got.
+
+  Condition bodies and capability bodies are given the same two keys and
+  dispatch the same way. A condition *predicate* is the one place with no
+  channel for an error — its answer is a boolean and nothing else — so a
+  failure there is logged and the condition answers false.
   """
 
   require Logger
@@ -242,10 +302,7 @@ defmodule Anemos.Compiler do
       if all_bodies == [] do
         nil
       else
-        fn context ->
-          {ops, _bindings} = eval_body(all_bodies, context, %{})
-          {:ok, ops}
-        end
+        fn context -> run_detached_body(all_bodies, context) end
       end
 
     evaluator = build_condition_evaluator(when_blocks, at_blocks, predicates)
@@ -293,13 +350,29 @@ defmodule Anemos.Compiler do
         end)
 
     fn event_name, context ->
-      triggered? =
-        Enum.any?(triggers, fn {events, guard} ->
-          event_name in events and trigger_guard_satisfied?(guard, context)
-        end)
+      try do
+        triggered? =
+          Enum.any?(triggers, fn {events, guard} ->
+            event_name in events and trigger_guard_satisfied?(guard, context)
+          end)
 
-      triggered? and
-        Enum.all?(predicates, fn expr -> truthy?(eval_condition(expr, context, %{})) end)
+        triggered? and
+          Enum.all?(predicates, fn expr -> truthy?(eval_condition(expr, context, %{})) end)
+      catch
+        # A-56. A condition's truth is a boolean and nothing else — there is
+        # no results list to put an error in and no caller to hand it to. So
+        # a failed expression-position verb call is logged and the condition
+        # answers false. This is the one place the failure is not visible in
+        # a return value, which is why it is loud in the log.
+        {:anemos_verb_error, error} ->
+          Logger.error(
+            "[anemos] condition evaluation failed: a module call in a condition " <>
+              "predicate could not be dispatched — #{inspect(error)}. The condition " <>
+              "answers false."
+          )
+
+          false
+      end
     end
   end
 
@@ -330,9 +403,14 @@ defmodule Anemos.Compiler do
   # --- Capability compilation ---
 
   defp compile_capability(%AST.Capability{name: name, context: context, body: body}) do
-    handler = fn _context ->
-      {ops, _bindings} = eval_body(body, %{}, %{})
-      {:ok, ops}
+    # A capability body has never resolved `?var` — it is invoked by a demand,
+    # not by an event, and giving it the demanding rule's payload would be a
+    # separate decision. So only the two evaluation keys are taken through:
+    # enough to dispatch a `[MODULE::verb]` in expression position (A-56),
+    # and nothing that changes what the body can read.
+    handler = fn context ->
+      eval_context = Map.take(context || %{}, [:registry, :_verb_context])
+      run_detached_body(body, eval_context)
     end
 
     %Anemos.CompiledCapability{
@@ -645,14 +723,22 @@ defmodule Anemos.Compiler do
 
   defp build_guarded_handler(body, nil), do: build_handler(body)
 
+  # The guard is evaluated outside `eval_body`, so a verb error raised while
+  # evaluating it is still the raw signal here rather than an already-converted
+  # `:anemos_return`. `inner` handles its own; this catch only covers the guard.
   defp build_guarded_handler(body, {:unless, guard_expr}) do
     inner = build_handler(body)
 
     fn event_name, context, persistent_bindings ->
-      if eval_condition(guard_expr, context, persistent_bindings) do
-        {:ok, [], persistent_bindings}
-      else
-        inner.(event_name, context, persistent_bindings)
+      try do
+        if eval_condition(guard_expr, context, persistent_bindings) do
+          {:ok, [], persistent_bindings}
+        else
+          inner.(event_name, context, persistent_bindings)
+        end
+      catch
+        {:anemos_verb_error, error} ->
+          {:ok, [verb_error_op(error)], persistent_bindings}
       end
     end
   end
@@ -661,14 +747,19 @@ defmodule Anemos.Compiler do
     inner = build_handler(body)
 
     fn event_name, context, persistent_bindings ->
-      if Map.get(persistent_bindings, {:until_tripped}, false) do
-        {:ok, [], persistent_bindings}
-      else
-        if eval_condition(guard_expr, context, persistent_bindings) do
-          {:ok, [], Map.put(persistent_bindings, {:until_tripped}, true)}
+      try do
+        if Map.get(persistent_bindings, {:until_tripped}, false) do
+          {:ok, [], persistent_bindings}
         else
-          inner.(event_name, context, persistent_bindings)
+          if eval_condition(guard_expr, context, persistent_bindings) do
+            {:ok, [], Map.put(persistent_bindings, {:until_tripped}, true)}
+          else
+            inner.(event_name, context, persistent_bindings)
+          end
         end
+      catch
+        {:anemos_verb_error, error} ->
+          {:ok, [verb_error_op(error)], persistent_bindings}
       end
     end
   end
@@ -705,6 +796,35 @@ defmodule Anemos.Compiler do
     end
   end
 
+  # Bodies that are not a rule handler — a capability's, and a condition's
+  # side effects — answer `{:ok, ops}` to their own GenServer rather than
+  # through `build_handler/1`. They still need the flow-control throws caught:
+  # `eval_body/3` is what converts a failed expression-position verb call into
+  # an abort (A-56), and `return`/`done`/`nextevent`/`nextrule` are legal
+  # statements in these bodies too. Left uncaught, any of them would unwind
+  # into `Anemos.Runtime.ConditionServer` or `CapabilityServer` and kill it.
+  #
+  # Both are given `:registry` and `:_verb_context` by the dispatcher, so an
+  # expression-position module call in either is dispatched exactly as it is
+  # in a rule body, and a failure becomes a `:verb_error` operation the
+  # dispatcher renders as `{:error, _}` like any other.
+  defp run_detached_body(body, context) do
+    {ops, _bindings} = eval_body(body, context, %{})
+    {:ok, ops}
+  catch
+    {:anemos_return, ops, _bindings} ->
+      {:ok, ops}
+
+    {:anemos_done, ops, _bindings} ->
+      {:ok, ops}
+
+    {:anemos_nextevent, target, ops, _bindings} ->
+      {:ok, ops ++ [%{type: :nextevent, target: target}]}
+
+    {:anemos_nextrule, target, args, ops, _bindings} ->
+      {:ok, ops ++ [%{type: :nextrule, target: target, args: args}]}
+  end
+
   # --- Body evaluation ---
 
   # Flow control (return/done/nextevent/nextrule) aborts evaluation with a
@@ -718,13 +838,31 @@ defmodule Anemos.Compiler do
       Enum.reduce(statements, {[], bindings}, fn stmt, {ops_acc, bindings_acc} ->
         {new_ops, new_bindings} =
           prepend_ops_on_abort(Enum.reverse(ops_acc), fn ->
-            eval_statement(stmt, context, bindings_acc)
+            eval_statement_catching_verb_error(stmt, context, bindings_acc)
           end)
 
         {Enum.reverse(new_ops) ++ ops_acc, new_bindings}
       end)
 
     {Enum.reverse(ops_rev), final_bindings}
+  end
+
+  # A-56. A `[MODULE::verb]` that failed while being evaluated as a value has
+  # nowhere in the expression to put the error, so it aborts here — as a
+  # `return` carrying one `:verb_error` operation. Converting it at statement
+  # granularity is what lets it reuse the flow-control machinery: every
+  # enclosing body, loop and handler already knows how to prepend its own
+  # accumulated operations to a `:anemos_return`, so the results list shows
+  # what the rule managed before the failure and then the failure.
+  #
+  # `bindings_acc` is the binding state as of the statement that failed. It is
+  # carried so persistent `set` values written earlier in the body survive the
+  # abort, exactly as they do for an explicit `return`.
+  defp eval_statement_catching_verb_error(stmt, context, bindings_acc) do
+    eval_statement(stmt, context, bindings_acc)
+  catch
+    {:anemos_verb_error, error} ->
+      throw({:anemos_return, [verb_error_op(error)], bindings_acc})
   end
 
   # Run `fun`; if a flow-control throw unwinds through it, re-throw the same
@@ -780,19 +918,16 @@ defmodule Anemos.Compiler do
     {[%{type: :assert_triple, subject: s, predicate: p, object: o}], bindings}
   end
 
+  # A-56. `let x = [MOD::verb]` used to emit the call as an operation *and*
+  # bind an inert descriptor of it, so the real return value was discarded
+  # into the results list and `@x` was the descriptor. `resolve_expr/3` now
+  # makes the call, so there is one call and `@x` is what it answered. The
+  # special case for a command value is gone on purpose: a verb is entitled
+  # to return a map with a `:type` key and that must bind like any other
+  # value.
   defp eval_statement(%AST.Let{name: name, value: value}, context, bindings) do
     resolved = resolve_expr(value, context, bindings)
-
-    {ops, new_bindings} =
-      case resolved do
-        %{type: :command} = cmd_op ->
-          {[cmd_op], Map.put(bindings, {:let, name}, cmd_op)}
-
-        other ->
-          {[], Map.put(bindings, {:let, name}, other)}
-      end
-
-    {ops, new_bindings}
+    {[], Map.put(bindings, {:let, name}, resolved)}
   end
 
   defp eval_statement(%AST.Set{name: name, value: value}, context, bindings) do
@@ -950,9 +1085,12 @@ defmodule Anemos.Compiler do
     Map.get(bindings, {:set, name})
   end
 
+  # A-56. Value position: dispatch now, and the return value *is* the value.
+  # Arguments are resolved first, so a nested call is made before the call
+  # that consumes it. See the moduledoc section on expression position.
   defp resolve_expr(%AST.Command{module: mod, verb: verb, args: args}, context, bindings) do
     resolved_args = Enum.map(args, &resolve_expr(&1, context, bindings))
-    %{type: :command, module: mod, verb: verb, args: resolved_args}
+    invoke_verb(mod, verb, resolved_args, context)
   end
 
   defp resolve_expr(%AST.BinaryOp{} = op, context, bindings) do
@@ -986,6 +1124,24 @@ defmodule Anemos.Compiler do
   defp resolve_expr(%AST.BuiltinCall{} = call, _context, _bindings), do: call
 
   defp resolve_expr(other, _context, _bindings), do: other
+
+  # The one place the compiled closure reaches host code, and it does so
+  # through the dispatcher's shared entry point so that A-11's schema
+  # validation, bounds and path confinement apply here exactly as they do on
+  # the statement path. `:_verb_context` is what the dispatcher precomputed
+  # for host code; the evaluation context it lives in is not passed on.
+  defp invoke_verb(mod, verb, args, context) do
+    registry = Map.get(context, :registry)
+    handler_context = Map.get(context, :_verb_context) || %{}
+
+    case Anemos.Runtime.Dispatcher.invoke_verb(registry, mod, verb, args, handler_context) do
+      {:ok, value} -> value
+      {:error, error} -> throw({:anemos_verb_error, error})
+      other -> other
+    end
+  end
+
+  defp verb_error_op(error), do: %{type: :verb_error, error: error}
 
   defp resolve_triple_element(%AST.Literal{value: value}, _context, _bindings), do: value
 
@@ -1206,10 +1362,14 @@ defmodule Anemos.Compiler do
     Anemos.Runtime.Builtins.emit(collection, command_fn, context, bindings)
   end
 
-  # Pipe with a command: prepend collection to args
+  # Pipe with a command: prepend collection to args. A pipeline is only ever
+  # reachable in expression position, so this dispatches and yields the
+  # verb's value like any other value-position call (A-56). `|> emit [...]`
+  # above is the exception and stays a descriptor: that builtin exists to
+  # fan a collection out into one *operation* per element.
   defp eval_pipe(collection, %AST.Command{module: mod, verb: verb, args: args}, context, bindings) do
     resolved_args = [collection | Enum.map(args, &resolve_expr(&1, context, bindings))]
-    %{type: :command, module: mod, verb: verb, args: resolved_args}
+    invoke_verb(mod, verb, resolved_args, context)
   end
 
   # Pipe with any other expression

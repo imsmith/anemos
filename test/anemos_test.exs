@@ -139,6 +139,61 @@ defmodule AnemosTest do
                )
     end
 
+    # A-30's last inert example, and the reason A-56 was filed. Both halves
+    # are pinned: that the guard can now be true at all, and that the inner
+    # branch discriminates rather than always firing. If module calls in
+    # expression position ever stop being dispatched, the first assertion
+    # goes back to an empty list.
+    test "normalize-pdfs normalizes metadata that disagrees with the document" do
+      source = File.read!("priv/examples/normalize-pdfs.rule")
+
+      assert {:ok, ops} =
+               Anemos.run(source,
+                 event: "FILE_CREATED",
+                 context_path: "/papers",
+                 modules: Anemos.example_modules(),
+                 context_data: %{
+                   "file" => "/papers/Draft_Report_v2.pdf",
+                   "meta_title" => "Untitled Document"
+                 }
+               )
+
+      assert [
+               %{module: "PDF", verb: "metadata", args: ["title", "Draft Report v2"]},
+               %{module: "PDF", verb: "metadata", args: ["author", "Unknown Author"]},
+               %{module: "FILE", verb: "rename", args: ["draft-report-v2"]}
+             ] = ops
+    end
+
+    test "normalize-pdfs leaves agreeing metadata alone and only renames" do
+      source = File.read!("priv/examples/normalize-pdfs.rule")
+
+      assert {:ok, ops} =
+               Anemos.run(source,
+                 event: "FILE_CREATED",
+                 context_path: "/papers",
+                 modules: Anemos.example_modules(),
+                 context_data: %{
+                   "file" => "/papers/Draft_Report_v2.pdf",
+                   "meta_title" => "Draft Report v2"
+                 }
+               )
+
+      assert [%{module: "FILE", verb: "rename", args: ["draft-report-v2"]}] = ops
+    end
+
+    test "normalize-pdfs does not fire for a non-pdf" do
+      source = File.read!("priv/examples/normalize-pdfs.rule")
+
+      assert {:ok, []} =
+               Anemos.run(source,
+                 event: "FILE_CREATED",
+                 context_path: "/papers",
+                 modules: Anemos.example_modules(),
+                 context_data: %{"file" => "/papers/notes.txt"}
+               )
+    end
+
     test "ddns resolves its let-bound addresses from context data" do
       source = File.read!("priv/examples/ddns.rule")
 
@@ -156,8 +211,26 @@ defmodule AnemosTest do
                )
 
       assert report.errors == []
-      assert "203.0.113.7" in report.results
-      assert "2001:db8::7" in report.results
+
+      # A-56 changed what this test can see. It used to assert the two
+      # addresses were bare entries in `results` — but that was the defect:
+      # `let ipv4 = [INFRA::get_ip ...]` emitted the call as a *separate*
+      # operation whose return value was discarded into the results list,
+      # while `@ipv4` stayed an inert descriptor. The call now happens once,
+      # in expression position, so the address appears where the rule
+      # actually put it: inside the payload the emit carries.
+      #
+      # Only the IPv6 address is reachable to assert on. `let update =
+      # (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)` evaluates `AND` as
+      # `l && r`, which answers `r` and drops the IPv4 triple entirely.
+      # That is a separate defect in how `AND` combines triple patterns, and
+      # it predates this change.
+      assert [%{type: :emit, label: "katachora.ddns.key"}, %{type: :emit} = update] =
+               report.results
+
+      assert %{module: "INFRA", verb: "ddns_update", args: [_key, _zone, triple]} = update.value
+      assert "2001:db8::7" in triple
+      assert "host.katachora.com" in triple
     end
 
     test "every shipped example parses and compiles" do

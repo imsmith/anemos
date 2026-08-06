@@ -15,17 +15,25 @@
 ; doubles; --context-data supplies the file under evaluation and the
 ; metadata title that should disagree with it.
 ;
-; KNOWN GAP — this example does not yet produce any operation, and the
-; reason is in the runtime, not in this file. A module call in expression
-; position is never dispatched: `resolve_expr/3` (compiler.ex:862) turns
-; `[FILE::extension]` into an inert descriptor map instead of calling the
-; module, so the outer guard below compares a map to "pdf" and is false for
-; every input. Binding first does not help — `let x = [MOD::verb]`
-; (compiler.ex:700) dispatches the call but binds the *descriptor*, and
-; discards the return value into the top-level result list. Until a module
-; call has a usable return value, nothing this rule computes can be read
-; back, so the file is kept in the shape it should have rather than
-; rewritten into one that runs.
+; Expect three operations from that invocation:
+;
+;   [PDF::metadata "title" "Draft Report v2"]
+;   [PDF::metadata "author" "Unknown Author"]
+;   [FILE::rename "draft-report-v2"]
+;
+; The first two come from the inner branch, which fires because the title
+; the document implies ("Draft Report v2", derived from the filename) and
+; the title actually recorded ("Untitled Document") disagree. Pass
+; --context-data meta_title="Draft Report v2" instead and the two agree,
+; the inner branch does not fire, and only the rename is produced. That
+; difference is what the example is for. (Omitting the flag entirely is not
+; the agreeing case: the recorded title is then absent, which disagrees.)
+;
+; This file is the one A-56 blocked. Every read below — the extension in
+; the guard, both titles, the author, the slug — is a module call in
+; expression position, and until those were dispatched during evaluation
+; the outer guard compared a descriptor map to "pdf" and was false for
+; every input. Nothing in the rule needed changing; the runtime did.
 
 rule normalize-pdfs {
   context "/papers" {
@@ -38,7 +46,7 @@ rule normalize-pdfs {
         ; said $title, which is the mutable namespace `set` writes to, so
         ; both sides resolved to nil, nil ne nil was false, and the branch
         ; was dead even where the guard above passed. Nothing reported it
-        ; (A-25). Fixed here; the guard gap above still blocks the rule.
+        ; (A-25). Fixed here, and now reachable.
         if @title ne @meta_title {
           [PDF::metadata title @title]
           [PDF::metadata author [PDF::author]]

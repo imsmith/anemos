@@ -72,7 +72,7 @@ defmodule Anemos.Channel.ComnBusTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_comn_bus, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_comn_bus, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, _results} = Anemos.Runtime.dispatch(:test_comn_bus, "BREACH")
 

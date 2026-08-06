@@ -33,6 +33,10 @@ defmodule Anemos.Runtime.ConditionSideEffectsTest do
     {:ok, ast} = Anemos.Parser.parse(source)
     {:ok, compiled} = Anemos.Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
+    # A-56: `emit [EVENT::changed]` is a value-position call now, so EVENT has
+    # to resolve for the emit to carry a payload — in a condition body as much
+    # as in a rule body.
+    :ok = ModuleRegistry.register(registry, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, dispatcher} =
       Anemos.Runtime.Standalone.start_link(

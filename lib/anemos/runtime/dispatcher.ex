@@ -200,9 +200,14 @@ defmodule Anemos.Runtime.Dispatcher do
 
     {results, state} =
       Comn.Contexts.with_context(comn_ctx, fn ->
-        # Route event to all condition servers (async cast)
-        Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
-          ConditionServer.handle_event(pid, event_name, context)
+        # Route event to all condition servers (async cast). A condition
+        # evaluates expressions the same way a rule does, so it is given the
+        # same expression-position authority (A-56) — with its own name and
+        # declared context as the source, which is what
+        # apply_condition_message/3 stamps on the operations its body
+        # produces.
+        Enum.each(state.condition_servers, fn {name, %{pid: pid}} ->
+          ConditionServer.handle_event(pid, event_name, condition_context(name, context, state))
         end)
 
         # Synchronize: call get_state on each condition server to ensure all casts
@@ -709,6 +714,25 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
+  # The condition-side counterpart of the `enriched_context` in
+  # dispatch_immediate/6: what a condition's evaluator and body may reach
+  # while evaluating expressions. `:_verb_context` is built from the raw
+  # `context` by the same verb_context/2 the statement path uses, so a verb
+  # called from a condition sees exactly what it sees from a rule. It does
+  # not contain `:registry`: that key is evaluation authority for the
+  # closure and must not be forwarded into `handle_verb/3`.
+  #
+  # `:data_store` is deliberately absent: it is scoped per *rule* name and a
+  # condition is not a rule. memberof() in a condition answers false, as it
+  # did before A-56.
+  defp condition_context(name, context, state) do
+    source = {name, Map.get(state.condition_contexts, name)}
+
+    context
+    |> Map.put(:registry, state.registry)
+    |> Map.put(:_verb_context, verb_context(context, source))
+  end
+
   defp recursion_error(event_name) do
     Comn.Errors.Registry.error!("anemos.runtime/event_recursion_limit",
       message:
@@ -719,18 +743,29 @@ defmodule Anemos.Runtime.Dispatcher do
 
   defp dispatch_immediate(rule, event_name, context, results_acc, st, depth) do
     persistent = Map.get(st.rule_bindings, rule.name, %{})
+    rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
 
-    # Pass DataStore pid and rule name through context so compiled closures
-    # can resolve memberof() with per-rule scope
+    # Authority handed to the compiled closure, and to nothing else:
+    #
+    #   * `:data_store` + `:_rule_name` — memberof() with per-rule scope;
+    #   * `:registry` — expression-position `[MODULE::verb]` calls (A-56);
+    #   * `:_verb_context` — the context those calls hand to host code,
+    #     built here by the same verb_context/2 run_ops/5 uses so the two
+    #     positions present host code identical inputs.
+    #
+    # The first three are evaluation authority and stop at the closure.
+    # `:_verb_context` is built from `context`, not from this map, which is
+    # what keeps them out of `handle_verb/3` (A-11).
     enriched_context =
       context
       |> Map.put(:data_store, st.data_store)
       |> Map.put(:_rule_name, rule.name)
+      |> Map.put(:registry, st.registry)
+      |> Map.put(:_verb_context, verb_context(context, {rule.name, rule_context}))
 
     case safe_handle(rule, event_name, enriched_context, persistent) do
       {:ok, ops, new_persistent} ->
         new_st = put_in(st.rule_bindings[rule.name], new_persistent)
-        rule_context = Map.get(rule, :meta, %{}) |> Map.get(:context_path)
 
         {results, new_st} = run_ops(ops, {rule.name, rule_context}, context, new_st, depth)
         {results_acc ++ results, new_st}
@@ -808,7 +843,7 @@ defmodule Anemos.Runtime.Dispatcher do
   # context filter, the depth ceiling, or the state threading. The three
   # times something *did* arrive without them are A-16, A-39 and A-50.
   defp run_ops(ops, source, context, st, depth) do
-    exec_context = Map.put(context, :_rule_source, source)
+    exec_context = verb_context(context, source)
 
     # execute_op/4 returns {results, state}: `nextevent` and `nextrule`
     # re-enter dispatch, and the state they produce — persistent `set`
@@ -917,19 +952,16 @@ defmodule Anemos.Runtime.Dispatcher do
          state,
          _depth
        ) do
-    result =
-      case ModuleRegistry.lookup(state.registry, mod_name) do
-        {:ok, mod} ->
-          validate_then_handle(mod, mod_name, verb, args, context)
+    {invoke_verb(state.registry, mod_name, verb, args, context), state}
+  end
 
-        :error ->
-          {:error,
-           Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
-             message: "Module #{mod_name} not found in registry"
-           )}
-      end
-
-    {result, state}
+  # A `[MODULE::verb]` that failed while being evaluated as a *value*
+  # (A-56). The compiled closure has nowhere to put an error mid-expression,
+  # so it aborts the body and hands the error back as this operation, which
+  # lands in the results list exactly where a statement-position failure
+  # would. See the "Expression position" section of `Anemos.Compiler`.
+  defp execute_op(%{type: :verb_error, error: error}, _context, state, _depth) do
+    {{:error, error}, state}
   end
 
   # `log` prints its value verbatim, and that is the intended behaviour.
@@ -952,8 +984,16 @@ defmodule Anemos.Runtime.Dispatcher do
   # The distinction that matters, and the one sites 2 and 3 below turn on:
   # here the author *asked* for the value to be printed. There, a value
   # leaked out of an error nobody asked to see.
+  #
+  # `log_text/1` exists because interpolating the value directly raised
+  # `Protocol.UndefinedError` and killed the dispatcher for anything without
+  # a `String.Chars` implementation — a map, a list, a tuple. That was
+  # reachable before A-56 (`log ?payload` on a structured event) and A-56
+  # makes it ordinary, since a verb may now return a map into a binding.
+  # `to_string/1` is still tried first, and only first, because that is the
+  # branch `Anemos.Secret` redaction rides on.
   defp execute_op(%{type: :log, value: value} = op, _context, state, _depth) do
-    Logger.info("[anemos] #{value}")
+    Logger.info("[anemos] #{log_text(value)}")
     {{:ok, op}, state}
   end
 
@@ -995,8 +1035,18 @@ defmodule Anemos.Runtime.Dispatcher do
   defp execute_op(%{type: :demand, capability: cap_name} = op, context, state, _depth) do
     demands = [%{capability: cap_name, flag: Map.get(op, :flag, :requisite)}]
 
+    # A capability body evaluates expressions like any other body, so it is
+    # given the same expression-position authority (A-56). `context` is
+    # already the verb context of the demanding rule — `:_rule_source` and
+    # all — which is what a verb called from the capability body should see,
+    # and what `Demand` reads to decide whether the demand is in scope.
+    cap_context =
+      context
+      |> Map.put(:registry, state.registry)
+      |> Map.put(:_verb_context, context)
+
     results =
-      case Anemos.Runtime.Demand.evaluate(demands, state.capability_servers, context) do
+      case Anemos.Runtime.Demand.evaluate(demands, state.capability_servers, cap_context) do
         {:ok, ops} -> Enum.map(ops, fn result_op -> {:ok, result_op} end)
         {:error, _} = err -> [err]
       end
@@ -1080,6 +1130,76 @@ defmodule Anemos.Runtime.Dispatcher do
     {{:ok, %{type: :register_query, name: query.name}}, state}
   end
 
+  @doc """
+  Resolves `mod_name` in `registry`, validates `args`, and invokes `verb`.
+
+  **This is the only path from a `[MODULE::verb]` call to host code**, and
+  it is deliberately public so that it can be shared rather than copied.
+  Both positions the language offers go through it:
+
+    * statement position — `execute_op/4`, on the operation list a rule
+      handler returned;
+    * expression position — `Anemos.Compiler`, from inside the compiled
+      closure, where the call's return value becomes the value of the
+      expression (A-56).
+
+  Sharing it is the point. A second implementation would be the fourth
+  instance of the defect shape A-39, A-59 and the duplicated `gate/3` all
+  had: a caller reaching the same destination by a path that skipped a
+  check. Here the checks are `Anemos.Runtime.Module.schema_for/2`, the
+  `Anemos.Runtime.ArgSchema` bounds and allow-lists, and
+  `Anemos.Runtime.PathGuard` confinement — all of them A-11's, and all of
+  them applied before `handle_verb/3` regardless of which position the call
+  was written in.
+
+  `context` is the *verb* context — the event context stamped with
+  `:_rule_source`. It is not the closure's evaluation context: `:data_store`
+  and `:registry` reach the closure and must not reach host verb code. See
+  `verb_context/2`.
+
+  A `nil` registry answers `unknown_module` rather than raising. A compiled
+  closure invoked outside a dispatcher — a unit test, an embedder calling
+  `handler.(event, %{}, %{})` directly — has no registry to be given, so
+  this is a reachable state and it fails closed with a message that says why
+  rather than resolving to `nil` and letting a guard read false.
+  """
+  @spec invoke_verb(GenServer.server() | nil, String.t(), String.t(), list(), map()) ::
+          Anemos.Runtime.Module.verb_result()
+  def invoke_verb(nil, mod_name, verb, _args, _context) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
+       field: "#{mod_name}::#{verb}",
+       message:
+         "Module #{mod_name} is not reachable here: this expression is evaluated " <>
+           "without a module registry"
+     )}
+  end
+
+  def invoke_verb(registry, mod_name, verb, args, context) do
+    case ModuleRegistry.lookup(registry, mod_name) do
+      {:ok, mod} ->
+        validate_then_handle(mod, mod_name, verb, args, context)
+
+      :error ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.runtime/unknown_module",
+           message: "Module #{mod_name} not found in registry"
+         )}
+    end
+  end
+
+  @doc """
+  Builds the context a host verb sees: the event context plus `:_rule_source`.
+
+  One definition, used by `run_ops/5` for statement-position calls and by
+  `dispatch_immediate/6` to precompute `:_verb_context` for expression-position
+  ones, so the two positions cannot drift into showing host code different
+  things. Note what it does *not* add: `:data_store` and `:registry` are
+  closure-evaluation authority and stop at the closure.
+  """
+  @spec verb_context(map(), {String.t(), String.t() | nil}) :: map()
+  def verb_context(context, source), do: Map.put(context, :_rule_source, source)
+
   defp validate_then_handle(mod, mod_name, verb, args, context) do
     schema = Anemos.Runtime.Module.schema_for(mod, verb)
 
@@ -1094,6 +1214,10 @@ defmodule Anemos.Runtime.Dispatcher do
            message: message
          )}
     end
+  end
+
+  defp log_text(value) do
+    if String.Chars.impl_for(value), do: to_string(value), else: inspect(value)
   end
 
   defp nextrule_event_name(rule, target) do

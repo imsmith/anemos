@@ -129,6 +129,125 @@ defmodule Anemos.Runtime.ArgValidationTest do
     end
   end
 
+  # A-56 gave `[MODULE::verb]` a usable return value by dispatching it during
+  # expression evaluation. The hazard that created is the one this whole file
+  # exists to close: a second route to `handle_verb/3` that skips the schema.
+  # `Dispatcher.invoke_verb/5` is shared by both positions precisely so that
+  # cannot happen, and these are the tests that hold it shared. Every case
+  # below has a passing twin in "arg schema enforcement" above, written as a
+  # statement; the only difference is where the call appears.
+  describe "arg schema enforcement in expression position" do
+    test "an over-long string argument is rejected in a let binding" do
+      dispatcher =
+        dispatcher_for("""
+        rule overlong-expr {
+          when EV {
+            let x = [REC::set "aaaaaaaaaaaaaaaaaaaaaaaa" "x"]
+            log @x
+          }
+        }
+        """)
+
+      assert [{:error, err}] = Dispatcher.dispatch(dispatcher, "EV")
+      assert err.code == "anemos.runtime/invalid_argument"
+    end
+
+    test "a value outside the allow-list is rejected inside a guard" do
+      dispatcher =
+        dispatcher_for("""
+        rule allowlist-expr {
+          when EV {
+            if [REC::mode "sudo"] eq "anything" {
+              log "reached"
+            }
+          }
+        }
+        """)
+
+      assert [{:error, err}] = Dispatcher.dispatch(dispatcher, "EV")
+      assert err.code == "anemos.runtime/invalid_argument"
+    end
+
+    test "a nested call's arguments are validated before the outer call is built" do
+      dispatcher =
+        dispatcher_for("""
+        rule nested-expr {
+          when EV {
+            [REC::anything [REC::mode "sudo"]]
+          }
+        }
+        """)
+
+      assert [{:error, err}] = Dispatcher.dispatch(dispatcher, "EV")
+      assert err.code == "anemos.runtime/invalid_argument"
+    end
+
+    @tag :tmp_dir
+    test "a traversal argument is confined in expression position too", %{tmp_dir: tmp} do
+      Application.put_env(:anemos, :path_roots, %{test_root: tmp})
+      on_exit(fn -> Application.delete_env(:anemos, :path_roots) end)
+
+      dispatcher =
+        dispatcher_for("""
+        rule traversal-expr {
+          when EV {
+            let contents = [REC::read "../../etc/shadow"]
+            log @contents
+          }
+        }
+        """)
+
+      assert [{:error, err}] = Dispatcher.dispatch(dispatcher, "EV")
+      assert err.code == "anemos.runtime/invalid_argument"
+    end
+
+    @tag :tmp_dir
+    test "a confined path is expanded before the host verb, in expression position",
+         %{tmp_dir: tmp} do
+      Application.put_env(:anemos, :path_roots, %{test_root: tmp})
+      on_exit(fn -> Application.delete_env(:anemos, :path_roots) end)
+
+      dispatcher =
+        dispatcher_for("""
+        rule confined-expr {
+          when EV {
+            let contents = [REC::read "notes/a.txt"]
+            log @contents
+          }
+        }
+        """)
+
+      assert [{:ok, %{type: :log, value: log_value}}] = Dispatcher.dispatch(dispatcher, "EV")
+      assert %{args: [expanded]} = log_value
+      assert expanded == Path.join(tmp, "notes/a.txt")
+    end
+
+    test "an expression-position call sees the same verb context a statement one does" do
+      dispatcher =
+        dispatcher_for("""
+        rule ctx-expr {
+          when EV {
+            let seen = [REC::anything "x"]
+            log @seen
+          }
+        }
+        """)
+
+      assert [{:ok, %{type: :log, value: %{context: context}}}] =
+               Dispatcher.dispatch(dispatcher, "EV")
+
+      # The same closed door as the "verb context" case below: the registry
+      # and the data store are evaluation authority and stop at the closure.
+      refute Map.has_key?(context, :data_store)
+      refute Map.has_key?(context, :registry)
+      refute Map.has_key?(context, :_verb_context)
+
+      for {_k, v} <- context do
+        refute is_pid(v), "verb context leaked a process handle: #{inspect(context)}"
+      end
+    end
+  end
+
   describe "path confinement" do
     @tag :tmp_dir
     test "a traversal argument is rejected before the host verb runs", %{tmp_dir: tmp} do

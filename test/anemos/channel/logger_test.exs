@@ -73,7 +73,7 @@ defmodule Anemos.Channel.LoggerTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_logger_redact, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_logger_redact, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     log =
       capture_log(fn ->

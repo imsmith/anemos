@@ -508,6 +508,9 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: rules}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
+    # A-56: `emit [EVENT::fire]` is a value-position call, so EVENT has to be
+    # registered for the emit to have a payload at all.
+    ModuleRegistry.register(registry, "EVENT", Anemos.Runtime.Modules.Example.Event)
     {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
@@ -533,12 +536,15 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
+    ModuleRegistry.register(registry, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, dispatcher} =
       Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
-    assert [{:ok, %{type: :emit}}] = results
+    # A-56: the emit's value is what EVENT::fire answered, not a descriptor
+    # of the call that was never made.
+    assert [{:ok, %{type: :emit, value: %{module: "EVENT", verb: "fire"}}}] = results
   end
 
   # --- DataStore integration ---

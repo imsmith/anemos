@@ -3,8 +3,27 @@ defmodule Anemos.CompilerTest do
   use ExUnit.Case, async: true
 
   alias Anemos.{Compiler, Parser}
+  alias Anemos.Runtime.ModuleRegistry
 
   doctest Anemos.Compiler
+
+  # A-56. Expression-position `[MODULE::verb]` is dispatched during
+  # evaluation, so a closure that meets one needs the same two keys the
+  # dispatcher puts in its evaluation context: the registry to resolve the
+  # module, and the context to hand host code.
+  defmodule Echo do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+
+    @impl true
+    def handle_verb(verb, args, _context), do: {:ok, "#{verb}(#{Enum.join(args, ",")})"}
+  end
+
+  defp eval_context(modules) do
+    {:ok, registry} = ModuleRegistry.start_link([])
+    Enum.each(modules, fn name -> :ok = ModuleRegistry.register(registry, name, Echo) end)
+    %{registry: registry, _verb_context: %{}}
+  end
 
   test "compiles a rule to a module with handle_event/2" do
     input = """
@@ -100,7 +119,12 @@ defmodule Anemos.CompilerTest do
     assert [%{type: :log, value: "hello"}] = ops
   end
 
-  test "let binding with command produces command operation" do
+  # A-56. This test previously asserted the defect: `let x = [MOD::verb]`
+  # emitted the call as an operation *and* bound an inert descriptor of it,
+  # so `@x` was the descriptor and the verb's real answer was thrown into
+  # the top-level results list. Now the call is made once, during
+  # evaluation, and `@x` is what it answered.
+  test "a let-bound command binds the verb's return value and emits no command op" do
     input = """
     rule let-cmd-rule {
       when TEST_EVENT {
@@ -113,12 +137,87 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
-    # let with a command value stores the command op; log resolves $title to it
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    assert [%{type: :log, value: "title()"}] = ops
+  end
+
+  test "a command in expression position is invoked once per occurrence" do
+    input = """
+    rule twice {
+      when TEST_EVENT {
+        log [PDF::title]
+        log [PDF::title]
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    assert [%{type: :log, value: "title()"}, %{type: :log, value: "title()"}] = ops
+  end
+
+  test "a nested command is invoked and its value passed as the outer argument" do
+    input = """
+    rule nested {
+      when TEST_EVENT {
+        [DEVICE::set "k" [PDF::title]]
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    # The outer call stays a statement-position operation; only the inner one
+    # was in value position, and it was resolved before the op was built.
+    assert [%{type: :command, module: "DEVICE", verb: "set", args: ["k", "title()"]}] = ops
+  end
+
+  test "a guard comparing a command's value can be true" do
+    input = """
+    rule guarded {
+      when TEST_EVENT {
+        if [PDF::title] eq "title()" {
+          log "matched"
+        }
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    assert [%{type: :log, value: "matched"}] = ops
+  end
+
+  # The failure semantics: not nil, and not silent. See the "When the verb
+  # fails" section of the compiler moduledoc.
+  test "an unresolvable command in expression position aborts the body with an error op" do
+    input = """
+    rule failing {
+      when TEST_EVENT {
+        log "before"
+        let x = [NOSUCH::verb]
+        log "after"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context([]), %{})
+
     assert [
-             %{type: :command, module: "PDF", verb: "title", args: []},
-             %{type: :log, value: %{type: :command, module: "PDF", verb: "title", args: []}}
+             %{type: :log, value: "before"},
+             %{type: :verb_error, error: %Comn.Errors.ErrorStruct{} = error}
            ] = ops
+
+    assert error.code == "anemos.runtime/unknown_module"
   end
 
   test "emit operations are compiled" do
@@ -133,10 +232,9 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["EVENT"]), %{})
 
-    assert [%{type: :emit, value: %{type: :command, module: "EVENT", verb: "fire", args: []}}] =
-             ops
+    assert [%{type: :emit, value: "fire()"}] = ops
   end
 
   test "emit with type and label" do
@@ -151,7 +249,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["EVENT"]), %{})
     assert [%{type: :emit, emit_type: :state, label: "my.label"}] = ops
   end
 

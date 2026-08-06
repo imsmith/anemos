@@ -40,6 +40,8 @@ than removed.
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | Open — decision |
+| A-72 | MEDIUM | `log` of any non-`String.Chars` value crashed the dispatcher | **Fixed** |
+| A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | Open |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
@@ -2199,6 +2201,67 @@ synthesises a name — can reintroduce the ambiguity.
 Distinguish author-written names from generated ones, and say which happened. A
 `CompiledRule` field marking a generated name would do it, and would also let the error
 path stop showing users a name they never wrote (`"Rule at_AT_08_00 raised: ..."`).
+
+---
+
+## A-72 — `log` of any non-`String.Chars` value crashed the dispatcher
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · **Fixed**
+
+`Logger.info("[anemos] #{value}")` in the `:log` clause raised whenever the value had no
+`String.Chars` implementation:
+
+```text
+** (Protocol.UndefinedError) protocol String.Chars not implemented for Map
+Got value: %{args: ["/papers/a.pdf"], module: "FILE", verb: "extension", type: :command}
+    (anemos 0.1.0) lib/anemos/runtime/dispatcher.ex:956
+```
+
+Reachable before A-56 — `log ?payload` on any structured event payload does it — and A-56
+makes it ordinary, since a verb may now return a map into a binding that is later logged.
+
+Fixed with a `log_text/1` that tries `to_string/1` first and falls back to `inspect/1`.
+**`to_string/1` first, and only first, is load-bearing:** that is the branch `Anemos.Secret`'s
+`String.Chars` redaction rides on, and the A-52 reasoning above the clause depends on it. A
+map has no `String.Chars` impl, so it cannot be a `Secret`, so the fallback cannot disclose
+anything the old code would have redacted.
+
+---
+
+## A-73 — `AND` over non-boolean operands silently discards the left one
+
+**Filed:** 2026-08-06 · **Severity:** HIGH
+
+`eval_condition` on `%AST.BinaryOp{op: :and}` computes `l && r`, which in Elixir **answers
+`r`** whenever `l` is truthy. For boolean operands that is correct. For anything else the
+left operand is evaluated and thrown away.
+
+`priv/examples/ddns.rule`:
+
+```text
+let update = (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)
+```
+
+Both triple patterns are built. The `AND` discards the A record entirely, so only the AAAA
+triple reaches the emit. **The example reads as "update both records" and updates one.**
+
+### Why it surfaced now
+
+It predates A-56 and was invisible because the old test read the addresses out of the
+results list — where they landed loose as a byproduct of the A-56 defect — rather than out
+of the payload the rule actually built. Fixing A-56 moved the values into the payload, where
+only one of them turns out to be.
+
+### Family
+
+This is A-46's shape: a boolean operator applied to operands that are not booleans,
+answering something the author cannot have meant, with no diagnostic. A-46 was fixed by
+giving the language real boolean literals; this needs `and`/`or` to either reject
+non-boolean operands or define a combining semantics for them — which, for triple patterns
+specifically, probably means "assert both", not "answer one".
+
+Note `and`/`or` currently evaluate **both** operands before combining, so this is a discard
+rather than a short-circuit. Making them lazy would be a separate language decision.
 
 ---
 

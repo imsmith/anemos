@@ -38,6 +38,8 @@ than removed.
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | In progress |
 | A-68 | MEDIUM | A secret-redaction assertion passes vacuously | In progress |
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
+| A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
+| A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | Open — decision |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |

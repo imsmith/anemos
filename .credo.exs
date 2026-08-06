@@ -160,7 +160,15 @@
           {Credo.Check.Warning.ExpensiveEmptyEnumCheck, []},
           {Credo.Check.Warning.IExPry, []},
           {Credo.Check.Warning.IoInspect, []},
-          {Credo.Check.Warning.MissedMetadataKeyInLoggerConfig, []},
+          # This check earned its keep: it caught A-68, a secret-redaction
+          # assertion that passed vacuously because :secret was never rendered.
+          # Now that the test captures with an explicit `metadata: [:secret]`,
+          # the finding is a false positive — the check reads global Logger
+          # config and cannot see per-capture options. Verified by mutation:
+          # breaking the expected string fails the test against real output
+          # ("secret=[REDACTED] [error] in metadata"), so the metadata is
+          # genuinely rendered. Ignore the key, keep the check for other keys.
+          {Credo.Check.Warning.MissedMetadataKeyInLoggerConfig, [metadata_keys: [:secret]]},
           {Credo.Check.Warning.OperationOnSameValues, []},
           {Credo.Check.Warning.OperationWithConstantResult, []},
           {Credo.Check.Warning.RaiseInsideRescue, []},

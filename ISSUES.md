@@ -31,7 +31,7 @@ than removed.
 | A-13 | MEDIUM | Demand fails open on unknown capabilities | Fixed — pending suite verification |
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | Fixed — pending suite verification |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | Open |
-| A-16 | MEDIUM | `nextrule`/`nextevent` discard state | Open |
+| A-16 | MEDIUM | `nextrule`/`nextevent` discard state | Open — fix jointly with A-39, same clause |
 | A-17 | MEDIUM | Sibling `when` block destroys armed dwell state | Open |
 | A-18 | MEDIUM | `Anemos.run/2` leaks 4 processes per call | **Fixed** — `Runtime.Standalone` with explicit teardown; 2 regression tests |
 | A-19 | MEDIUM | Same-time `at` blocks collide and leak timers | Open |
@@ -54,6 +54,11 @@ than removed.
 | A-36 | LOW | Spec/test drift on transducer naming | Open |
 | A-37 | LOW | `compiler.ex:453` type confusion latent in dwell duration | Open |
 | A-38 | LOW | DST exposure is wider than `scheduler.ex` — `nld.ex` too | Open |
+| A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | Open |
+| A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
+| A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
+| A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
+| A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | Open |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -1175,6 +1180,113 @@ Related latent item: `handle_info({:fire_recurring, ...})` → `schedule_next_oc
 still returns a bare timer ref rather than `{:ok, ref}`. It is only reachable for
 `{:time, {h, m}}`, which is always armable, so it is safe today — but it will need the
 same treatment when recurrence widens beyond `{:time, ...}` (see A-20).
+
+---
+
+## A-39 — `nextrule` bypasses context filtering and the dwell state machine
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · found during the A-01 supervision work
+
+### Symptom
+
+`execute_op(%{type: :nextrule, ...})` in `lib/anemos/runtime/dispatcher.ex` filters
+`state.rules` on `rule.name == target` and invokes the handler directly. It does not route
+through `dispatch_to_rules/4`, so it skips both of the checks that function applies:
+
+1. `context_matches?/2` — **a context-scoped rule invoked via `nextrule` fires outside its
+   context.**
+2. the `dwell_duration_ms` branch — a rule declared `when EV for 10min` fires immediately
+   instead of arming its timer.
+
+### Why this is a security finding, not a correctness one
+
+Under the multi-tenant trust decision (2026-08-06), `context` is a security boundary. A-06
+covers the two ways `context_matches?/2` itself fails open; this is a third route that
+does not consult it at all. Any policy that can name a rule can invoke it outside its
+declared context, which defeats the boundary even after A-06 is fixed.
+
+A-06 and A-39 must be fixed together. Fixing `context_matches?/2` alone leaves this path
+open.
+
+### What should change
+
+Route `nextrule` through `dispatch_to_rules/4` rather than reimplementing a subset of it.
+That also fixes A-16's state loss on the same clause, and removes the synthetic
+`"nextrule:#{target}"` event name that no subscription can match.
+
+---
+
+## A-40 — Persistent `set` bindings destroyed by a dispatcher restart
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · found during the A-01 supervision work
+
+`lib/anemos/runtime/dispatcher.ex:128` initialises `rule_bindings: %{}`. `PolicyStore`
+restores rules, conditions, capabilities and the channel connector on restart, but not
+accumulated `$mutable` state.
+
+A rule counting with `set $n` silently restarts from its initial value after any dispatcher
+crash. No error, no log line.
+
+This is the same class as A-01 — derived state with no durable backing — narrowed rather
+than eliminated by the supervision work. The README documents `$` as surviving "across
+firings" without stating that it does not survive a restart.
+
+---
+
+## A-41 — Armed dwell timers vanish on restart and never re-arm
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · found during the A-01 supervision work
+
+Dwell timers are `Process.send_after(self(), {:dwell_fire, ...}, ms)` in the dispatcher
+process (`dispatcher.ex:~660`). On restart every armed timer is gone.
+
+Arming only happens on a subsequent matching event, so a `for <duration>` rule whose signal
+is **already steady-true** can wait forever — the condition that would arm it has already
+passed. `handle_info({:dwell_fire, ...})` drops non-matching fires silently by design, so
+nothing surfaces.
+
+Interacts with A-17 (sibling `when` blocks wiping dwell state) and A-42: all three are the
+dwell state machine's state having no durable home.
+
+---
+
+## A-42 — Condition state resets to false on restart, causing a double-fire
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · **introduced by the A-01 fix, disclosed by its author**
+
+`StoreSupervisor.put_condition/3` replaces rather than reuses a condition server, because
+the `on_transition` callback closes over the dispatcher pid and a restarted dispatcher must
+install callbacks pointing at itself. The consequence: a condition that was `true` reads
+`false` after a dispatcher restart.
+
+Since conditions broadcast on `false → true`, the next true evaluation **re-broadcasts**
+`CONDITION_<name>`, firing rules that already ran. For a policy whose rules are not
+idempotent, that is a duplicate side effect.
+
+This is a real regression against the pre-fix behaviour in one narrow respect: before the
+fix, a condition server crash killed the dispatcher outright, so there was no
+"restarted dispatcher observing a stale condition" state to get wrong. The trade is
+strongly favourable — total silent policy loss for a recoverable double-fire — but it is a
+trade, and it is recorded here rather than buried.
+
+Properly fixing it requires the deferred event-state model (level-vs-edge events, paired
+event dwell cancellation), not a supervision change.
+
+---
+
+## A-43 — `ModuleRegistry` registrations have no durable backing
+
+**Filed:** 2026-08-06 · **Severity:** MEDIUM · found during the A-01 supervision work
+
+`lib/anemos/runtime/module_registry.ex` is an `Agent` with no durable backing. If it
+crashes, every `Anemos.Runtime.register/3` is lost and `[MOD::verb]` returns
+`anemos.runtime/unknown_module` forever.
+
+Identical in shape to the `PolicyStore` defect that A-01 fixed, one supervisor child over.
+`:rest_for_one` restarts the dispatcher behind it but cannot invent the registrations back
+— only the host application knows them.
+
+Note this compounds A-10: the registry is both hijackable and non-durable.
 
 ---
 

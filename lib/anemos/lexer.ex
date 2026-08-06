@@ -21,7 +21,28 @@ defmodule Anemos.Lexer do
     matches_glob matches_regex
   )a
 
+  # Order is significant: the token combinator tries these in sequence, so a
+  # shorter unit listed before a longer one wins the prefix.
   @duration_units ~w(ms s min h d days minutes seconds hours)
+
+  @weekdays ~w(monday tuesday wednesday thursday friday saturday sunday)
+
+  @demand_flags ~w(required optional sufficient requisite)
+
+  # Source text is untrusted: `Anemos.Runtime.load/2` is called at runtime with
+  # arbitrary policy. Atoms are never garbage collected, and exhausting the atom
+  # table aborts the whole node rather than crashing a supervised process — so no
+  # atom may be derived from source text outside a closed, compile-time set.
+  #
+  # These maps ARE those closed sets. Lookup is by binary; the atom on the value
+  # side already exists because the map itself is built at compile time. A miss
+  # means the text is not a member, and the caller must treat it as an
+  # identifier or a lexer error — never as a new atom.
+  @keyword_atoms Map.new(@keywords, &{Atom.to_string(&1), &1})
+  @word_operator_atoms Map.new(@word_operators, &{Atom.to_string(&1), &1})
+  @duration_unit_atoms Map.new(@duration_units, &{&1, String.to_atom(&1)})
+  @weekday_atoms Map.new(@weekdays, &{&1, String.to_atom(&1)})
+  @demand_flag_atoms Map.new(@demand_flags, &{&1, String.to_atom(&1)})
 
   # --- Primitives ---
 
@@ -225,12 +246,7 @@ defmodule Anemos.Lexer do
   # Demand flags: --required, --optional, --sufficient, --requisite
   demand_flag =
     string("--")
-    |> choice([
-      string("required"),
-      string("optional"),
-      string("sufficient"),
-      string("requisite")
-    ])
+    |> choice(Enum.map(@demand_flags, &string/1))
     |> tag(:demand_flag_raw)
     |> label("demand flag")
 
@@ -391,7 +407,14 @@ defmodule Anemos.Lexer do
   def tokenize(input) do
     case raw_tokens(input) do
       {:ok, raw, "", _, _, _} ->
-        {:ok, postprocess(raw)}
+        # Post-processing rejects members that fall outside a closed set (see
+        # @weekday_atoms). Those clauses are buried in a 20-clause fold, so they
+        # signal by throw and are caught here — the throw never escapes tokenize/1.
+        try do
+          {:ok, postprocess(raw)}
+        catch
+          {:lex_error, msg, line} -> {:error, msg, line, 1}
+        end
 
       {:ok, _raw, rest, _context, {line, _}, col} ->
         {:error, "Unexpected input: #{inspect(String.slice(rest, 0, 20))}", line, col}
@@ -429,7 +452,9 @@ defmodule Anemos.Lexer do
 
   # Duration
   defp build_tokens([{:duration_raw, [amount, unit]} | rest], line, acc) do
-    token = {:duration, [line: line], {amount, String.to_atom(unit)}}
+    # The combinator only ever emits a member of @duration_units, so a miss here
+    # is a broken invariant in this module, not bad input.
+    token = {:duration, [line: line], {amount, Map.fetch!(@duration_unit_atoms, unit)}}
     build_tokens(rest, line, [token | acc])
   end
 
@@ -467,9 +492,17 @@ defmodule Anemos.Lexer do
     build_tokens(rest, line, [{:nld_literal, [line: line], text} | acc])
   end
 
-  # DAY_weekday prefixed day
+  # DAY_weekday prefixed day. The combinator accepts any lowercase run, but only
+  # the seven weekdays are meaningful downstream (Scheduler.day_to_number/1), so
+  # anything else is rejected here rather than interned and crashed on later.
   defp build_tokens([{:day_prefix_raw, [_, day_name]} | rest], line, acc) do
-    build_tokens(rest, line, [{:day_literal, [line: line], String.to_atom(day_name)} | acc])
+    case Map.fetch(@weekday_atoms, day_name) do
+      {:ok, day} ->
+        build_tokens(rest, line, [{:day_literal, [line: line], day} | acc])
+
+      :error ->
+        throw({:lex_error, "Unknown day name #{inspect(day_name)} in DAY_ literal", line})
+    end
   end
 
   # IPv4 address
@@ -496,18 +529,28 @@ defmodule Anemos.Lexer do
 
   # Demand flag
   defp build_tokens([{:demand_flag_raw, [_, value]} | rest], line, acc) do
-    build_tokens(rest, line, [{:demand_flag, [line: line], String.to_atom(value)} | acc])
+    # Combinator-bounded to @demand_flags; a miss is a broken module invariant.
+    flag = Map.fetch!(@demand_flag_atoms, value)
+    build_tokens(rest, line, [{:demand_flag, [line: line], flag} | acc])
   end
 
-  # Identifier — check if it's a keyword or word operator
+  # Identifier — check if it's a keyword or word operator.
+  #
+  # The membership test is on the BINARY. Converting first and testing second
+  # would intern every identifier in the source as a side effect of the test,
+  # which is precisely the unbounded-atom hazard. An identifier that matches
+  # nothing stays a binary and never reaches the atom table.
   defp build_tokens([{:identifier_raw, [value]} | rest], line, acc) do
-    atom = String.to_atom(value)
-
     token =
-      cond do
-        atom in @keywords -> {:keyword, [line: line], atom}
-        atom in @word_operators -> {:word_operator, [line: line], atom}
-        true -> {:identifier, [line: line], value}
+      case Map.fetch(@keyword_atoms, value) do
+        {:ok, keyword} ->
+          {:keyword, [line: line], keyword}
+
+        :error ->
+          case Map.fetch(@word_operator_atoms, value) do
+            {:ok, operator} -> {:word_operator, [line: line], operator}
+            :error -> {:identifier, [line: line], value}
+          end
       end
 
     build_tokens(rest, line, [token | acc])

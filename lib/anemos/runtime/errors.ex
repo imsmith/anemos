@@ -17,4 +17,10 @@ defmodule Anemos.Runtime.Errors do
 
   register_error "anemos.runtime/unknown_verb", :validation,
     message: "Verb not found on module"
+
+  register_error "anemos.runtime/event_recursion_limit", :validation,
+    message: "Event recursion limit exceeded"
+
+  register_error "anemos.runtime/unknown_capability", :validation,
+    message: "Capability not found in registry"
 end

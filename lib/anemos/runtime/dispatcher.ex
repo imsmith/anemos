@@ -3,11 +3,21 @@ defmodule Anemos.Runtime.Dispatcher do
   GenServer holding compiled rules indexed by subscription.
 
   Dispatches events to matching rules, executes resulting operations
-  via the ModuleRegistry. Also manages ConditionServer instances and
-  routes synthetic `CONDITION_<name>` events when conditions transition.
+  via the ModuleRegistry. Also routes synthetic `CONDITION_<name>` events
+  when conditions transition.
 
   Handled operation types: `:command`, `:log`, `:emit`, `:demand`,
   `:assert_triple`, `:triple_query`, `:nextevent`, `:nextrule`.
+
+  ## Owns no process lifecycles
+
+  The dispatcher `start_link`s nothing. Condition servers, capability
+  servers, the triple store, the data store and the subscribable registry
+  all live under `Anemos.Runtime.StoreSupervisor`, and are resolved by
+  child id at the head of every callback (`refresh_stores/1`). The
+  dispatcher's own state is a *derived* view, rebuildable at any moment
+  from `Anemos.Runtime.PolicyStore` — which is what `init/1` does, so that
+  a crash costs a dispatch cycle rather than every loaded policy.
   """
 
   use GenServer
@@ -15,7 +25,15 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @behaviour Comn
 
-  alias Anemos.Runtime.{CapabilityServer, ConditionServer, DataStore, ModuleRegistry, SubscribableRegistry, TripleStore}
+  alias Anemos.Runtime.{DataStore, ModuleRegistry, PolicyStore, StoreSupervisor, SubscribableRegistry, TripleStore}
+  alias Anemos.Runtime.ConditionServer
+
+  # Ceiling on re-entrant event dispatch (`emit ... as`, `nextevent`,
+  # `nextrule`). Matches @while_limit in Anemos.Compiler: a policy author
+  # gets one bound to reason about, not two. Without it, a two-rule cycle
+  # spins the dispatcher at 100% CPU until the VM dies, and the caller sees
+  # only a GenServer timeout.
+  @max_event_depth 10_000
 
   # --- Client API ---
 
@@ -24,23 +42,27 @@ defmodule Anemos.Runtime.Dispatcher do
 
   ## Options
 
-    * `:rules` — list of `%Anemos.CompiledRule{}` structs (required)
-    * `:registry` — pid of a `ModuleRegistry` (required)
-    * `:conditions` — list of `%Anemos.CompiledCondition{}` structs (optional)
-    * `:capabilities` — list of `%Anemos.CompiledCapability{}` structs (optional)
-    * `:subscribable_registry` — pid of a `SubscribableRegistry` (optional, created if omitted)
+    * `:registry` — pid or name of a `ModuleRegistry` (required)
+    * `:store_supervisor` — pid or name of a `StoreSupervisor` (required)
+    * `:policy_store` — pid or name of a `PolicyStore` (required)
+    * `:rule_supervisor` — pid or name of a `RuleSupervisor` (optional)
     * `:name` — process registration name (optional)
+
+  Rules, conditions and capabilities are *not* passed here. They are read
+  from the policy store, which is the only thing that survives a restart.
+  Use `Anemos.Runtime.Standalone.start_link/1` to wire up a dispatcher and
+  its stores outside a full `Anemos.Runtime` tree.
   """
   def start_link(opts) do
-    rules = Keyword.fetch!(opts, :rules)
-    registry = Keyword.fetch!(opts, :registry)
-    conditions = Keyword.get(opts, :conditions, [])
-    capabilities = Keyword.get(opts, :capabilities, [])
-    channel_connector = Keyword.get(opts, :channel_connector, Anemos.Channel.Logger)
-    subscribable_registry = Keyword.get(opts, :subscribable_registry)
     name = Keyword.get(opts, :name)
-    GenServer.start_link(__MODULE__, {rules, registry, conditions, capabilities, channel_connector, subscribable_registry}, name: name)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
+
+  @doc """
+  Returns the store supervisor and policy store this dispatcher reads from.
+  """
+  @spec topology(pid() | atom()) :: %{store_supervisor: pid(), policy_store: pid()}
+  def topology(dispatcher), do: GenServer.call(dispatcher, :topology)
 
   @doc """
   Dispatches an event to all matching rules and conditions.
@@ -89,62 +111,53 @@ defmodule Anemos.Runtime.Dispatcher do
   # --- Server callbacks ---
 
   @impl true
-  def init({rules, registry, compiled_conditions, compiled_capabilities, channel_connector, subscribable_registry}) do
-    index = build_index(rules)
-    dispatcher_pid = self()
+  def init(opts) do
+    state = %{
+      rules: [],
+      index: %{},
+      registry: Keyword.fetch!(opts, :registry),
+      store_supervisor: Keyword.fetch!(opts, :store_supervisor),
+      policy_store: Keyword.fetch!(opts, :policy_store),
+      rule_supervisor: Keyword.get(opts, :rule_supervisor),
+      condition_servers: %{},
+      capability_servers: %{},
+      triple_store: nil,
+      data_store: nil,
+      subscribable_registry: nil,
+      channel_connector: Anemos.Channel.Logger,
+      rule_bindings: %{}
+    }
 
-    condition_servers =
-      Map.new(compiled_conditions, fn cond_spec ->
-        {:ok, pid} =
-          ConditionServer.start_link(
-            name_str: cond_spec.name,
-            subscriptions: cond_spec.subscriptions,
-            evaluator: cond_spec.evaluator,
-            side_effects: cond_spec.side_effects,
-            side_effect_handler: cond_spec.side_effect_handler,
-            on_transition: fn name ->
-              send(dispatcher_pid, {:condition_transition, name})
-            end
-          )
+    policy_store = state.policy_store
 
-        {cond_spec.name, %{pid: pid, subscriptions: cond_spec.subscriptions}}
+    state =
+      %{state | channel_connector: PolicyStore.connector(policy_store)}
+      |> refresh_stores()
+
+    # Rebuild the derived view from the durable one. On a first start this
+    # is a no-op; on a restart it is the difference between the policy set
+    # firing and dispatch silently returning [].
+    #
+    # Replay failures are logged inside apply_compiled/2 and dropped here:
+    # there is no caller to return them to, and refusing to start over an
+    # inert data block would trade a degraded runtime for no runtime.
+    state =
+      Enum.reduce(PolicyStore.all(policy_store), state, fn compiled, st ->
+        {st, _failures} = apply_compiled(compiled, st)
+        st
       end)
 
-    capability_servers =
-      Map.new(compiled_capabilities, fn cap ->
-        {:ok, pid} =
-          CapabilityServer.start_link(
-            name_str: cap.name,
-            context: cap.context || "",
-            handler: cap.handler
-          )
+    {:ok, state}
+  end
 
-        {cap.name, pid}
-      end)
-
-    {:ok, triple_store} = TripleStore.start_link()
-    {:ok, data_store} = DataStore.start_link()
-
-    subscribable_registry =
-      subscribable_registry || elem(SubscribableRegistry.start_link(), 1)
-
-    {:ok,
-     %{
-       rules: rules,
-       index: index,
-       registry: registry,
-       condition_servers: condition_servers,
-       capability_servers: capability_servers,
-       triple_store: triple_store,
-       data_store: data_store,
-       channel_connector: channel_connector,
-       subscribable_registry: subscribable_registry,
-       rule_bindings: %{}
-     }}
+  @impl true
+  def handle_call(:topology, _from, state) do
+    {:reply, %{store_supervisor: state.store_supervisor, policy_store: state.policy_store}, state}
   end
 
   @impl true
   def handle_call({:dispatch, event_name, context}, _from, state) do
+    state = refresh_stores(state)
     comn_ctx = build_comn_context(event_name, context)
 
     {results, state} =
@@ -164,12 +177,12 @@ defmodule Anemos.Runtime.Dispatcher do
         synthetic_events = collect_transitions()
 
         # Dispatch original event to matching rules
-        {results, state} = dispatch_to_rules(event_name, context, state)
+        {results, state} = dispatch_to_rules(event_name, context, state, 0)
 
         # Dispatch synthetic CONDITION_<name> events to matching rules
         {synthetic_results, state} =
           Enum.reduce(synthetic_events, {[], state}, fn cond_name, {acc, st} ->
-            {res, st} = dispatch_to_rules("CONDITION_#{cond_name}", context, st)
+            {res, st} = dispatch_to_rules("CONDITION_#{cond_name}", context, st, 0)
             {acc ++ res, st}
           end)
 
@@ -181,90 +194,27 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def handle_call({:load, compiled}, _from, state) do
-    dispatcher_pid = self()
+    state = refresh_stores(state)
 
-    # Start new condition servers
-    new_condition_servers =
-      Map.new(compiled.conditions, fn cond_spec ->
-        {:ok, pid} =
-          ConditionServer.start_link(
-            name_str: cond_spec.name,
-            subscriptions: cond_spec.subscriptions,
-            evaluator: cond_spec.evaluator,
-            side_effects: cond_spec.side_effects,
-            side_effect_handler: cond_spec.side_effect_handler,
-            on_transition: fn name ->
-              send(dispatcher_pid, {:condition_transition, name})
-            end
-          )
+    # Record before applying: the policy store is the source of truth, and a
+    # crash midway through apply_compiled/2 must still leave the policy
+    # recoverable on restart.
+    :ok = PolicyStore.put(state.policy_store, compiled)
 
-        {cond_spec.name, %{pid: pid, subscriptions: cond_spec.subscriptions}}
-      end)
+    {state, failures} = apply_compiled(compiled, state)
 
-    # Start new capability servers
-    new_capability_servers =
-      Map.new(compiled.capabilities, fn cap ->
-        {:ok, pid} =
-          CapabilityServer.start_link(
-            name_str: cap.name,
-            context: cap.context || "",
-            handler: cap.handler
-          )
-
-        {cap.name, pid}
-      end)
-
-    # Register data blocks (static and dynamic)
-    Enum.each(Map.get(compiled, :data_blocks, []), fn data ->
-      if data.dataset do
-        DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
-          source: data.source)
-      end
-
-      case data.dynamic do
-        {{:subscribe, protocol, uri}, _periodic} ->
-          case SubscribableRegistry.lookup(state.subscribable_registry, protocol) do
-            {:ok, handler} ->
-              scope = data.scope || :global
-              DataStore.register(state.data_store, data.name, scope, MapSet.new())
-
-              callback = fn new_data ->
-                dataset = if is_list(new_data), do: MapSet.new(new_data), else: new_data
-                DataStore.update(state.data_store, data.name, scope, dataset)
-              end
-
-              case handler.subscribe(protocol, uri, callback) do
-                {:ok, _ref} ->
-                  Logger.debug("Started subscription for data block '#{data.name}' via #{protocol}")
-                {:error, reason} ->
-                  Logger.warning("Failed to subscribe data block '#{data.name}': #{inspect(reason)}")
-              end
-
-            :error ->
-              Logger.warning("No subscribable handler registered for protocol '#{protocol}' (data block '#{data.name}')")
-          end
-        _ -> :ok
-      end
-    end)
-
-    # Merge into existing state
-    merged_rules = state.rules ++ compiled.rules
-    merged_conditions = Map.merge(state.condition_servers, new_condition_servers)
-    merged_capabilities = Map.merge(state.capability_servers, new_capability_servers)
-
-    new_state = %{
-      state
-      | rules: merged_rules,
-        index: build_index(merged_rules),
-        condition_servers: merged_conditions,
-        capability_servers: merged_capabilities
-    }
-
-    {:reply, :ok, new_state}
+    # Same convention as Scheduler.schedule/2: :ok means every declaration
+    # in this result is live, {:error, failures} means the policy loaded but
+    # the listed declarations are inert. Previously these were Logger
+    # warnings and nothing else, so the caller could not tell.
+    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
+    {:reply, reply, state}
   end
 
   @impl true
   def handle_call({:condition_state, name}, _from, state) do
+    state = refresh_stores(state)
+
     case Map.get(state.condition_servers, name) do
       %{pid: pid} -> {:reply, ConditionServer.get_state(pid), state}
       nil -> {:reply, nil, state}
@@ -273,23 +223,128 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def handle_call({:data_member?, name, value}, _from, state) do
+    state = refresh_stores(state)
     result = DataStore.member?(state.data_store, name, value)
     {:reply, result, state}
   end
 
   @impl true
   def handle_call({:set_connector, connector}, _from, state) do
+    :ok = PolicyStore.put_connector(state.policy_store, connector)
     {:reply, :ok, %{state | channel_connector: connector}}
   end
 
   @impl true
   def handle_call({:register_subscribable, protocol, handler_module}, _from, state) do
+    state = refresh_stores(state)
     :ok = SubscribableRegistry.register(state.subscribable_registry, protocol, handler_module)
     {:reply, :ok, state}
   end
 
+  # Turns one compilation result into running processes and index entries.
+  # Called both from {:load, _} and from init/1 when replaying the policy
+  # store, so a rebuilt dispatcher is wired identically to a freshly loaded
+  # one.
+  defp apply_compiled(compiled, state) do
+    dispatcher_pid = self()
+
+    # Condition and capability servers are (re)started under the store
+    # supervisor, not linked here. put_condition/3 replaces any existing
+    # server for the name so that a restarted dispatcher installs
+    # transition callbacks pointing at itself.
+    Enum.each(compiled.conditions, fn cond_spec ->
+      {:ok, _pid} =
+        StoreSupervisor.put_condition(state.store_supervisor, cond_spec, fn name ->
+          send(dispatcher_pid, {:condition_transition, name})
+        end)
+    end)
+
+    Enum.each(compiled.capabilities, fn cap ->
+      {:ok, _pid} = StoreSupervisor.put_capability(state.store_supervisor, cap)
+    end)
+
+    # Register data blocks (static and dynamic). A data block whose
+    # subscription never starts is inert: the block exists and every
+    # memberof() against it answers false, forever. That is a load failure
+    # the author has to hear about, not a log line.
+    failures =
+      Enum.reduce(Map.get(compiled, :data_blocks, []), [], fn data, failures ->
+        if data.dataset do
+          DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
+            source: data.source)
+        end
+
+        case data.dynamic do
+          {{:subscribe, protocol, uri}, _periodic} ->
+            subscribe_data_block(data, protocol, uri, state, failures)
+
+          _ ->
+            failures
+        end
+      end)
+
+    merged_rules = state.rules ++ compiled.rules
+
+    # Condition/capability pids are never cached in state — refresh_stores/1
+    # reads them from the supervisor so a restarted server is picked up.
+    state = refresh_stores(%{state | rules: merged_rules, index: build_index(merged_rules)})
+
+    {state, failures}
+  end
+
+  defp subscribe_data_block(data, protocol, uri, state, failures) do
+    case SubscribableRegistry.lookup(state.subscribable_registry, protocol) do
+      {:ok, handler} ->
+        scope = data.scope || :global
+        DataStore.register(state.data_store, data.name, scope, MapSet.new())
+
+        callback = fn new_data ->
+          dataset = if is_list(new_data), do: MapSet.new(new_data), else: new_data
+          DataStore.update(state.data_store, data.name, scope, dataset)
+        end
+
+        case handler.subscribe(protocol, uri, callback) do
+          {:ok, _ref} ->
+            Logger.debug("Started subscription for data block '#{data.name}' via #{protocol}")
+            failures
+
+          {:error, reason} ->
+            Logger.warning(
+              "data block '#{data.name}' not subscribed: #{inspect(reason)} — it will never update"
+            )
+
+            [{:data_block, data.name, {:subscribe_failed, reason}} | failures]
+        end
+
+      :error ->
+        Logger.warning(
+          "data block '#{data.name}' names protocol '#{protocol}', which has no registered " <>
+            "handler — it will never update"
+        )
+
+        [{:data_block, data.name, {:no_subscribable_handler, protocol}} | failures]
+    end
+  end
+
+  # Resolves every supervised child by id, once per callback. Cheaper than a
+  # monitor-and-invalidate scheme and, unlike a cached pid, cannot hand a
+  # dead process to a rule body mid-dispatch.
+  defp refresh_stores(state) do
+    snap = StoreSupervisor.snapshot(state.store_supervisor)
+
+    %{
+      state
+      | triple_store: snap.triple_store,
+        data_store: snap.data_store,
+        subscribable_registry: snap.subscribable_registry,
+        condition_servers: Map.new(snap.conditions, fn {name, pid} -> {name, %{pid: pid}} end),
+        capability_servers: snap.capabilities
+    }
+  end
+
   @impl true
   def handle_info({:dwell_fire, rule_name, event_name}, state) do
+    state = refresh_stores(state)
     rule_state = Map.get(state.rule_bindings, rule_name, %{})
     dwell_key = {:dwell, event_name}
 
@@ -299,7 +354,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
         new_state =
           if rule do
-            {_results, st_after_run} = dispatch_immediate(rule, event_name, context, [], state)
+            {_results, st_after_run} = dispatch_immediate(rule, event_name, context, [], state, 0)
 
             # dispatch_immediate writes handler persistent bindings back to
             # rule_bindings[rule_name], which may wipe dwell entries for other
@@ -380,7 +435,14 @@ defmodule Anemos.Runtime.Dispatcher do
 
   # --- Private ---
 
-  defp dispatch_to_rules(event_name, context, state) do
+  # Re-entrant dispatch is bounded, not truncated and not fatal: the caller
+  # gets a structured error naming the event it gave up on, and the
+  # dispatcher stays alive to serve the next request.
+  defp dispatch_to_rules(event_name, _context, state, depth) when depth >= @max_event_depth do
+    {[{:error, recursion_error(event_name)}], state}
+  end
+
+  defp dispatch_to_rules(event_name, context, state, depth) do
     matching = Map.get(state.index, event_name, [])
     event_context = Map.get(context, :context_path)
 
@@ -389,7 +451,7 @@ defmodule Anemos.Runtime.Dispatcher do
     |> Enum.reduce({[], state}, fn rule, {results_acc, st} ->
       case Map.get(rule, :dwell_duration_ms) do
         nil ->
-          dispatch_immediate(rule, event_name, context, results_acc, st)
+          dispatch_immediate(rule, event_name, context, results_acc, st, depth)
 
         ms when is_integer(ms) ->
           new_st = handle_dwell_event(rule, event_name, context, ms, st)
@@ -398,7 +460,15 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
-  defp dispatch_immediate(rule, event_name, context, results_acc, st) do
+  defp recursion_error(event_name) do
+    Comn.Errors.Registry.error!("anemos.runtime/event_recursion_limit",
+      message:
+        "Event recursion exceeded #{@max_event_depth} levels while dispatching '#{event_name}' — " <>
+          "check for a cycle between emit/nextevent/nextrule targets"
+    )
+  end
+
+  defp dispatch_immediate(rule, event_name, context, results_acc, st, depth) do
     persistent = Map.get(st.rule_bindings, rule.name, %{})
 
     # Pass DataStore pid and rule name through context so compiled closures
@@ -416,7 +486,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
         all_results =
           Enum.flat_map(ops, fn op ->
-            List.wrap(execute_op(op, exec_context, new_st))
+            List.wrap(execute_op(op, exec_context, new_st, depth))
           end)
 
         {normal_results, emit_events} =
@@ -427,7 +497,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
         {emit_results, new_st} =
           Enum.reduce(emit_events, {[], new_st}, fn {:emit_event, label, op}, {acc, s} ->
-            {sub_results, s} = dispatch_to_rules(label, context, s)
+            {sub_results, s} = dispatch_to_rules(label, context, s, depth + 1)
             {acc ++ [{:ok, op} | sub_results], s}
           end)
 
@@ -487,7 +557,7 @@ defmodule Anemos.Runtime.Dispatcher do
     end)
   end
 
-  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state) do
+  defp execute_op(%{type: :command, module: mod_name, verb: verb, args: args}, context, state, _depth) do
     case ModuleRegistry.lookup(state.registry, mod_name) do
       {:ok, mod} -> mod.handle_verb(verb, args, context)
       :error ->
@@ -496,12 +566,12 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  defp execute_op(%{type: :log, value: value} = op, _context, _state) do
+  defp execute_op(%{type: :log, value: value} = op, _context, _state, _depth) do
     Logger.info("[anemos] #{value}")
     {:ok, op}
   end
 
-  defp execute_op(%{type: :emit} = op, context, state) do
+  defp execute_op(%{type: :emit} = op, context, state, _depth) do
     # Publish to channel if destination is present
     if match?({:channel, _}, op[:destination]) do
       {:channel, channel_path} = op.destination
@@ -532,7 +602,7 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  defp execute_op(%{type: :demand, capability: cap_name} = op, context, state) do
+  defp execute_op(%{type: :demand, capability: cap_name} = op, context, state, _depth) do
     demands = [%{capability: cap_name, flag: Map.get(op, :flag, :requisite)}]
 
     case Anemos.Runtime.Demand.evaluate(demands, state.capability_servers, context) do
@@ -541,12 +611,12 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  defp execute_op(%{type: :assert_triple, subject: s, predicate: p, object: o} = op, _context, state) do
+  defp execute_op(%{type: :assert_triple, subject: s, predicate: p, object: o} = op, _context, state, _depth) do
     TripleStore.assert_triple(state.triple_store, s, p, o)
     {:ok, op}
   end
 
-  defp execute_op(%{type: :triple_query} = op, _context, state) do
+  defp execute_op(%{type: :triple_query} = op, _context, state, _depth) do
     s = triple_query_pattern(op.subject)
     p = triple_query_pattern(op.predicate)
     o = triple_query_pattern(op.object)
@@ -554,26 +624,34 @@ defmodule Anemos.Runtime.Dispatcher do
     {:ok, %{type: :triple_result, query: op, results: results}}
   end
 
-  defp execute_op(%{type: :nextevent, target: target}, context, state) do
-    {results, _state} = dispatch_to_rules(target, context, state)
+  defp execute_op(%{type: :nextevent, target: target}, context, state, depth) do
+    {results, _state} = dispatch_to_rules(target, context, state, depth + 1)
     results
   end
 
-  defp execute_op(%{type: :nextrule, target: target}, context, state) do
+  # `nextrule` re-enters a rule handler directly rather than going back
+  # through the index, so it needs its own ceiling — `rule a { nextrule a }`
+  # never reaches dispatch_to_rules/4 at all.
+  defp execute_op(%{type: :nextrule, target: target}, _context, _state, depth)
+       when depth >= @max_event_depth do
+    [{:error, recursion_error("nextrule:#{target}")}]
+  end
+
+  defp execute_op(%{type: :nextrule, target: target}, context, state, depth) do
     matching = Enum.filter(state.rules, fn rule -> rule.name == target end)
 
     Enum.flat_map(matching, fn rule ->
       persistent = Map.get(state.rule_bindings, rule.name, %{})
       case safe_handle(rule, "nextrule:#{target}", context, persistent) do
         {:ok, ops, _new_persistent} ->
-          Enum.flat_map(ops, fn op -> List.wrap(execute_op(op, context, state)) end)
+          Enum.flat_map(ops, fn op -> List.wrap(execute_op(op, context, state, depth + 1)) end)
         {:error, reason} ->
           [{:error, {:handler_crash, rule.name, reason}}]
       end
     end)
   end
 
-  defp execute_op(%{type: :register_data, data: data}, context, state) do
+  defp execute_op(%{type: :register_data, data: data}, context, state, _depth) do
     if data.dataset do
       scope = case data.scope do
         :local ->
@@ -593,7 +671,7 @@ defmodule Anemos.Runtime.Dispatcher do
     {:ok, %{type: :register_data, name: data.name}}
   end
 
-  defp execute_op(%{type: :register_query, query: query}, _context, _state) do
+  defp execute_op(%{type: :register_query, query: query}, _context, _state, _depth) do
     {:ok, %{type: :register_query, name: query.name}}
   end
 

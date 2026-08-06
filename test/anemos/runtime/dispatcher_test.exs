@@ -22,7 +22,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "TEST_EVENT")
     assert [{:ok, _}] = results
@@ -43,7 +43,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "UNRELATED_EVENT")
     assert results == []
@@ -70,7 +70,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
     ModuleRegistry.register(registry, "DEVICE", Anemos.TestModules.Device)
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: compiled_rules, registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: compiled_rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "SHARED_EVENT")
     assert length(results) == 2
@@ -95,7 +95,7 @@ defmodule Anemos.Runtime.DispatcherTest do
 
     {:ok, registry} = ModuleRegistry.start_link([])
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "LOG_EVENT")
     assert [{:ok, %{type: :log, value: "hello world"}}] = results
@@ -113,7 +113,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     log =
       ExUnit.CaptureLog.capture_log(fn ->
@@ -138,7 +138,7 @@ defmodule Anemos.Runtime.DispatcherTest do
 
     {:ok, registry} = ModuleRegistry.start_link([])
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "UNKNOWN_EVENT")
     assert [{:error, _}] = results
@@ -158,7 +158,7 @@ defmodule Anemos.Runtime.DispatcherTest do
 
     {:ok, registry} = ModuleRegistry.start_link([])
 
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "EMPTY_EVENT")
     assert [{:error, _}] = results
@@ -172,7 +172,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     }
 
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [crash_rule], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [crash_rule], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "CRASH_EVENT")
     assert [{:error, %Comn.Errors.ErrorStruct{code: "anemos.runtime/handler_crash"}}] = results
@@ -197,7 +197,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: [compiled_rule],
         registry: registry,
         conditions: [
@@ -228,7 +228,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: [compiled_rule],
         registry: registry,
         conditions: [
@@ -249,7 +249,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: [],
         registry: registry,
         conditions: [
@@ -284,7 +284,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: [compiled_rule],
         registry: registry,
         capabilities: [
@@ -319,7 +319,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     # Event with matching context fires the rule
     results = Dispatcher.dispatch(dispatcher, "SENSOR_MOTION_DETECTED", %{context_path: "garage.motion"})
@@ -343,7 +343,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "NETWORK_EVENT", %{context_path: "infra.networking.dns"})
     assert [{:ok, %{type: :log, value: "network"}}] = results
@@ -360,7 +360,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "GLOBAL_EVENT", %{context_path: "any.path"})
     assert [{:ok, %{type: :log, value: "global"}}] = results
@@ -380,14 +380,18 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: [compiled_rule],
         registry: registry,
         capabilities: []
       )
 
     results = Dispatcher.dispatch(dispatcher, "TEST_EVENT")
-    assert [{:error, {:unknown_capability, "nonexistent"}}] = results
+
+    assert [{:error, %Comn.Errors.ErrorStruct{code: "anemos.runtime/unknown_capability"} = err}] =
+             results
+
+    assert err.message =~ "nonexistent"
   end
 
   # --- Set persistence ---
@@ -405,7 +409,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     # First firing: set count = 1
     results1 = Dispatcher.dispatch(dispatcher, "TICK")
@@ -439,7 +443,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: rules}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: rules, registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: rules, registry: registry)
 
     # First: set the value
     Dispatcher.dispatch(dispatcher, "PING")
@@ -473,7 +477,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: rules}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: rules, registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
 
@@ -498,7 +502,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: [compiled], registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: [compiled], registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "SOURCE_EVENT")
     assert [{:ok, %{type: :emit}}] = results
@@ -525,7 +529,7 @@ defmodule Anemos.Runtime.DispatcherTest do
     {:ok, compiled} = Anemos.Compiler.compile(ast)
 
     {:ok, dispatcher} =
-      Anemos.Runtime.Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry
       )

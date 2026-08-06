@@ -16,6 +16,18 @@ defmodule Anemos.Runtime.ErrorsTest do
       assert "anemos.runtime/handler_crash" in codes
       assert "anemos.runtime/unknown_module" in codes
       assert "anemos.runtime/unknown_verb" in codes
+      assert "anemos.runtime/unknown_capability" in codes
+    end
+  end
+
+  describe "unknown_capability error" do
+    test "includes the capability name in message" do
+      demands = [%{capability: "ghost-cap", flag: :optional}]
+
+      assert {:error, %ErrorStruct{} = err} = Anemos.Runtime.Demand.evaluate(demands, %{}, %{})
+      assert err.code == "anemos.runtime/unknown_capability"
+      assert err.reason == "validation"
+      assert err.message =~ "ghost-cap"
     end
   end
 

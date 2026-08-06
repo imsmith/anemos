@@ -58,7 +58,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry
       )
@@ -100,7 +100,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry
       )
@@ -175,7 +175,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, registry} = Anemos.Runtime.ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Anemos.Runtime.Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry
       )
@@ -215,7 +215,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, compiled} = Compiler.compile(ast)
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry,
         subscribable_registry: sub_registry
@@ -253,14 +253,16 @@ defmodule Anemos.DataBlockTest do
     {:ok, compiled} = Compiler.compile(ast)
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry,
         subscribable_registry: sub_registry
       )
 
-    # Should not crash even though no handler is registered
-    :ok = Dispatcher.load(dispatcher, compiled)
+    # Should not crash even though no handler is registered, but the block
+    # is inert and load/2 must say so rather than reporting :ok.
+    assert {:error, [{:data_block, "missing-handler", {:no_subscribable_handler, "unknown-proto"}}]} =
+             Dispatcher.load(dispatcher, compiled)
 
     # Data block exists but is empty
     refute Dispatcher.data_member?(dispatcher, "missing-handler", "anything")
@@ -271,7 +273,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: [],
         registry: registry
       )
@@ -328,7 +330,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, registry} = Anemos.Runtime.ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Anemos.Runtime.Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry
       )
@@ -380,7 +382,7 @@ defmodule Anemos.DataBlockTest do
     {:ok, registry} = Anemos.Runtime.ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Anemos.Runtime.Dispatcher.start_link(
+      Anemos.Runtime.Standalone.start_link(
         rules: compiled.rules,
         registry: registry
       )

@@ -199,20 +199,26 @@ defmodule Anemos.RuntimeTest do
   end
 
   test "at interval fires through runtime" do
+    import ExUnit.CaptureLog
+
     start_supervised!({Anemos.Runtime, name: :test_at_rt})
 
-    Anemos.Runtime.load(:test_at_rt, """
-    rule tick {
-      at interval(50ms) {
-        log "tick"
-      }
-    }
-    """)
+    # 1s is the scheduler's interval floor; anything shorter is rejected
+    # outright rather than armed. See Anemos.Runtime.Scheduler.
+    log =
+      capture_log(fn ->
+        Anemos.Runtime.load(:test_at_rt, """
+        rule tick {
+          at interval(1s) {
+            log "tick"
+          }
+        }
+        """)
 
-    # Give the interval time to fire
-    Process.sleep(150)
+        Process.sleep(1_200)
+      end)
 
-    # Verify scheduler process is running
+    assert log =~ "tick"
     assert Process.alive?(Process.whereis(:"test_at_rt.scheduler"))
   end
 

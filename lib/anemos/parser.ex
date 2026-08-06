@@ -409,10 +409,9 @@ defmodule Anemos.Parser do
 
   # at <time_literal> every <recurrence> { ... }
   defp parse_at([{:time_literal, meta, time}, {:keyword, _, :every} | rest]) do
-    {recurrence, rest} = parse_recurrence(rest)
-    {guard, rest} = parse_optional_guard(rest)
-
-    with {:ok, rest} <- expect(rest, :lbrace),
+    with {:ok, recurrence, rest} <- parse_recurrence(rest),
+         {guard, rest} = parse_optional_guard(rest),
+         {:ok, rest} <- expect(rest, :lbrace),
          {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
          {:ok, rest} <- expect(rest, :rbrace) do
       {:ok,
@@ -477,13 +476,31 @@ defmodule Anemos.Parser do
     {:error, "Expected time spec after 'at' but got end of input"}
   end
 
-  # Recurrence: day | weekday | weekend | <day_name_identifier>
-  defp parse_recurrence([{:keyword, _, :day} | rest]), do: {:day, rest}
+  # Recurrence: day | weekday | weekend | <weekday_name>.
+  #
+  # Closed set. Source text is untrusted, and atoms are never collected, so an
+  # unrecognised name must become a parse error rather than a new atom — a parse
+  # failure is recoverable, atom-table exhaustion takes the node down. The set is
+  # also what Anemos.Runtime.Scheduler actually dispatches on; anything else used
+  # to parse cleanly and then crash the scheduler at fire time.
+  @recurrences Map.new(
+                 ~w(day weekday weekend monday tuesday wednesday thursday friday saturday sunday),
+                 &{&1, String.to_atom(&1)}
+               )
 
-  defp parse_recurrence([{:identifier, _, name} | rest]),
-    do: {String.to_atom(name), rest}
+  defp parse_recurrence([{:keyword, _, :day} | rest]), do: {:ok, :day, rest}
 
-  defp parse_recurrence(tokens), do: {:day, tokens}
+  defp parse_recurrence([{:identifier, meta, name} | rest]) do
+    case Map.fetch(@recurrences, name) do
+      {:ok, recurrence} ->
+        {:ok, recurrence, rest}
+
+      :error ->
+        {:error, "Unknown recurrence #{inspect(name)} after 'every' on line #{meta[:line]}"}
+    end
+  end
+
+  defp parse_recurrence(tokens), do: {:ok, :day, tokens}
 
   # --- Statements ---
 
@@ -1524,15 +1541,20 @@ defmodule Anemos.Parser do
 
   defp parse_optional_expect(tokens), do: {[], tokens}
 
-  # collect_atom_list — gather comma-separated atoms
+  # collect_atom_list — gather comma-separated `expect` names.
+  #
+  # These names are open-ended: a policy may expect any binding it likes, so
+  # there is no closed set to validate against and no safe atom to produce.
+  # Names are kept as binaries. Nothing downstream dispatches on them — the
+  # compiler copies the list into %Anemos.CompiledQuery{} verbatim — so this is
+  # a representation change only.
   defp collect_atom_list([{:atom, _, val} | rest]) do
-    atom = String.to_atom(val)
     case rest do
       [{:comma, _, _} | rest2] ->
         {more, rest2} = collect_atom_list(rest2)
-        {[atom | more], rest2}
+        {[val | more], rest2}
       _ ->
-        {[atom], rest}
+        {[val], rest}
     end
   end
 

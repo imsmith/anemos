@@ -8,6 +8,18 @@ defmodule Anemos.Runtime.Demand do
   - `:required` — must succeed, but evaluate rest of stack before failing
   - `:optional` — continue whether it succeeds or fails
   - `:sufficient` — if succeeds, skip rest of stack
+
+  ## Missing capabilities are not failures
+
+  The flags above govern how *failure* is handled. A capability that is not
+  present in the registry has not failed — it was never loaded, which is a
+  configuration error in the policy text (typically a typo in the capability
+  name). Such a demand is fatal under every flag, including `:optional` and
+  `:sufficient`.
+
+  Were it otherwise, a stack composed entirely of `:optional` demands naming
+  capabilities that do not exist would return `{:ok, []}` — a gate that reads
+  as an authorization check while authorizing nothing.
   """
 
   alias Anemos.Runtime.CapabilityServer
@@ -43,7 +55,7 @@ defmodule Anemos.Runtime.Demand do
 
   defp eval_stack([demand | rest], registry, context, results, deferred_error) do
     case Map.get(registry, demand.capability) do
-      nil -> handle_missing(demand, rest, registry, context, results, deferred_error)
+      nil -> handle_missing(demand)
       pid ->
         case CapabilityServer.execute(pid, context) do
           {:ok, ops} -> handle_success(demand, ops, rest, registry, context, results, deferred_error)
@@ -52,14 +64,13 @@ defmodule Anemos.Runtime.Demand do
     end
   end
 
-  defp handle_missing(demand, rest, registry, context, results, deferred_error) do
-    error = {:error, {:unknown_capability, demand.capability}}
-    case demand.flag do
-      :requisite -> error
-      :required -> eval_stack(rest, registry, context, results, deferred_error || error)
-      :optional -> eval_stack(rest, registry, context, results, deferred_error)
-      :sufficient -> eval_stack(rest, registry, context, results, deferred_error)
-    end
+  # Fatal regardless of flag — see the moduledoc. Note the absence of any
+  # `rest` argument: there is no continuation from here.
+  defp handle_missing(demand) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.runtime/unknown_capability",
+       message: "Capability #{demand.capability} not found in registry"
+     )}
   end
 
   defp handle_success(demand, ops, rest, registry, context, results, deferred_error) do

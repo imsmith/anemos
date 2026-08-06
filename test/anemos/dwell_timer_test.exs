@@ -9,7 +9,7 @@ defmodule Anemos.DwellTimerTest do
     {:ok, ast} = Parser.parse(source)
     {:ok, compiled} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: compiled.rules, registry: registry)
+    {:ok, dispatcher} = Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
     dispatcher
   end
 

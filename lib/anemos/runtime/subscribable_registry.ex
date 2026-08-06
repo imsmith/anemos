@@ -2,10 +2,19 @@ defmodule Anemos.Runtime.SubscribableRegistry do
   @moduledoc """
   Agent mapping protocol strings to `Anemos.Subscribable` handler modules.
 
-  Unlike `DataModelRegistry` (which derives the key from the handler via
-  `keyword/0`), the protocol string is supplied externally at registration
-  time because `Subscribable` handlers receive the protocol as a parameter
-  rather than owning it intrinsically.
+  This registry is a companion to `Anemos.Runtime.DataModelRegistry`, not a
+  replacement for it. The two key different things for different behaviours:
+  this one maps a *protocol* (`"webhook"`, `"rss"`, `"amqp"`) to an
+  `Anemos.Subscribable` handler for `dynamic { subscribe ... }` blocks;
+  `DataModelRegistry` maps a *format keyword* (`"edn"`, `"xml"`, `"sql"`) to an
+  `Anemos.DataModel` handler for format bodies and query engines. One handler
+  module may implement both behaviours and appear in both registries.
+
+  The registration signature differs for the same reason. `DataModelRegistry`
+  derives its key from the handler via `keyword/0`, because a format handler
+  owns its format. Here the protocol string is supplied externally at
+  registration time, because `Subscribable` handlers receive the protocol as a
+  parameter and so may serve more than one.
   """
 
   use Agent

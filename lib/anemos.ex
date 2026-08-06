@@ -8,7 +8,7 @@ defmodule Anemos do
 
   alias Anemos.Parser
   alias Anemos.Compiler
-  alias Anemos.Runtime.{Dispatcher, ModuleRegistry}
+  alias Anemos.Runtime.{Dispatcher, ModuleRegistry, Standalone}
   alias Anemos.Runtime.Modules
 
   @default_modules %{
@@ -47,11 +47,12 @@ defmodule Anemos do
         end)
 
         with {:ok, dispatcher} <-
-               Dispatcher.start_link(
+               Standalone.start_link(
                  rules: compiled.rules,
                  registry: registry,
                  conditions: compiled.conditions,
-                 capabilities: compiled.capabilities
+                 capabilities: compiled.capabilities,
+                 data_blocks: compiled.data_blocks
                ) do
           try do
             raw_results = Dispatcher.dispatch(dispatcher, event, context)
@@ -64,7 +65,12 @@ defmodule Anemos do
 
             {:ok, results}
           after
-            GenServer.stop(dispatcher)
+            # Standalone.stop/1, not GenServer.stop/1: stopping the
+            # dispatcher exits :normal, which every non-trapping linked
+            # store ignores. That left the triple store, data store,
+            # subscribable registry and one process per condition and
+            # capability alive for the life of the VM.
+            Standalone.stop(dispatcher)
           end
         end
       after

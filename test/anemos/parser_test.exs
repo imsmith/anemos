@@ -661,7 +661,7 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
     assert %AST.QueryDecl{} = decl
     assert decl.name == "wd-city"
-    assert decl.expect == [:city, :state]
+    assert decl.expect == ["city", "state"]
     assert decl.engine == "wikidata"
     assert is_binary(decl.body)
     assert decl.return == "city"

@@ -27,4 +27,20 @@ defmodule Anemos.Runtime.DurationTest do
     assert Duration.to_ms({2, :d}) == 172_800_000
     assert Duration.to_ms({2, :days}) == 172_800_000
   end
+
+  test "unknown unit returns an error tuple rather than raising" do
+    assert {:error, {:unknown_duration_unit, :fortnights}} = Duration.to_ms({2, :fortnights})
+  end
+
+  test "malformed duration returns an error tuple rather than raising" do
+    assert {:error, {:invalid_duration, "5 minutes"}} = Duration.to_ms("5 minutes")
+  end
+
+  test "to_ms!/1 returns the integer for known units" do
+    assert Duration.to_ms!({2, :min}) == 120_000
+  end
+
+  test "to_ms!/1 raises with a readable message for unknown units" do
+    assert_raise ArgumentError, ~r/fortnights/, fn -> Duration.to_ms!({2, :fortnights}) end
+  end
 end

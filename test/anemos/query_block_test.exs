@@ -20,7 +20,7 @@ defmodule Anemos.QueryBlockTest do
 
     assert [query] = result.query_blocks
     assert query.name == "find-user"
-    assert query.expect == [:name]
+    assert query.expect == ["name"]
     assert query.engine == "users"
     assert query.return == "user"
     assert is_function(query.handler, 2)

@@ -3,6 +3,7 @@ defmodule Anemos.Runtime.DemandTest do
   @moduledoc false
 
   alias Anemos.Runtime.{Demand, CapabilityServer}
+  alias Comn.Errors.ErrorStruct
 
   doctest Anemos.Runtime.Demand
 
@@ -32,7 +33,49 @@ defmodule Anemos.Runtime.DemandTest do
 
   test "missing capability — requisite fails" do
     demands = [%{capability: "nonexistent", flag: :requisite}]
-    assert {:error, {:unknown_capability, "nonexistent"}} = Demand.evaluate(demands, %{}, %{})
+
+    assert {:error, %ErrorStruct{code: "anemos.runtime/unknown_capability"} = err} =
+             Demand.evaluate(demands, %{}, %{})
+
+    assert err.message =~ "nonexistent"
+  end
+
+  # A missing capability is a configuration error, not an authorization
+  # failure. PAM flag semantics govern how FAILURE is handled; they must not
+  # let a typo'd or unloaded capability be skipped.
+  for flag <- [:requisite, :required, :optional, :sufficient] do
+    test "missing capability is fatal under #{flag}" do
+      demands = [%{capability: "ghost", flag: unquote(flag)}]
+
+      assert {:error, %ErrorStruct{code: "anemos.runtime/unknown_capability"}} =
+               Demand.evaluate(demands, %{}, %{})
+    end
+  end
+
+  test "all-optional stack of missing capabilities does not authorize" do
+    demands = [
+      %{capability: "ghost-a", flag: :optional},
+      %{capability: "ghost-b", flag: :optional}
+    ]
+
+    refute match?({:ok, _}, Demand.evaluate(demands, %{}, %{}))
+
+    assert {:error, %ErrorStruct{code: "anemos.runtime/unknown_capability"} = err} =
+             Demand.evaluate(demands, %{}, %{})
+
+    assert err.message =~ "ghost-a"
+  end
+
+  test "missing capability is fatal even when a later demand succeeds" do
+    ok_pid = start_capability("real-key", {:ok, [%{type: :emit, value: "done"}]})
+
+    demands = [
+      %{capability: "typo-key", flag: :optional},
+      %{capability: "real-key", flag: :requisite}
+    ]
+
+    assert {:error, %ErrorStruct{code: "anemos.runtime/unknown_capability"}} =
+             Demand.evaluate(demands, %{"real-key" => ok_pid}, %{})
   end
 
   test "optional demand — failure continues" do

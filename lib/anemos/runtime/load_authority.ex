@@ -7,10 +7,10 @@ defmodule Anemos.Runtime.LoadRequest do
   map is one field rename away from matching nothing and — depending on how
   it was written — failing open.
 
-  `signers` is the seam for A-05. `signed_by` is parsed today and verified
-  by nothing; when verification lands, it is an authority implementation
-  that checks these names against a keyring, and neither this struct nor
-  `Anemos.Runtime.load/3` has to change.
+  `signers` is the seam for A-05, and it is now filled: an authority
+  implementation checks these names against a keyring, and neither this
+  struct nor `Anemos.Runtime.load/3` had to change to let it. See
+  `Anemos.Runtime.LoadAuthority.Signed`.
   """
 
   @enforce_keys [:runtime, :source, :byte_size, :authorization, :signers]
@@ -91,14 +91,15 @@ defmodule Anemos.Runtime.LoadAuthority do
   Refuse by default and permit explicitly, not the other way round: an
   authority whose fallthrough clause returns `:ok` is not an authority.
 
-  ## Where A-05 slots in
+  ## Where A-05 slotted in
 
   `authorize/1` runs *after* the source is parsed, which is the only reason
   `LoadRequest.signers` can be populated at all. Signature verification is
   therefore an authority implementation — it needs the signer names, the
-  source bytes to verify against, and a keyring, and it has all three. No
-  change to `load/3`, to `LoadRequest`, or to this behaviour is required
-  when it lands.
+  source bytes to verify against, and a keyring, and it has all three. It
+  landed as `Anemos.Runtime.LoadAuthority.Signed` and required no change to
+  `load/3`, to `LoadRequest`, or to this behaviour, which is the evidence
+  the seam was in the right place.
   """
 
   alias Anemos.Runtime.LoadRequest
@@ -304,7 +305,17 @@ defmodule Anemos.Runtime.LoadAuthority do
   end
 
   @doc """
-  Collects the `signed_by` names declared by an AST's rules.
+  Collects the `signed_by` names an AST declares, from both placements.
+
+  Source-level `signed_by` (A-60) is the one that describes what a detached
+  signature actually covers, and the only one available to a source carrying no
+  `rule`. Rule-level `signed_by` is still read: it names a signer the whole
+  source must carry, which is what it always did, and dropping it would silently
+  weaken every policy already written against it.
+
+  The two are unioned and de-duplicated. All named signers are required — see
+  `Anemos.Runtime.LoadAuthority.Signed` on why that is conjunctive — so which
+  placement a name arrived by cannot change the decision.
 
   Empty when nothing in the source claims a signer, which is itself a fact
   an authority may want to refuse on.
@@ -313,6 +324,7 @@ defmodule Anemos.Runtime.LoadAuthority do
   def signers(%Anemos.AST.Program{declarations: declarations}) do
     declarations
     |> Enum.flat_map(fn
+      %Anemos.AST.SignedBy{signer: signer} when not is_nil(signer) -> [signer]
       %{meta: meta} when is_map(meta) -> List.wrap(Map.get(meta, :signed_by))
       _other -> []
     end)

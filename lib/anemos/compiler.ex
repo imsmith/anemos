@@ -370,6 +370,12 @@ defmodule Anemos.Compiler do
     {:query, compile_query(query)}
   end
 
+  # A-60. `signed_by` is consumed by the load authority before the compiler is
+  # reached — it is provenance, not behaviour, and compiles to nothing. Stated
+  # explicitly rather than left to the catch-all below, so that deleting it
+  # would be a visible act.
+  defp compile_declaration(%AST.SignedBy{}), do: :skip
+
   defp compile_declaration(_other), do: :skip
 
   # --- Condition compilation ---

@@ -13,6 +13,20 @@ defmodule Anemos.AST do
     defstruct [:declarations]
   end
 
+  defmodule SignedBy do
+    @moduledoc """
+    A source-level `signed_by` declaration (A-60).
+
+    A detached signature covers the whole source, so provenance is a property
+    of the file rather than of any one declaration in it. This is the placement
+    that says so, and the only one under which a source carrying no `rule` —
+    conditions, capabilities, data blocks — can make a provenance claim at all.
+    """
+    @enforce_keys []
+    @type t :: %__MODULE__{signer: String.t() | nil, line: non_neg_integer() | nil}
+    defstruct [:signer, :line]
+  end
+
   defmodule Rule do
     @moduledoc "A named rule declaration with a body, optional metadata, and source line."
     @enforce_keys []

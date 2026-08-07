@@ -328,13 +328,17 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
       assert err.code == "anemos.runtime/load_denied"
     end
 
-    test "a source of non-rule declarations cannot be signed at all — a known limitation" do
-      # `signed_by` is rule-only syntax (`parser.ex:154-178` is reached
-      # from `parse_rule` alone), so a source made of conditions,
-      # capabilities or data blocks declares no signer and *cannot*. Under
-      # `:permit` that means it loads unverified; under `:strict` it means
-      # it can never load. Pinned here so the limitation is a decision on
-      # the record rather than a surprise in production.
+    test "a source of non-rule declarations is refused when it declares no signer" do
+      # This test pinned A-60 — `signed_by` was rule-only syntax, so a
+      # source of conditions, capabilities or data blocks could not carry a
+      # signer and `:strict` could never load one. That limitation is gone:
+      # `signed_by` is now a source-level declaration, and
+      # `Anemos.Runtime.SourceLevelSignedByTest` covers the signed case.
+      #
+      # What survives is the part that was never the defect. A source that
+      # declares no signer is still refused under `:strict`, and `signed_by`
+      # inside a `condition` body is still not a placement — source level is,
+      # because that is what a detached signature covers.
       conditions_only = """
       condition night {
         when EV { log "x" }

@@ -182,6 +182,30 @@ rule name {
 }
 ```
 
+### Provenance
+
+`signed_by` names a signer the source must carry. It is written at source
+level, outside any declaration, because a detached signature covers the
+whole file — not one rule inside it.
+
+```
+signed_by :operator
+
+condition night {
+  when SUNSET { log "dark" }
+}
+```
+
+Whether an unsigned source loads is the runtime's `:unsigned_policy`
+setting: `:permit` (the default), `:warn`, or `:strict`. A source naming
+any signer is never treated as unsigned — it is making a provenance
+claim, and `:permit` does not launder it. Where several signers are
+named, all of them must verify.
+
+`signed_by` is also accepted as rule metadata, where it means the same
+thing. Source level is the placement to prefer; it is the only one
+available to a file that declares no rule.
+
 ### Conditions
 
 Conditions are stateful processes. They evaluate incoming events and track

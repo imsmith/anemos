@@ -20,7 +20,7 @@ than removed.
 | A-02 | CRITICAL | Unbounded event recursion never terminates | **Fixed** — depth ceiling 10,000, structured error; 5 regression tests |
 | A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | **Fixed** — accumulator threaded through the throw payload; no `Process.put` remains in `compiler.ex` |
 | A-04 | CRITICAL | Every `condition` fires unconditionally | **Fixed** — `build_condition_evaluator/3` compiles the trigger; body operations routed via `:on_side_effects` |
-| A-05 | HIGH | `signed_by` parsed and never verified | **Fixed** — `LoadAuthority.Signed` + `TrustStore`. A-59 closed; A-60 still limits `:strict` |
+| A-05 | HIGH | `signed_by` parsed and never verified | **Fixed** — `LoadAuthority.Signed` + `TrustStore`. A-59 and A-60 both closed |
 | A-06 | HIGH | Context isolation fails open, two ways | **Fixed** — `ContextScope.within?/2`, segment-aware and fail-closed |
 | A-07 | HIGH | Capability context scoping is decorative | **Fixed** — enforced in the server; denial bypasses PAM flags |
 | A-08 | HIGH | Unbounded atom creation can kill the node | **Fixed** — compile-time string maps; 10 regression tests assert the atom table does not grow |
@@ -75,7 +75,7 @@ than removed.
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
 | A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
 | A-59 | HIGH | `Anemos.run/2` and the CLI bypass `LoadAuthority` entirely | **Fixed** — both callers collapsed onto `LoadAuthority.gate/3`, the only door to an AST |
-| A-60 | HIGH | `signed_by` is rule-only syntax, so `:strict` cannot load a condition file | Open |
+| A-60 | HIGH | `signed_by` is rule-only syntax, so `:strict` cannot load a condition file | **Fixed** — `signed_by` is a source-level declaration; rule-level still accepted |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
 | A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
@@ -2138,6 +2138,48 @@ record rather than a production surprise.
 Either lift `signed_by` to a source-level or declaration-level construct so any declaration
 can carry provenance, or scope `:strict` explicitly to rule-bearing sources and say so. The
 first is the real fix; the second is honest triage.
+
+### Fixed 2026-08-07 — source-level, the first option
+
+`signed_by :operator` is now a declaration in its own right, written outside any block:
+
+```text
+signed_by :operator
+
+condition night {
+  when SUNSET { log "dark" }
+}
+```
+
+The second option was ruled out before it was costed. Condition bodies execute side
+effects (A-04), so a conditions-only file is a full payload, and a `:strict` that exempts
+non-rule sources exempts exactly the thing an attacker would write.
+
+Source level is not a convenience, it is the accurate placement: the signature is detached
+and covers the whole file, so `signed_by` inside a `rule` always named a signer for the
+*source* and merely looked like it named one for the rule. `Signed`'s moduledoc already
+said so — "per-rule attribution is not representable" — which is the sentence that decided
+where the new syntax goes.
+
+Rule-level `signed_by` keeps working and keeps meaning what it meant. `signers/1` unions
+both placements and de-duplicates. Since all declared signers are conjunctive, which
+placement a name arrived by cannot change the decision, so there is no second path to
+diverge — the reason it was safe to keep rather than migrate.
+
+Fourteen tests. Two things pinned beyond the brief:
+
+- `signed_by` inside a `condition` body is *still* a parse error. That is not an oversight
+  left over from the defect; source level is the placement, and accepting a second one
+  would re-manufacture the granularity lie this fix removes.
+- A malformed trailing `signed_by` is refused rather than silently dropped.
+  `parse_declarations/2` treats a failed declaration as "end of parseable declarations"
+  once anything has parsed, so the obvious worry was that a broken signer line would
+  vanish and the source would load as unsigned. Probed directly: the leftover tokens are
+  refused by `parse/1`. Pinned because that failure would have been invisible.
+
+The test that pinned this limitation in `signature_verification_test.exs` is rewritten
+rather than deleted — the half that was never the defect still holds, and the entry now
+points at where the signed case is covered.
 
 ---
 

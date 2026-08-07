@@ -100,6 +100,27 @@ defmodule Anemos.Runtime.LoadAuthority.Signed do
   says — it is making a provenance claim, and `:permit` must not launder
   it.
 
+  ## Where `signed_by` may be written
+
+  At **source level**, outside any declaration, which is the placement
+  that matches what the signature covers:
+
+      signed_by :operator
+
+      condition night { ... }
+
+  It is also still accepted as rule metadata, where it means the same
+  thing — a signer the whole source must carry — because that is what it
+  has always meant and every policy already written against it keeps
+  working. The two placements are unioned by
+  `Anemos.Runtime.LoadAuthority.signers/1`.
+
+  Source level exists because rule metadata was the *only* placement
+  (A-60), so a source carrying no `rule` — conditions, capabilities, data
+  blocks — could not make a provenance claim and `:strict` could never
+  load one. Since condition bodies execute side effects, such a file is a
+  full payload, so exempting it from `:strict` was not available either.
+
   ## Configuring it
 
       config :anemos, :load_authority, Anemos.Runtime.LoadAuthority.Signed

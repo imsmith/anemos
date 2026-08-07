@@ -121,6 +121,20 @@ defmodule Anemos.Parser do
 
   # --- Declaration dispatch ---
 
+  # A-60. `signed_by` at source level, outside any declaration. It was
+  # rule-only syntax, reachable from `parse_rule/1` alone, so a source of
+  # conditions, capabilities or data blocks could not make a provenance claim
+  # and `:strict` could never load one. The signature covers the whole source
+  # regardless, so this placement is also the one that describes what is
+  # actually being claimed.
+  defp parse_declaration([{:keyword, meta, :signed_by}, {:atom, _, signer} | rest]) do
+    {:ok, %AST.SignedBy{signer: signer, line: meta[:line]}, rest}
+  end
+
+  defp parse_declaration([{:keyword, meta, :signed_by} | _]) do
+    {:error, "Expected a signer name after 'signed_by' on line #{meta[:line]}"}
+  end
+
   defp parse_declaration([{:keyword, _, :rule} | rest]) do
     parse_rule(rest)
   end

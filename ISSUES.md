@@ -41,6 +41,7 @@ than removed.
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | **Fixed** — deleted, after proving it unreachable; last Dialyzer finding in `parser.ex` |
 | A-74 | HIGH | Eight more parser functions crash on truncated input | **Fixed** — `[]` clauses added; `parse_destination/1` made total; 5,955-input sweep is a regression test |
+| A-75 | MEDIUM | Parser totality is untested against *malformed* input — only against truncated | Open |
 | A-72 | MEDIUM | `log` of any non-`String.Chars` value crashed the dispatcher | **Fixed** |
 | A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | **Fixed** — `AND` compounds; spine flattened on the AST; `&&` unchanged. `OR` decided separately 2026-08-07 |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
@@ -2484,6 +2485,66 @@ concern, but do not crash).
 Eight targeted tests, plus the sweep itself kept as a regression test: every prefix of every
 shipped example must parse or error, never raise. It re-runs in the suite. Post-fix the same
 5,955 inputs produce 0 raises, down from 96.
+
+---
+
+## A-75 — Parser totality is untested against malformed input, only against truncated
+
+**Filed:** 2026-08-07 · **Severity:** MEDIUM · **coverage gap, no defect demonstrated**
+
+### What is covered today
+
+A-74's regression sweep feeds `Parser.parse/1` every *prefix* of every shipped example —
+5,955 inputs — and asserts none of them raises. That establishes totality against input that
+**runs out**, which is the shape a partially-written file, an interrupted upload or a
+truncated transfer takes.
+
+### What is not covered
+
+Input that is **wrong in the middle** rather than absent at the end. A prefix is always a
+valid source with a clean cut; it never contains a token in a position the language does not
+allow. Nothing exercises:
+
+- a token of the wrong class where a specific one is required (`rule 42 { }`)
+- unbalanced or mismatched brackets (`rule r { when EV { log "x" }` — one `}` short, or a
+  `)` closing a `{`)
+- a keyword appearing where an expression belongs, and the reverse
+- valid tokens in a shuffled order
+- bytes that break the lexer rather than the parser — unterminated strings, stray sigils,
+  invalid UTF-8
+
+This matters for the same reason A-74 did, and no more strongly: `Parser.parse/1` is on the
+only path from source to an AST (`LoadAuthority.gate/3`), and under the multi-tenant decision
+its input is untrusted. A-74 demonstrated that the totality contract was being violated by an
+entire untested class. That is evidence about the *method*, not proof there is a second bug —
+this entry claims a gap, not a defect.
+
+### What should change
+
+A property test with a mutation generator over the shipped examples, seeded explicitly so a
+failure reproduces:
+
+1. **Token-level mutations** — delete a token, duplicate one, swap an adjacent pair, replace
+   one with a token of a different class drawn from the lexer's own vocabulary.
+2. **Structural mutations** — drop or add a single `{`, `}`, `(`, `)`, `[`, `]`.
+3. **Byte-level mutations** — flip, insert and delete bytes, so the lexer is exercised and
+   not only the parser. Include invalid UTF-8 explicitly.
+
+The oracle is the same contract A-74 pinned, plus one addition:
+
+- `parse/1` returns `{:ok, %AST.Program{}}` or `{:error, binary}` — never raises, for any
+  binary input.
+- **It terminates.** A hang on the untrusted path is no better than a crash, and no current
+  test bounds parse time. Give each case a timeout.
+
+### Related, and deliberately not folded in
+
+Whether the *message* is any good is A-31, not this entry. `parse_declarations/2` treats a
+failed declaration as "end of parseable declarations" once anything has parsed, so a source
+malformed in its third declaration is reported by `parse_program/1` against the leftover
+tokens — which may name a position some distance from the actual mistake. A fuzzer will
+produce many such cases; they are diagnostics-quality findings and belong in A-31 unless one
+of them raises or hangs, which makes it this entry's.
 
 ---
 

@@ -265,22 +265,28 @@ defmodule Anemos.AST do
   end
 
   defmodule NextEvent do
-    @moduledoc "A `nextevent` statement: transitions to another `when` block within the same rule."
+    @moduledoc """
+    A `nextevent` statement: transitions to another `when` block within the
+    same rule, optionally carrying a `with { }` argument block (A-55).
+    """
     @enforce_keys []
     @type t :: %__MODULE__{
             target: String.t() | nil,
-            args: map() | nil,
+            args: Anemos.AST.BlockArgs.t() | nil,
             line: non_neg_integer() | nil
           }
     defstruct [:target, :args, :line]
   end
 
   defmodule NextRule do
-    @moduledoc "A `nextrule` statement: dispatches to a different rule's pipeline."
+    @moduledoc """
+    A `nextrule` statement: dispatches to a different rule's pipeline,
+    optionally carrying a `with { }` argument block.
+    """
     @enforce_keys []
     @type t :: %__MODULE__{
             target: String.t() | nil,
-            args: map() | nil,
+            args: Anemos.AST.BlockArgs.t() | nil,
             line: non_neg_integer() | nil
           }
     defstruct [:target, :args, :line]

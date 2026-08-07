@@ -299,12 +299,22 @@ nextevent STEP_TWO
 
 ; Dispatch to a different rule by name
 nextrule other-rule
+
+; Either one may carry arguments to its target
+nextevent STEP_TWO with { stage: "two", file: @path }
+nextrule other-rule with { who: ?sender }
 ```
 
 `return` and `done` stop execution immediately — statements after them
 are not reached. `nextevent` re-dispatches within the same rule's when
 blocks. `nextrule` invokes another rule directly, bypassing event
 subscription matching.
+
+A `with { }` block delivers its pairs to the target as event context
+data, so the target reads them with `?key` exactly as it would read a
+real event payload. The pairs are resolved against the *sending* body's
+bindings and merged over the originating event's context rather than
+replacing it, so the target still sees what got it there.
 
 ### Scheduled Triggers
 

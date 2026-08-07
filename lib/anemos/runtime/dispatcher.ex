@@ -1072,8 +1072,8 @@ defmodule Anemos.Runtime.Dispatcher do
     {{:ok, %{type: :triple_result, query: op, results: results}}, state}
   end
 
-  defp execute_op(%{type: :nextevent, target: target}, context, state, depth) do
-    dispatch_to_rules(target, context, state, depth + 1)
+  defp execute_op(%{type: :nextevent, target: target} = op, context, state, depth) do
+    dispatch_to_rules(target, with_block_args(context, Map.get(op, :args)), state, depth + 1)
   end
 
   # Selects rules by *rule* name and then hands them to the same
@@ -1094,7 +1094,7 @@ defmodule Anemos.Runtime.Dispatcher do
     dispatch_rules(
       pairs,
       "nextrule:#{target}",
-      nextrule_context(context, Map.get(op, :args)),
+      with_block_args(context, Map.get(op, :args)),
       state,
       depth + 1
     )
@@ -1227,17 +1227,21 @@ defmodule Anemos.Runtime.Dispatcher do
     end
   end
 
-  # `nextrule foo { a: 1 }` delivers its arguments as event context data, so
-  # the target reads them with `?a` exactly as it would read a real event
-  # payload. Nothing produces these yet — see the note in the report —
-  # but the delivery path is here rather than dropping them silently.
-  defp nextrule_context(context, args) when is_map(args) and map_size(args) > 0 do
+  # A `with { a: 1 }` block on `nextrule` or `nextevent` delivers its arguments
+  # as event context data, so the target reads them with `?a` exactly as it
+  # would read a real event payload. Both statements share this, so the two
+  # cannot drift apart in what a payload means.
+  #
+  # The args are merged into the originating context rather than replacing it:
+  # the target still sees the event that got here, with the block's pairs laid
+  # over the top. Absent a block, args are nil and the context passes through.
+  defp with_block_args(context, args) when is_map(args) and map_size(args) > 0 do
     Map.update(context, :context_data, args, fn existing ->
       Map.merge(existing || %{}, args)
     end)
   end
 
-  defp nextrule_context(context, _args), do: context
+  defp with_block_args(context, _args), do: context
 
   # --- Dwell timer state machine ---
   #

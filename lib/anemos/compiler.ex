@@ -874,8 +874,8 @@ defmodule Anemos.Compiler do
           {:anemos_done, ops, bindings} ->
             {ops, bindings}
 
-          {:anemos_nextevent, target, ops, bindings} ->
-            {ops ++ [%{type: :nextevent, target: target}], bindings}
+          {:anemos_nextevent, target, args, ops, bindings} ->
+            {ops ++ [%{type: :nextevent, target: target, args: args}], bindings}
 
           {:anemos_nextrule, target, args, ops, bindings} ->
             {ops ++ [%{type: :nextrule, target: target, args: args}], bindings}
@@ -916,8 +916,8 @@ defmodule Anemos.Compiler do
     {:anemos_done, ops, _bindings} ->
       {:ok, ops}
 
-    {:anemos_nextevent, target, ops, _bindings} ->
-      {:ok, ops ++ [%{type: :nextevent, target: target}]}
+    {:anemos_nextevent, target, args, ops, _bindings} ->
+      {:ok, ops ++ [%{type: :nextevent, target: target, args: args}]}
 
     {:anemos_nextrule, target, args, ops, _bindings} ->
       {:ok, ops ++ [%{type: :nextrule, target: target, args: args}]}
@@ -977,8 +977,8 @@ defmodule Anemos.Compiler do
     {:anemos_done, ops, bindings} ->
       throw({:anemos_done, prefix ++ ops, bindings})
 
-    {:anemos_nextevent, target, ops, bindings} ->
-      throw({:anemos_nextevent, target, prefix ++ ops, bindings})
+    {:anemos_nextevent, target, args, ops, bindings} ->
+      throw({:anemos_nextevent, target, args, prefix ++ ops, bindings})
 
     {:anemos_nextrule, target, args, ops, bindings} ->
       throw({:anemos_nextrule, target, args, prefix ++ ops, bindings})
@@ -1109,21 +1109,12 @@ defmodule Anemos.Compiler do
     throw({:anemos_done, [], bindings})
   end
 
-  defp eval_statement(%AST.NextEvent{target: target}, _context, bindings) do
-    throw({:anemos_nextevent, target, [], bindings})
+  defp eval_statement(%AST.NextEvent{target: target, args: args}, context, bindings) do
+    throw({:anemos_nextevent, target, resolve_block_args(args, context, bindings), [], bindings})
   end
 
   defp eval_statement(%AST.NextRule{target: target, args: args}, context, bindings) do
-    resolved_args =
-      case args do
-        %AST.BlockArgs{pairs: pairs} ->
-          Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
-
-        _ ->
-          nil
-      end
-
-    throw({:anemos_nextrule, target, resolved_args, [], bindings})
+    throw({:anemos_nextrule, target, resolve_block_args(args, context, bindings), [], bindings})
   end
 
   # Inline data/query declarations are extracted and registered at compile/load
@@ -1134,6 +1125,16 @@ defmodule Anemos.Compiler do
   defp eval_statement(_other, _context, bindings) do
     {[], bindings}
   end
+
+  # A-55. `nextevent` and `nextrule` resolve their `with { }` block the same
+  # way, against the sending body's own bindings, and one function does it for
+  # both — a second path that mostly does what the first does is the shape this
+  # branch keeps finding defects in.
+  defp resolve_block_args(%AST.BlockArgs{pairs: pairs}, context, bindings) do
+    Map.new(pairs, fn {k, v} -> {k, resolve_expr(v, context, bindings)} end)
+  end
+
+  defp resolve_block_args(_absent, _context, _bindings), do: nil
 
   # --- While loop helpers ---
 

@@ -1194,12 +1194,14 @@ defmodule Anemos.Parser do
 
   # --- NextEvent ---
 
-  defp parse_nextevent([{:module_id, meta, target} | rest]) do
-    {:ok, %AST.NextEvent{target: target, args: nil, line: meta[:line]}, rest}
-  end
+  defp parse_nextevent([{type, meta, target} | rest]) when type in [:module_id, :identifier] do
+    case parse_optional_with(rest) do
+      {:ok, args, rest} ->
+        {:ok, %AST.NextEvent{target: target, args: args, line: meta[:line]}, rest}
 
-  defp parse_nextevent([{:identifier, meta, target} | rest]) do
-    {:ok, %AST.NextEvent{target: target, args: nil, line: meta[:line]}, rest}
+      {:error, _} = err ->
+        err
+    end
   end
 
   defp parse_nextevent([{_, meta, _} | _]) do
@@ -1230,9 +1232,10 @@ defmodule Anemos.Parser do
     {:error, "Expected rule name after 'nextrule' but got end of input"}
   end
 
-  # `with { key: expr, ... }` — the argument block a `nextrule` carries to its
-  # target. The dispatcher merges the resolved pairs into the target's
-  # `:context_data`, so the target reads them as `?key`.
+  # `with { key: expr, ... }` — the argument block a `nextrule` or a
+  # `nextevent` carries to its target (A-51, A-55). The dispatcher merges the
+  # resolved pairs into the target's `:context_data`, so the target reads them
+  # as `?key`.
   #
   # Absent `with`, args stay nil and the target sees only the originating
   # event's context. A brace block with no `with` is not an argument list; it

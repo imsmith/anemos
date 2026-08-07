@@ -41,7 +41,7 @@ than removed.
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | Open — decision |
 | A-72 | MEDIUM | `log` of any non-`String.Chars` value crashed the dispatcher | **Fixed** |
-| A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | **Fixed** — `AND` compounds; spine flattened on the AST; `&&` and `OR` unchanged |
+| A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | **Fixed** — `AND` compounds; spine flattened on the AST; `&&` unchanged. `OR` decided separately 2026-08-07 |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
@@ -69,8 +69,8 @@ than removed.
 | A-38 | LOW | DST exposure is wider than `scheduler.ex` — `nld.ex` too | Open |
 | A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | **Fixed** — `dispatch_rules/5` is now the only path into a handler |
 | A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | **Fixed** — syntax is `nextrule t with { k: v }`; needed a lexer fix too |
-| A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | Open — decision needed |
-| A-56 | HIGH | Module calls in expression position are never dispatched | Decided 2026-08-06 — resolve and substitute; implementation queued |
+| A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | **Fixed** — wired, per option 1; `with { }` shared with `nextrule` |
+| A-56 | HIGH | Module calls in expression position are never dispatched | **Fixed** — 2450f88; resolved and substituted at evaluation, eagerly |
 | A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
 | A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
@@ -1843,6 +1843,25 @@ A field with no producer *and* no reader is a decision, not a defect. Two option
 
 Flagged rather than actioned, per the standing rule about orphan-looking code.
 
+### Decided 2026-08-07 — option 1, wired
+
+`nextevent <target> with { key: expr }` now parses, resolves against the sending body's
+bindings, and merges into the target's `:context_data`, so the target reads the pairs as
+`?key`. Ten tests.
+
+Both statements share one resolver in the compiler (`resolve_block_args/3`) and one merge
+in the dispatcher (`with_block_args/2`, renamed from `nextrule_context/2`), rather than
+`nextevent` getting a parallel copy — this branch has spent four defects on "a second path
+that mostly does what the first does, minus a check", and a symmetry feature is exactly
+where that shape gets introduced.
+
+Two things surfaced on the way. The `@type` for `args` on **both** `NextEvent` and
+`NextRule` said `map() | nil`; the field holds an `%AST.BlockArgs{}`, so the declared
+contract was wrong for the one that had been working since A-51 — the same class as A-67.
+And the new parse-error test passed before the fix for the wrong reason: it asserted a
+positioned error on `nextevent OTHER with { key: }`, and got one, because `with` itself
+did not parse. It is load-bearing only now.
+
 ### The pattern, now complete
 
 A sweep of every `defstruct` in `lib/` closes this family out:
@@ -1852,7 +1871,7 @@ A sweep of every `defstruct` in `lib/` closes this family out:
 | `NextRule.args` | missing | present | **fixed** (A-51) |
 | `CompiledCondition.context` | missing | present | **fixed** (A-54) |
 | `Envelope.signature` | missing | missing | A-05, design decided |
-| `NextEvent.args` | missing | missing | this entry |
+| `NextEvent.args` | missing | missing | **fixed** (A-55, wired 2026-08-07) |
 
 `CompiledData.raw` / `.format` / `.dynamic`, `Envelope.channel` / `.timestamp`, and
 `CompiledRule.dwell_duration_ms` were all checked and have real producers. Beyond the four

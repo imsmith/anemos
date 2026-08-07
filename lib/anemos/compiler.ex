@@ -294,6 +294,20 @@ defmodule Anemos.Compiler do
   `nextrule`, `context`, commands (`[MODULE::verb ...]`), and triple patterns.
   Guard modifiers (`unless`, `until`) on `when`, `if`, and `at` blocks.
 
+  ## `nextevent` and `nextrule` carry arguments
+
+  Both take an optional `with { key: expr }` block. The pairs are resolved
+  against the *sending* body's bindings and merged into the target's event
+  context, so the target reads them as `?key` exactly as it would read a real
+  event payload. Merged, not replaced: the target still sees the event that got
+  it there.
+
+  One resolver (`resolve_block_args/3`) and one merge
+  (`Anemos.Runtime.Dispatcher.with_block_args/2`) serve both statements. A
+  second path that mostly does what the first does, minus a check, is the shape
+  that accounted for four separate defects on this branch (A-39, A-59, and two
+  others), and a symmetry feature is where it gets introduced.
+
   ## Examples
 
       iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { log \\"hi\\" } }")
@@ -307,6 +321,22 @@ defmodule Anemos.Compiler do
       iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { set i = 0 while $i < 3 { set i = $i + 1 } log $i } }")
       iex> {:ok, %{rules: [compiled]}} = Anemos.Compiler.compile(ast)
       iex> {:ok, [%{type: :log, value: 3}], _} = compiled.handler.("EV", %{}, %{})
+
+  `AND` answers every operand and `OR` the first available one, which is easier
+  to read as code than as prose:
+
+      iex> {:ok, ast} = Anemos.Parser.parse(~S|rule r { when EV { let x = (:h IN A "1") AND (:h IN AAAA "2") log @x } }|)
+      iex> {:ok, %{rules: [compiled]}} = Anemos.Compiler.compile(ast)
+      iex> {:ok, [%{type: :log, value: value}], _} = compiled.handler.("EV", %{}, %{})
+      iex> value
+      [["h", "IN", "A", "1"], ["h", "IN", "AAAA", "2"]]
+
+      iex> {:ok, ast} = Anemos.Parser.parse(~S|rule r { when EV { let x = (:h IN A "1") OR (:h IN AAAA "2") log @x } }|)
+      iex> {:ok, %{rules: [compiled]}} = Anemos.Compiler.compile(ast)
+      iex> {:ok, [%{type: :log, value: value}], _} = compiled.handler.("EV", %{}, %{})
+      iex> value
+      ["h", "IN", "A", "1"]
+
   """
   @spec compile(AST.Program.t()) :: {:ok, Anemos.CompilationResult.t()} | {:error, String.t()}
   def compile(%AST.Program{declarations: declarations}) do

@@ -138,17 +138,31 @@ Use Broadway (Elixir) for backpressure-aware, concurrent event processing in the
 
 ## Security and Trust
 
-### Cryptographic Signing (`signed_by`, DID)
+### Cryptographic Signing — DID identifiers and the encoding suite
+
+**Partly landed.** Detached Ed25519 signature verification shipped with A-05:
+`Anemos.Runtime.LoadAuthority.Signed` verifies a signature carried in the
+`:authorization` option against a public-key keyring, all declared signers are
+required, and `unsigned_policy` decides what happens to a source claiming none.
+A-60 then made `signed_by` a source-level declaration, so a file declaring no
+rule can still carry provenance:
 
 ```
-rule secure-deploy {
-  signed_by :operator.did
-  scope mesh
-  ...
-}
+signed_by :operator
+
+condition night { ... }
 ```
 
-Rules carry cryptographic signatures via DID (Decentralized Identifier). Supports `sha256`, `sha384`, `sha512`, `base58`, `base64`, `base64url`.
+What remains future is the **identifier and encoding suite**, not the
+mechanism:
+
+- **DID (Decentralized Identifier) signers** — `signed_by :operator.did`. Today
+  a signer is an opaque name looked up in a keyring; resolving a DID to a key
+  needs a resolver and a trust policy for the resolution itself.
+- **Algorithms beyond Ed25519** — `sha256`, `sha384`, `sha512`. `TrustStore`
+  refuses a key whose algorithm it does not verify rather than accepting it
+  unchecked, so adding one is additive.
+- **Encodings beyond raw and Base64** — `base58`, `base64url`.
 
 ### Predefined Conditions
 

@@ -319,6 +319,33 @@ defmodule Anemos.Runtime.LoadAuthority do
 
   Empty when nothing in the source claims a signer, which is itself a fact
   an authority may want to refuse on.
+
+  ## Examples
+
+  Source level, on a file that declares no rule at all — the case rule-only
+  syntax made impossible:
+
+      iex> {:ok, ast} = Anemos.Parser.parse("signed_by :operator\\ncondition c { when EV { log \\"x\\" } }")
+      iex> Anemos.Runtime.LoadAuthority.signers(ast)
+      ["operator"]
+
+  Both placements union, and a name declared twice is counted once:
+
+      iex> {:ok, ast} = Anemos.Parser.parse("signed_by :operator\\nrule r { signed_by :auditor\\nwhen EV { log \\"x\\" } }")
+      iex> Enum.sort(Anemos.Runtime.LoadAuthority.signers(ast))
+      ["auditor", "operator"]
+
+      iex> {:ok, ast} = Anemos.Parser.parse("signed_by :op\\nrule r { signed_by :op\\nwhen EV { log \\"x\\" } }")
+      iex> Anemos.Runtime.LoadAuthority.signers(ast)
+      ["op"]
+
+  A source claiming nothing answers `[]`, which is what `:unsigned_policy`
+  acts on:
+
+      iex> {:ok, ast} = Anemos.Parser.parse("rule r { when EV { log \\"x\\" } }")
+      iex> Anemos.Runtime.LoadAuthority.signers(ast)
+      []
+
   """
   @spec signers(Anemos.AST.Program.t() | term()) :: [atom() | String.t()]
   def signers(%Anemos.AST.Program{declarations: declarations}) do

@@ -1,6 +1,6 @@
 # Anemos — implementation status
 
-**Last verified:** 2026-08-06, against branch `hardening/supervision-and-trust-boundary`.
+**Last verified:** 2026-08-07, against branch `hardening/supervision-and-trust-boundary`.
 
 Every claim below was checked by running the code, not by reading it. Where a construct
 parses but does nothing at runtime, it is listed as **inert** rather than implemented —
@@ -12,11 +12,12 @@ Defects in implemented features are tracked in `ISSUES.md`, not here. This file 
 
 ## Working end to end
 
-Verified by the test suite (36 doctests, 631 tests, 0 failures) and by direct execution.
+Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct execution.
 
 - Lexical structure — comments, strings, numbers, durations, sigils, identifiers, atoms
 - Boolean literals — `true` / `false` as real booleans
-- `rule`, `condition`, `capability` declarations
+- `rule`, `condition`, `capability`, `data`, `query` declarations
+- `signed_by` at source level — provenance on a file that declares no rule
 - `when` blocks, including compound events with `OR`
 - `when EV for <duration>` — dwell-timer state machine
 - `at` blocks — time literals, intervals, recurring schedules, natural-language dates
@@ -24,16 +25,20 @@ Verified by the test suite (36 doctests, 631 tests, 0 failures) and by direct ex
 - Guards — `unless` (stateless), `until` (stateful, permanent on rules)
 - `let`, `set`, `log`, `emit` (with type, destination and label)
 - `demand` with PAM control flags — `--required`, `--optional`, `--sufficient`, `--requisite`
-- `[MODULE::verb]` commands **in statement position**
+- `[MODULE::verb]` commands in **statement and expression** position — an expression-position
+  call is dispatched at evaluation and its return value *is* the value of the expression
 - Loops — `while`, `for`, `each`, `every`, `foreach`
 - Flow control — `return`, `done`, `nextevent`, `nextrule`
-- `nextrule <target> with { key: value }` — argument passing
+- `nextrule` and `nextevent` `<target> with { key: value }` — argument passing
 - Pipelines — `|>` with `filter`, `map`, `reduce`
 - Triple patterns — assertion and query
 - Comparison, logical, membership and bitwise operators, over a 14-level precedence table
+- `AND` compounds over non-boolean operands, `OR` alternates — see the `Anemos.Compiler`
+  moduledoc for the algebra
 - `in`, `contains`, `starts_with`, `ends_with`, `matches_glob`, `memberof`
 - Context filtering — segment-aware and fail-closed
 - Variable sigil differentiation — `?` external, `@` ephemeral, `$` persistent
+- All three shipped examples in `priv/examples/` — `garage-lights`, `ddns`, `normalize-pdfs`
 
 ### Runtime
 
@@ -47,19 +52,20 @@ Verified by the test suite (36 doctests, 631 tests, 0 failures) and by direct ex
 - `Anemos.Secret` — redacting wrapper surviving `inspect`, interpolation and `Logger`
 - Write-once module registration
 - CLI: `--event`, `--context`, `--context-data`, `--stub-modules`, `--help`, real exit codes
+- Detached Ed25519 signature verification on `load/3`, with `unsigned_policy` of
+  `:permit` / `:warn` / `:strict`
+- `Parser.parse/1` is total over binaries — it answers a tuple for any input, never raises,
+  and terminates. Covered by a truncation sweep and a mutation fuzzer, not by inspection
 
 ## Partially implemented
 
 | Feature | State |
 | --- | --- |
 | Compound `AND` events | Parses, but compiles identically to `OR` — fires on either event (A-47) |
-| `[MODULE::verb]` in expression position | Parses; never dispatched. Returns a descriptor map, not a value (A-56) |
 | Keyword arguments — `type:ipv4` | Parses; flattened to positional, structure discarded (A-57) |
-| `signed_by` | Parsed; verification in progress |
 | `until` on conditions | Compiles as "false while guard holds"; cannot latch permanently (A-48) |
 | Message envelope | `source`, `timestamp`, `label`, `channel` populated; `signature` never set |
 | `data` blocks — dynamic | `subscribe` works; `periodic` is parsed and unimplemented |
-| Shipped examples | `garage-lights` and `ddns` run; `normalize-pdfs` blocked on A-56 |
 
 ## Parses but inert
 
@@ -76,7 +82,6 @@ has repeatedly been mistaken for "it works".
   with no substitution and no error. Appears in the README and both examples
 - **`Anemos.DataModel` behaviour** — declared; `parse/1`, `eval/2`, `transduce/3` have no
   callers
-- **`AST.NextEvent.args`** — declared with no producer and no consumer (A-55)
 
 ## Not implemented
 

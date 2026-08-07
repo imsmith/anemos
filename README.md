@@ -450,6 +450,50 @@ Full operator precedence (14 levels, matching the language spec):
 Arithmetic (`+`, `-`, `*`, `/`, `%`), bitwise (`&`, `|`, `^`, `<<`, `>>`, `~`),
 comparison, logical, and membership operators all at correct precedence.
 
+#### `AND` compounds, `OR` alternates
+
+Over booleans these are ordinary conjunction and disjunction. Over any
+other operands they carry values, and the two differ: **`AND` answers
+every operand, `OR` answers the first available one.**
+
+```
+; AND — "let update have the value A *and* the value B"
+let update = (:host IN A "1.1.1.1") AND (:host IN AAAA "::1")
+; @update == [["host", "IN", "A", "1.1.1.1"], ["host", "IN", "AAAA", "::1"]]
+
+; OR — "let pick have the value A, *or else* B"
+let pick = ?preferred OR ?fallback
+; @pick is whichever of the two the host actually sent
+```
+
+A compound is an ordinary list by the time it reaches a binding, so it
+flows into a call like `[INFRA::ddns_update ... update]` as an argument.
+The `update-ddns` example above depends on this: it builds an A record
+and an AAAA record and sends both.
+
+For `AND`, a `false` or `nil` operand answers for the whole expression
+and nothing is compounded, so `if ?missing AND ?present` stays false
+rather than becoming a truthy list. `true` carries nothing and drops
+out. For `OR`, `false` and `nil` drop out instead, and the first operand
+carrying a value wins.
+
+Neither short-circuits. An operand may be a `[MODULE::verb]` call whose
+side effect is the point, and it happens whether or not its value turns
+out to be reachable.
+
+The two spellings are not symmetric, and the reason is that only one of
+them changed meaning. `||` is the same operator as `OR` — alternation
+was already what it did, so there was nothing to preserve. `&&` stays
+purely logical and answers its right operand, which is how you ask for
+that behaviour deliberately now that `AND` no longer provides it:
+
+```
+(A) AND (B)   ; [A, B]  — both values
+(A) &&  (B)   ; B       — purely logical
+(A) OR  (B)   ; A       — the first available
+(A) ||  (B)   ; A       — same operator as OR
+```
+
 ### Event Protocol
 
 Implement the `Anemos.Event` protocol on your application's event types

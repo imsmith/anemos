@@ -249,6 +249,93 @@ defmodule Anemos.FlowControlTest do
     refute "after-nextrule" in log_values
   end
 
+  # --- A-03: accumulator must not leak between rule invocations ---
+
+  test "early return in one rule does not leak ops into an unrelated rule" do
+    input = """
+    rule a {
+      when EV {
+        log "a1"
+        return
+        log "a2"
+      }
+    }
+
+    rule b {
+      when EV {
+        log "b1"
+      }
+    }
+
+    rule c {
+      when EV {
+        log "c1"
+        return
+        log "c2"
+      }
+    }
+    """
+
+    {:ok, ast} = Anemos.Parser.parse(input)
+    {:ok, %{rules: [ra, rb, rc]}} = Anemos.Compiler.compile(ast)
+
+    # All three handlers run in this one process, as they do in the dispatcher.
+    assert {:ok, [%{type: :log, value: "a1"}], %{}} = ra.handler.("EV", %{}, %{})
+    assert {:ok, [%{type: :log, value: "b1"}], %{}} = rb.handler.("EV", %{}, %{})
+    assert {:ok, [%{type: :log, value: "c1"}], %{}} = rc.handler.("EV", %{}, %{})
+  end
+
+  test "no evaluator state survives a handler invocation" do
+    input = """
+    rule a {
+      when EV {
+        log "a1"
+        return
+      }
+    }
+    """
+
+    {:ok, ast} = Anemos.Parser.parse(input)
+    {:ok, %{rules: [ra]}} = Anemos.Compiler.compile(ast)
+
+    # A-03 regression: the evaluator must leave no residue in the process dictionary.
+    before = Process.get(:anemos_accumulated_ops)
+    {:ok, _ops, _b} = ra.handler.("EV", %{}, %{})
+    # Process dictionary read is deliberate: see comment above.
+    assert Process.get(:anemos_accumulated_ops) == before
+  end
+
+  test "early return inside a loop keeps prior iterations and leaks nothing" do
+    input = """
+    rule looper {
+      when EV {
+        set i = 0
+        while $i < 5 {
+          set i = $i + 1
+          log $i
+          if $i == 2 {
+            return
+          }
+        }
+        log "unreached"
+      }
+    }
+
+    rule after {
+      when EV {
+        log "after"
+      }
+    }
+    """
+
+    {:ok, ast} = Anemos.Parser.parse(input)
+    {:ok, %{rules: [looper, later]}} = Anemos.Compiler.compile(ast)
+
+    {:ok, ops, _} = looper.handler.("EV", %{}, %{})
+    assert [%{type: :log, value: 1}, %{type: :log, value: 2}] = ops
+    assert {:ok, [%{type: :log, value: "after"}], %{}} = later.handler.("EV", %{}, %{})
+  end
+
   test "parses nextrule with target" do
     input = """
     rule r {

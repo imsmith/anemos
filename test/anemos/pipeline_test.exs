@@ -75,8 +75,14 @@ defmodule Anemos.PipelineTest do
     """
 
     assert {:ok, results} = Anemos.run(input, event: "TEST_EVENT")
-    # Results include both capability output and rule output
-    assert length(results) >= 1
+
+    # `use-cap` declares no context, so it cannot reach a capability scoped
+    # to `test` (A-07). The rule body still runs; only the demand is refused.
+    # This assertion used to be `length(results) >= 1`, which passed either
+    # way and so said nothing.
+    log_values = for %{type: :log, value: v} <- results, do: v
+    assert "after demand" in log_values
+    refute "capability executed" in log_values
   end
 
   test "ddns.rule: raw event -> condition -> rule with demand" do

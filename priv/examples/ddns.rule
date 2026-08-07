@@ -1,8 +1,32 @@
 ; Infrastructure: Dynamic DNS with capability-gated secrets
+;
+; Run it:
+;
+;   mix anemos.run priv/examples/ddns.rule \
+;     --event CONDITION_networkchanged --context infra.networking.dns \
+;     --stub-modules \
+;     --context-data fqdn=host.katachora.com \
+;     --context-data hostname=host \
+;     --context-data ip_eth0_ipv4=203.0.113.7 \
+;     --context-data ip_eth0_ipv6=2001:db8::7
+;
+; --context is required: every block below declares one, and `context` is a
+; security boundary that fails closed. --stub-modules registers the INFRA,
+; SECRET and EVENT doubles; without them the module lookups fail. The
+; SECRET double deliberately returns a marker rather than key material.
+;
+; KNOWN GAPS — this example does not yet run end to end, and the reasons
+; are in the runtime, not in this file. See the comments at each site.
+; The module-call and AND gaps are closed (A-56, A-73); the remaining ones
+; are all string interpolation.
 
 capability katachora-ddns-key {
   context infra.networking
 
+  ; CLOSED (A-56): the SECRET::unlock call is dispatched here and what gets
+  ; emitted is its return value, not a description of the call. Against
+  ; --stub-modules that value is the SECRET double's marker, deliberately
+  ; not key material.
   on demand {
     emit [SECRET::unlock(agent.did_meshid_z6MkAgent123.operator.security:did_key_67890)]
       as :katachora.ddns.key
@@ -11,6 +35,8 @@ capability katachora-ddns-key {
 
 condition networkchanged {
   when (INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed) {
+    ; GAP: `:{?hostname}` renders literally. The interpolation form is
+    ; accepted by the parser and substituted by nothing.
     emit [EVENT::ip.addr.changed to channel(system.config.network)]
       as :{?hostname}.network.ip.addr.changed
   }
@@ -25,9 +51,21 @@ rule update-ddns {
     let fqdn = ?fqdn
     let ipv4 = [INFRA::get_ip "eth0" type:ipv4]
     let ipv6 = [INFRA::get_ip "eth0" type:ipv6]
-    let update = (:fqdn IN A ipv4) AND (:fqdn IN AAAA ipv6)
 
-    emit [INFRA::ddns_update(:katachora.ddns.key, katachora.com, update)
+    ; @, not bare: `let` binds @-sigil variables, and a bare word lexes as
+    ; an identifier literal. The original read `(:fqdn IN A ipv4)`, which
+    ; asserted the literal strings "ipv4" and "ipv6" as the addresses —
+    ; the two `let`s above were computed and then ignored. Same class of
+    ; mistake as normalize-pdfs.rule (A-25): nothing reports it.
+    ;
+    ; AND here is the compounding operator, not the logical one (A-73):
+    ; @update is BOTH triples, and the emit below carries both records.
+    ; It used to be `l && r`, which answers r, so the A record was built
+    ; and thrown away — the example read as "update both" and updated one.
+    let update = (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)
+
+    ; GAP: `as ddns.update.:{?fqdn}` renders literally, as above.
+    emit [INFRA::ddns_update(:katachora.ddns.key, "katachora.com", @update)
           to channel(system.config.network.dns.ddns)]
       as ddns.update.:{?fqdn}
   }

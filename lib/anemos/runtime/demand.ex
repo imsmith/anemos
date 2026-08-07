@@ -8,6 +8,28 @@ defmodule Anemos.Runtime.Demand do
   - `:required` — must succeed, but evaluate rest of stack before failing
   - `:optional` — continue whether it succeeds or fails
   - `:sufficient` — if succeeds, skip rest of stack
+
+  ## Missing capabilities are not failures
+
+  The flags above govern how *failure* is handled. A capability that is not
+  present in the registry has not failed — it was never loaded, which is a
+  configuration error in the policy text (typically a typo in the capability
+  name). Such a demand is fatal under every flag, including `:optional` and
+  `:sufficient`.
+
+  Were it otherwise, a stack composed entirely of `:optional` demands naming
+  capabilities that do not exist would return `{:ok, []}` — a gate that reads
+  as an authorization check while authorizing nothing.
+
+  ## Neither is a context denial
+
+  For the same reason, a capability refused because the demanding rule sits
+  outside its declared context is fatal under every flag. Failure flags
+  describe how much a policy may tolerate a capability that *tried and could
+  not*; they do not get to describe how much it may tolerate crossing a
+  security boundary. The demanding rule's context is read from the
+  `:_rule_source` the dispatcher stamps into the execution context, and an
+  absent one denies — see `Anemos.Runtime.ContextScope`.
   """
 
   alias Anemos.Runtime.CapabilityServer
@@ -22,7 +44,7 @@ defmodule Anemos.Runtime.Demand do
 
   ## Examples
 
-      iex> {:ok, pid} = Anemos.Runtime.CapabilityServer.start_link(name_str: "k", context: "t", handler: fn _ -> {:ok, [%{type: :log, value: "ok"}]} end)
+      iex> {:ok, pid} = Anemos.Runtime.CapabilityServer.start_link(name_str: "k", context: nil, handler: fn _ -> {:ok, [%{type: :log, value: "ok"}]} end)
       iex> {:ok, ops} = Anemos.Runtime.Demand.evaluate([%{capability: "k", flag: :requisite}], %{"k" => pid}, %{})
       iex> [%{type: :log, value: "ok"}] = ops
       [%{type: :log, value: "ok"}]
@@ -43,23 +65,43 @@ defmodule Anemos.Runtime.Demand do
 
   defp eval_stack([demand | rest], registry, context, results, deferred_error) do
     case Map.get(registry, demand.capability) do
-      nil -> handle_missing(demand, rest, registry, context, results, deferred_error)
+      nil ->
+        handle_missing(demand)
+
       pid ->
-        case CapabilityServer.execute(pid, context) do
-          {:ok, ops} -> handle_success(demand, ops, rest, registry, context, results, deferred_error)
-          {:error, reason} -> handle_failure(demand, reason, rest, registry, context, results, deferred_error)
+        case CapabilityServer.execute(pid, context, demanding_context(context)) do
+          {:ok, ops} ->
+            handle_success(demand, ops, rest, registry, context, results, deferred_error)
+
+          # Fatal regardless of flag, and regardless of what else the stack
+          # would have gone on to authorize.
+          {:error, {:context_denied, error}} ->
+            {:error, error}
+
+          {:error, reason} ->
+            handle_failure(demand, reason, rest, registry, context, results, deferred_error)
         end
     end
   end
 
-  defp handle_missing(demand, rest, registry, context, results, deferred_error) do
-    error = {:error, {:unknown_capability, demand.capability}}
-    case demand.flag do
-      :requisite -> error
-      :required -> eval_stack(rest, registry, context, results, deferred_error || error)
-      :optional -> eval_stack(rest, registry, context, results, deferred_error)
-      :sufficient -> eval_stack(rest, registry, context, results, deferred_error)
+  # The dispatcher stamps `{rule_name, rule_context}` into every execution
+  # context before running a rule's operations. Anything else — a direct
+  # `evaluate/3` call from a test or a host — counts as having no context,
+  # which a scoped capability refuses.
+  defp demanding_context(context) do
+    case Map.get(context, :_rule_source) do
+      {_rule_name, rule_context} -> rule_context
+      _ -> nil
     end
+  end
+
+  # Fatal regardless of flag — see the moduledoc. Note the absence of any
+  # `rest` argument: there is no continuation from here.
+  defp handle_missing(demand) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.runtime/unknown_capability",
+       message: "Capability #{demand.capability} not found in registry"
+     )}
   end
 
   defp handle_success(demand, ops, rest, registry, context, results, deferred_error) do
@@ -71,6 +113,7 @@ defmodule Anemos.Runtime.Demand do
 
   defp handle_failure(demand, reason, rest, registry, context, results, deferred_error) do
     error = {:error, {:demand_failed, demand.capability, reason}}
+
     case demand.flag do
       :requisite -> error
       :required -> eval_stack(rest, registry, context, results, deferred_error || error)

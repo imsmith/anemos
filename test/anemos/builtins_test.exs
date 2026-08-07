@@ -25,9 +25,11 @@ defmodule Anemos.Runtime.BuiltinsTest do
 
   test "reduce accumulates over collection" do
     collection = [1, 2, 3, 4]
+
     body_fn = fn ctx, bindings ->
       Map.get(bindings, {:set, "total"}) + get_in(ctx, [:context_data, "x"])
     end
+
     result = Builtins.reduce(collection, "total", 0, "x", body_fn, %{}, %{})
     assert result == 10
   end
@@ -40,9 +42,11 @@ defmodule Anemos.Runtime.BuiltinsTest do
   test "emit calls command function for each element and returns collection" do
     collection = [1, 2, 3]
     test_pid = self()
+
     command_fn = fn element, _ctx, _bindings ->
       send(test_pid, {:emitted, element})
     end
+
     result = Builtins.emit(collection, command_fn, %{}, %{})
     assert result == [1, 2, 3]
     assert_received {:emitted, 1}

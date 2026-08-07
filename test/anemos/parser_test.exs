@@ -401,6 +401,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:time, {13, 0}}, body: [%AST.Log{}]} = at_block
@@ -414,6 +415,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:interval, {5, :min}}} = at_block
@@ -427,6 +429,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:recurring, {:time, {9, 0}}, :day}} = at_block
@@ -440,6 +443,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:recurring, {:time, {9, 0}}, :weekday}} = at_block
@@ -453,6 +457,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:recurring, {:time, {9, 0}}, :monday}} = at_block
@@ -466,6 +471,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:date, {2026, 4, 15}}} = at_block
@@ -479,6 +485,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [rule]}} = Parser.parse(input)
     [at_block] = rule.body
     assert %AST.At{time_spec: {:day, :friday}} = at_block
@@ -492,6 +499,7 @@ defmodule Anemos.ParserTest do
       }
     }
     """
+
     {:ok, %AST.Program{declarations: [cond_decl]}} = Parser.parse(input)
     [at_block] = cond_decl.body
     assert %AST.At{time_spec: {:recurring, {:time, {11, 0}}, :weekday}} = at_block
@@ -613,7 +621,9 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
     assert decl.source == "ghost.ian.homebrew"
     assert {:format_block, "edn", _raw} = decl.content
-    assert {:transclude, "resource.schema.knowledge", "resource.transducer.edn", "fact"} = decl.transclude
+
+    assert {:transclude, "resource.schema.knowledge", "resource.transducer.edn", "fact"} =
+             decl.transclude
   end
 
   test "parses dynamic data block" do
@@ -661,7 +671,7 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
     assert %AST.QueryDecl{} = decl
     assert decl.name == "wd-city"
-    assert decl.expect == [:city, :state]
+    assert decl.expect == ["city", "state"]
     assert decl.engine == "wikidata"
     assert is_binary(decl.body)
     assert decl.return == "city"
@@ -809,7 +819,9 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
     when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
     let_stmt = hd(when_block.body)
-    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :filter}} = let_stmt.value
+
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :filter}} =
+             let_stmt.value
   end
 
   test "parses map built-in" do
@@ -824,7 +836,9 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
     when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
     let_stmt = hd(when_block.body)
-    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :map}} = let_stmt.value
+
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :map}} =
+             let_stmt.value
   end
 
   test "parses reduce built-in" do
@@ -839,7 +853,10 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
     when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
     let_stmt = hd(when_block.body)
-    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :reduce}} = let_stmt.value
+
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :reduce}} =
+             let_stmt.value
+
     builtin = let_stmt.value.right
     assert length(builtin.args) == 4
   end
@@ -856,7 +873,9 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
     when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
     let_stmt = hd(when_block.body)
-    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :emit}} = let_stmt.value
+
+    assert %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :emit}} =
+             let_stmt.value
   end
 
   test "parses chained pipe with multiple built-ins" do
@@ -871,11 +890,12 @@ defmodule Anemos.ParserTest do
     assert {:ok, %{declarations: [rule]}} = Anemos.Parser.parse(input)
     when_block = Enum.find(rule.body, &match?(%Anemos.AST.When{}, &1))
     let_stmt = hd(when_block.body)
+
     assert %Anemos.AST.BinaryOp{
-      op: :|>,
-      left: %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :filter}},
-      right: %Anemos.AST.BuiltinCall{name: :map}
-    } = let_stmt.value
+             op: :|>,
+             left: %Anemos.AST.BinaryOp{op: :|>, right: %Anemos.AST.BuiltinCall{name: :filter}},
+             right: %Anemos.AST.BuiltinCall{name: :map}
+           } = let_stmt.value
   end
 
   test "pipe operator has lowest precedence" do

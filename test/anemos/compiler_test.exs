@@ -3,8 +3,27 @@ defmodule Anemos.CompilerTest do
   use ExUnit.Case, async: true
 
   alias Anemos.{Compiler, Parser}
+  alias Anemos.Runtime.ModuleRegistry
 
   doctest Anemos.Compiler
+
+  # A-56. Expression-position `[MODULE::verb]` is dispatched during
+  # evaluation, so a closure that meets one needs the same two keys the
+  # dispatcher puts in its evaluation context: the registry to resolve the
+  # module, and the context to hand host code.
+  defmodule Echo do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+
+    @impl true
+    def handle_verb(verb, args, _context), do: {:ok, "#{verb}(#{Enum.join(args, ",")})"}
+  end
+
+  defp eval_context(modules) do
+    {:ok, registry} = ModuleRegistry.start_link([])
+    Enum.each(modules, fn name -> :ok = ModuleRegistry.register(registry, name, Echo) end)
+    %{registry: registry, _verb_context: %{}}
+  end
 
   test "compiles a rule to a module with handle_event/2" do
     input = """
@@ -100,7 +119,12 @@ defmodule Anemos.CompilerTest do
     assert [%{type: :log, value: "hello"}] = ops
   end
 
-  test "let binding with command produces command operation" do
+  # A-56. This test previously asserted the defect: `let x = [MOD::verb]`
+  # emitted the call as an operation *and* bound an inert descriptor of it,
+  # so `@x` was the descriptor and the verb's real answer was thrown into
+  # the top-level results list. Now the call is made once, during
+  # evaluation, and `@x` is what it answered.
+  test "a let-bound command binds the verb's return value and emits no command op" do
     input = """
     rule let-cmd-rule {
       when TEST_EVENT {
@@ -113,12 +137,87 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
-    # let with a command value stores the command op; log resolves $title to it
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    assert [%{type: :log, value: "title()"}] = ops
+  end
+
+  test "a command in expression position is invoked once per occurrence" do
+    input = """
+    rule twice {
+      when TEST_EVENT {
+        log [PDF::title]
+        log [PDF::title]
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    assert [%{type: :log, value: "title()"}, %{type: :log, value: "title()"}] = ops
+  end
+
+  test "a nested command is invoked and its value passed as the outer argument" do
+    input = """
+    rule nested {
+      when TEST_EVENT {
+        [DEVICE::set "k" [PDF::title]]
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    # The outer call stays a statement-position operation; only the inner one
+    # was in value position, and it was resolved before the op was built.
+    assert [%{type: :command, module: "DEVICE", verb: "set", args: ["k", "title()"]}] = ops
+  end
+
+  test "a guard comparing a command's value can be true" do
+    input = """
+    rule guarded {
+      when TEST_EVENT {
+        if [PDF::title] eq "title()" {
+          log "matched"
+        }
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["PDF"]), %{})
+    assert [%{type: :log, value: "matched"}] = ops
+  end
+
+  # The failure semantics: not nil, and not silent. See the "When the verb
+  # fails" section of the compiler moduledoc.
+  test "an unresolvable command in expression position aborts the body with an error op" do
+    input = """
+    rule failing {
+      when TEST_EVENT {
+        log "before"
+        let x = [NOSUCH::verb]
+        log "after"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context([]), %{})
+
     assert [
-             %{type: :command, module: "PDF", verb: "title", args: []},
-             %{type: :log, value: %{type: :command, module: "PDF", verb: "title", args: []}}
+             %{type: :log, value: "before"},
+             %{type: :verb_error, error: %Comn.Errors.ErrorStruct{} = error}
            ] = ops
+
+    assert error.code == "anemos.runtime/unknown_module"
   end
 
   test "emit operations are compiled" do
@@ -133,10 +232,9 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["EVENT"]), %{})
 
-    assert [%{type: :emit, value: %{type: :command, module: "EVENT", verb: "fire", args: []}}] =
-             ops
+    assert [%{type: :emit, value: "fire()"}] = ops
   end
 
   test "emit with type and label" do
@@ -151,7 +249,7 @@ defmodule Anemos.CompilerTest do
     {:ok, ast} = Parser.parse(input)
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
+    {:ok, ops, _} = compiled.handler.("TEST_EVENT", eval_context(["EVENT"]), %{})
     assert [%{type: :emit, emit_type: :state, label: "my.label"}] = ops
   end
 
@@ -369,6 +467,92 @@ defmodule Anemos.CompilerTest do
     assert is_function(cond.evaluator, 2)
   end
 
+  # --- A-04: the trigger expression must reach the evaluator ---
+
+  test "condition evaluator is false for an event it does not subscribe to" do
+    input = """
+    condition networkchanged {
+      when INFRA_ip4_addr_changed {
+        log "network changed"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("INFRA_ip4_addr_changed", %{}) == true
+    assert cond.evaluator.("SOMETHING_ELSE", %{}) == false
+  end
+
+  test "condition evaluator honours an unless guard on the trigger" do
+    input = """
+    condition maintenance_free {
+      when SERVICE_PING unless ?mode == "maintenance" {
+        log "up"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("SERVICE_PING", %{context_data: %{"mode" => "normal"}}) == true
+    assert cond.evaluator.("SERVICE_PING", %{context_data: %{"mode" => "maintenance"}}) == false
+  end
+
+  test "condition evaluator honours a top-level if trigger as a predicate" do
+    input = """
+    condition disk_pressure {
+      when DISK_STAT {
+        log "checked"
+      }
+      if ?pct > 90 {
+        log "high"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("DISK_STAT", %{context_data: %{"pct" => 95}}) == true
+    assert cond.evaluator.("DISK_STAT", %{context_data: %{"pct" => 50}}) == false
+  end
+
+  test "condition with a compound OR trigger is true for either event" do
+    input = """
+    condition networkchanged {
+      when (INFRA_ip4_addr_changed OR INFRA_ip6_addr_changed) {
+        log "network changed"
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert cond.evaluator.("INFRA_ip4_addr_changed", %{}) == true
+    assert cond.evaluator.("INFRA_ip6_addr_changed", %{}) == true
+    assert cond.evaluator.("INFRA_unrelated", %{}) == false
+  end
+
+  test "condition side effects see the triggering event context" do
+    input = """
+    condition named_host {
+      when HOST_SEEN {
+        log ?hostname
+      }
+    }
+    """
+
+    {:ok, ast} = Parser.parse(input)
+    {:ok, %{conditions: [cond]}} = Compiler.compile(ast)
+
+    assert {:ok, [%{type: :log, value: "alpha"}]} =
+             cond.side_effect_handler.(%{context_data: %{"hostname" => "alpha"}})
+  end
+
   test "compiles capability declaration into CompiledCapability" do
     input = """
     capability test-key {
@@ -465,6 +649,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -487,6 +672,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -505,11 +691,14 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
     [sched] = compiled.schedules
-    assert sched.event_name == "AT_09_00"
+    # A-61: recurrence is encoded in the event name, so `at 09:00` and
+    # `at 09:00 every day` no longer share a timer key.
+    assert sched.event_name == "AT_09_00_EVERY_DAY"
     assert sched.time_spec == {:time, {9, 0}}
     assert sched.recurrence == :day
   end
@@ -522,12 +711,13 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
     assert length(compiled.schedules) == 1
     [sched] = compiled.schedules
-    assert sched.event_name == "AT_11_00"
+    assert sched.event_name == "AT_11_00_EVERY_WEEKDAY"
     assert sched.recurrence == :weekday
   end
 
@@ -542,6 +732,7 @@ defmodule Anemos.CompilerTest do
       }
     }
     """
+
     {:ok, ast} = Parser.parse(input)
     {:ok, compiled} = Compiler.compile(ast)
 
@@ -599,7 +790,7 @@ defmodule Anemos.CompilerTest do
 
     assert [query] = result.query_blocks
     assert query.name == "find-user"
-    assert query.expect == [:name]
+    assert query.expect == ["name"]
     assert query.engine == "users"
     assert query.return == "user"
     assert is_function(query.handler, 2)
@@ -805,5 +996,28 @@ defmodule Anemos.CompilerTest do
 
     assert ev1_rule.dwell_duration_ms == nil
     assert ev2_rule.dwell_duration_ms == 300_000
+  end
+
+  # A-37: the lexer constrains `for <duration>` units to nine known values, so
+  # this AST cannot be produced by the parser today. Compiled directly, an
+  # unknown unit must be rejected rather than stored as a dwell duration.
+  test "an unknown dwell duration unit is a compile error, not a stored value" do
+    ast = %Anemos.AST.Program{
+      declarations: [
+        %Anemos.AST.Rule{
+          name: "r",
+          body: [
+            %Anemos.AST.When{
+              event: "EV",
+              duration: {2, :fortnights},
+              body: [%Anemos.AST.Log{expression: %Anemos.AST.Literal{value: "hi"}}]
+            }
+          ]
+        }
+      ]
+    }
+
+    assert {:error, message} = Compiler.compile(ast)
+    assert message =~ "fortnights"
   end
 end

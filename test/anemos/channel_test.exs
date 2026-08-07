@@ -39,7 +39,7 @@ defmodule Anemos.ChannelTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_channel, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_channel, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, _results} = Anemos.Runtime.dispatch(:test_channel, "ALERT")
 
@@ -67,9 +67,10 @@ defmodule Anemos.ChannelTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_chan_src, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_chan_src, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
-    {:ok, _} = Anemos.Runtime.dispatch(:test_chan_src, "ALERT", %{context_path: "infra.networking"})
+    {:ok, _} =
+      Anemos.Runtime.dispatch(:test_chan_src, "ALERT", %{context_path: "infra.networking"})
 
     assert_receive {:published, "alerts", envelope}
     assert envelope.source == "scoped-notify@infra.networking"
@@ -88,7 +89,7 @@ defmodule Anemos.ChannelTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_chan_type, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_chan_type, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, _results} = Anemos.Runtime.dispatch(:test_chan_type, "READING")
 
@@ -110,7 +111,7 @@ defmodule Anemos.ChannelTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_chan_none, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_chan_none, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, _results} = Anemos.Runtime.dispatch(:test_chan_none, "EV")
 
@@ -128,7 +129,7 @@ defmodule Anemos.ChannelTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_chan_default, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_chan_default, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     log =
       ExUnit.CaptureLog.capture_log(fn ->
@@ -158,7 +159,7 @@ defmodule Anemos.ChannelTest do
     }
     """)
 
-    Anemos.Runtime.register(:test_chan_redispatch, "EVENT", Anemos.Runtime.Modules.Device)
+    Anemos.Runtime.register(:test_chan_redispatch, "EVENT", Anemos.Runtime.Modules.Example.Event)
 
     {:ok, results} = Anemos.Runtime.dispatch(:test_chan_redispatch, "SOURCE")
 

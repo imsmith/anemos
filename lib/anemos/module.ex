@@ -8,15 +8,23 @@ defmodule Anemos.Module do
 
   ## Usage
 
-      # lib/my_app/anemos/secret.ex
+      # lib/my_app/anemos/secret.ex — inside MyApp.Anemos.Secret
       use Anemos.Module, name: "SECRET"
 
-      verb :unlock, &Comn.Secret.unlock/2
-      verb :rotate, &Comn.Secret.rotate/1
+      verb :unlock, &MyApp.Vault.unlock/2
 
   Then register it:
 
       Anemos.Runtime.register(:anemos, MyApp.Anemos.Secret)
+
+  > #### Wrap secret-bearing return values {: .warning}
+  >
+  > A verb that returns credential material should wrap it in
+  > `Anemos.Secret.new/2`. The wrapper redacts through `inspect/1`,
+  > string interpolation and `Logger`, which is what keeps a secret out of
+  > the application log when a policy does `log @token` or emits through
+  > the default channel connector. Nothing else on that path will redact
+  > it for you.
 
   The module carries its own name — no string to fat-finger at the call site.
 
@@ -85,8 +93,10 @@ defmodule Anemos.Module do
 
       @impl Anemos.Runtime.Module
       def handle_verb(verb, _args, _context) do
-        {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_verb",
-          message: "Verb #{verb} not found on module #{unquote(name)}")}
+        {:error,
+         Comn.Errors.Registry.error!("anemos.runtime/unknown_verb",
+           message: "Verb #{verb} not found on module #{unquote(name)}"
+         )}
       end
 
       @impl Comn

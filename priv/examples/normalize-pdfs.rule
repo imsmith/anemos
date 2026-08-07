@@ -1,6 +1,39 @@
 ; PDF metadata normalizer
 ; Ensures PDF metadata matches document content,
 ; renames file to slugified title.
+;
+; Run it:
+;
+;   mix anemos.run priv/examples/normalize-pdfs.rule \
+;     --event FILE_CREATED --context /papers --stub-modules \
+;     --context-data file=/papers/Draft_Report_v2.pdf \
+;     --context-data meta_title="Untitled Document"
+;
+; --context is required: the `context "/papers"` block below is a security
+; boundary and fails closed, so the rule is unreachable until the caller
+; says where it is standing. --stub-modules registers the PDF and STRING
+; doubles; --context-data supplies the file under evaluation and the
+; metadata title that should disagree with it.
+;
+; Expect three operations from that invocation:
+;
+;   [PDF::metadata "title" "Draft Report v2"]
+;   [PDF::metadata "author" "Unknown Author"]
+;   [FILE::rename "draft-report-v2"]
+;
+; The first two come from the inner branch, which fires because the title
+; the document implies ("Draft Report v2", derived from the filename) and
+; the title actually recorded ("Untitled Document") disagree. Pass
+; --context-data meta_title="Draft Report v2" instead and the two agree,
+; the inner branch does not fire, and only the rename is produced. That
+; difference is what the example is for. (Omitting the flag entirely is not
+; the agreeing case: the recorded title is then absent, which disagrees.)
+;
+; This file is the one A-56 blocked. Every read below — the extension in
+; the guard, both titles, the author, the slug — is a module call in
+; expression position, and until those were dispatched during evaluation
+; the outer guard compared a descriptor map to "pdf" and was false for
+; every input. Nothing in the rule needed changing; the runtime did.
 
 rule normalize-pdfs {
   context "/papers" {
@@ -9,12 +42,17 @@ rule normalize-pdfs {
         let title = [PDF::title]
         let meta_title = [PDF::metadata title]
 
-        if $title ne $meta_title {
-          [PDF::metadata title $title]
+        ; @, not $: `let` binds an immutable @-sigil variable. This read
+        ; said $title, which is the mutable namespace `set` writes to, so
+        ; both sides resolved to nil, nil ne nil was false, and the branch
+        ; was dead even where the guard above passed. Nothing reported it
+        ; (A-25). Fixed here, and now reachable.
+        if @title ne @meta_title {
+          [PDF::metadata title @title]
           [PDF::metadata author [PDF::author]]
         }
 
-        [FILE::rename [STRING::slugify $title]]
+        [FILE::rename [STRING::slugify @title]]
       }
     }
   }

@@ -15,7 +15,10 @@ defmodule Anemos.ComnDiscoveryTest do
     test "choices lists actions" do
       assert %{actions: actions} = Anemos.Runtime.choices()
       assert "dispatch" in actions
-      assert "load" in actions
+
+      # A-12: loading is the trust boundary and is not an action a generic
+      # Comn router may reach. `load/3` is the only entry point.
+      refute "load" in actions
     end
 
     test "act with unknown action returns error" do

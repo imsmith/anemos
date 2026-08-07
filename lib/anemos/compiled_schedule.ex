@@ -11,11 +11,12 @@ defmodule Anemos.CompiledSchedule do
 
   @type t :: %__MODULE__{
           event_name: String.t(),
-          time_spec: {:time, {non_neg_integer(), non_neg_integer()}}
-                   | {:date, {non_neg_integer(), non_neg_integer(), non_neg_integer()}}
-                   | {:day, atom()}
-                   | {:interval, {non_neg_integer(), atom()}}
-                   | {:delay_ms, non_neg_integer()},
+          time_spec:
+            {:time, {non_neg_integer(), non_neg_integer()}}
+            | {:date, {non_neg_integer(), non_neg_integer(), non_neg_integer()}}
+            | {:day, atom()}
+            | {:interval, {non_neg_integer(), atom()}}
+            | {:delay_ms, non_neg_integer()},
           recurrence: atom() | nil,
           handler: (-> {:ok, [map()]}) | nil,
           context: String.t() | nil

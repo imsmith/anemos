@@ -7,24 +7,29 @@ defmodule Anemos.Runtime.ConditionServerTest do
   doctest Anemos.Runtime.ConditionServer
 
   test "starts with state false" do
-    {:ok, pid} = ConditionServer.start_link(
-      name_str: "networkchanged",
-      subscriptions: ["INFRA_ip4_addr_changed"],
-      evaluator: fn _event, _ctx -> true end,
-      side_effects: []
-    )
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "networkchanged",
+        subscriptions: ["INFRA_ip4_addr_changed"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effects: []
+      )
+
     assert ConditionServer.get_state(pid) == false
   end
 
   test "transitions to true when matching event arrives and evaluator returns true" do
     test_pid = self()
-    {:ok, pid} = ConditionServer.start_link(
-      name_str: "networkchanged",
-      subscriptions: ["INFRA_ip4_addr_changed"],
-      evaluator: fn _event, _ctx -> true end,
-      side_effects: [],
-      on_transition: fn name -> send(test_pid, {:condition_true, name}) end
-    )
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "networkchanged",
+        subscriptions: ["INFRA_ip4_addr_changed"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effects: [],
+        on_transition: fn name -> send(test_pid, {:condition_true, name}) end
+      )
+
     ConditionServer.handle_event(pid, "INFRA_ip4_addr_changed", %{})
     assert ConditionServer.get_state(pid) == true
     assert_receive {:condition_true, "networkchanged"}
@@ -32,13 +37,16 @@ defmodule Anemos.Runtime.ConditionServerTest do
 
   test "does not broadcast when already true (true->true)" do
     test_pid = self()
-    {:ok, pid} = ConditionServer.start_link(
-      name_str: "networkchanged",
-      subscriptions: ["INFRA_ip4_addr_changed"],
-      evaluator: fn _event, _ctx -> true end,
-      side_effects: [],
-      on_transition: fn name -> send(test_pid, {:condition_true, name}) end
-    )
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "networkchanged",
+        subscriptions: ["INFRA_ip4_addr_changed"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effects: [],
+        on_transition: fn name -> send(test_pid, {:condition_true, name}) end
+      )
+
     ConditionServer.handle_event(pid, "INFRA_ip4_addr_changed", %{})
     assert_receive {:condition_true, "networkchanged"}
     ConditionServer.handle_event(pid, "INFRA_ip4_addr_changed", %{})
@@ -48,16 +56,19 @@ defmodule Anemos.Runtime.ConditionServerTest do
   test "transitions silently to false when evaluator returns false" do
     test_pid = self()
     call_count = :counters.new(1, [:atomics])
-    {:ok, pid} = ConditionServer.start_link(
-      name_str: "temp_high",
-      subscriptions: ["TEMP_READING"],
-      evaluator: fn _event, _ctx ->
-        :counters.add(call_count, 1, 1)
-        :counters.get(call_count, 1) == 1
-      end,
-      side_effects: [],
-      on_transition: fn name -> send(test_pid, {:condition_true, name}) end
-    )
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "temp_high",
+        subscriptions: ["TEMP_READING"],
+        evaluator: fn _event, _ctx ->
+          :counters.add(call_count, 1, 1)
+          :counters.get(call_count, 1) == 1
+        end,
+        side_effects: [],
+        on_transition: fn name -> send(test_pid, {:condition_true, name}) end
+      )
+
     ConditionServer.handle_event(pid, "TEMP_READING", %{})
     assert ConditionServer.get_state(pid) == true
     assert_receive {:condition_true, "temp_high"}
@@ -67,23 +78,27 @@ defmodule Anemos.Runtime.ConditionServerTest do
   end
 
   test "ignores non-subscribed events" do
-    {:ok, pid} = ConditionServer.start_link(
-      name_str: "networkchanged",
-      subscriptions: ["INFRA_ip4_addr_changed"],
-      evaluator: fn _event, _ctx -> true end,
-      side_effects: []
-    )
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "networkchanged",
+        subscriptions: ["INFRA_ip4_addr_changed"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effects: []
+      )
+
     ConditionServer.handle_event(pid, "UNRELATED_EVENT", %{})
     assert ConditionServer.get_state(pid) == false
   end
 
   test "queryable at any time" do
-    {:ok, pid} = ConditionServer.start_link(
-      name_str: "test_cond",
-      subscriptions: ["EV"],
-      evaluator: fn _event, _ctx -> true end,
-      side_effects: []
-    )
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "test_cond",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effects: []
+      )
+
     assert ConditionServer.get_state(pid) == false
     ConditionServer.handle_event(pid, "EV", %{})
     assert ConditionServer.get_state(pid) == true
@@ -105,6 +120,40 @@ defmodule Anemos.Runtime.ConditionServerTest do
 
     ConditionServer.handle_event(pid, "EV", %{})
     assert_receive :side_effect_fired
+  end
+
+  test "a 1-arity side effect handler receives the triggering event context" do
+    test_pid = self()
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "ctx_effects",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effect_handler: fn context ->
+          send(test_pid, {:side_effect_context, context})
+          {:ok, []}
+        end
+      )
+
+    ConditionServer.handle_event(pid, "EV", %{context_data: %{"host" => "alpha"}})
+    assert_receive {:side_effect_context, %{context_data: %{"host" => "alpha"}}}
+  end
+
+  test "side effect operations are handed to on_side_effects when supplied" do
+    test_pid = self()
+
+    {:ok, pid} =
+      ConditionServer.start_link(
+        name_str: "routed",
+        subscriptions: ["EV"],
+        evaluator: fn _event, _ctx -> true end,
+        side_effect_handler: fn _ctx -> {:ok, [%{type: :log, value: "effect"}]} end,
+        on_side_effects: fn name, ops -> send(test_pid, {:ops, name, ops}) end
+      )
+
+    ConditionServer.handle_event(pid, "EV", %{})
+    assert_receive {:ops, "routed", [%{type: :log, value: "effect"}]}
   end
 
   test "side effects do not execute on true->true" do

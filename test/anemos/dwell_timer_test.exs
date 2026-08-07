@@ -9,7 +9,10 @@ defmodule Anemos.DwellTimerTest do
     {:ok, ast} = Parser.parse(source)
     {:ok, compiled} = Compiler.compile(ast)
     {:ok, registry} = ModuleRegistry.start_link([])
-    {:ok, dispatcher} = Dispatcher.start_link(rules: compiled.rules, registry: registry)
+
+    {:ok, dispatcher} =
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
+
     dispatcher
   end
 
@@ -30,6 +33,7 @@ defmodule Anemos.DwellTimerTest do
       when EV for 50ms { log "fired" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     log =
@@ -49,6 +53,7 @@ defmodule Anemos.DwellTimerTest do
       when EV for 200ms { log "fired" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     elapsed_ref = :counters.new(1, [:atomics])
@@ -80,6 +85,7 @@ defmodule Anemos.DwellTimerTest do
       when EV for 100ms { log "fired" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     log =
@@ -103,6 +109,7 @@ defmodule Anemos.DwellTimerTest do
       when EV for 100ms { log "fired" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     log =
@@ -125,6 +132,7 @@ defmodule Anemos.DwellTimerTest do
       when EV for 50ms { log "fired" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     log =
@@ -144,14 +152,17 @@ defmodule Anemos.DwellTimerTest do
       when EV for 50ms { log "fired" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     log =
       capture_log(fn ->
         _ = Dispatcher.dispatch(dispatcher, "EV", %{})
-        Process.sleep(80)  # fires at ~50ms
+        # fires at ~50ms
+        Process.sleep(80)
         _ = Dispatcher.dispatch(dispatcher, "EV", %{})
-        Process.sleep(80)  # fires again at ~130ms total
+        # fires again at ~130ms total
+        Process.sleep(80)
       end)
 
     fired_count =
@@ -172,6 +183,7 @@ defmodule Anemos.DwellTimerTest do
       when EV2 for 50ms { log "two" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     log =
@@ -191,6 +203,7 @@ defmodule Anemos.DwellTimerTest do
       when EV { log "immediate" }
     }
     """
+
     dispatcher = setup_runtime(src)
 
     results = Dispatcher.dispatch(dispatcher, "EV", %{})

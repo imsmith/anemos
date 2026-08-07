@@ -42,11 +42,12 @@ defmodule Anemos.EventTest do
     }
     """)
 
-    {:ok, results} = Anemos.Runtime.dispatch(:test_map_evt, %{
-      name: "TICK",
-      context: "timers",
-      payload: %{"count" => 42}
-    })
+    {:ok, results} =
+      Anemos.Runtime.dispatch(:test_map_evt, %{
+        name: "TICK",
+        context: "timers",
+        payload: %{"count" => 42}
+      })
 
     assert [%{type: :log, value: 42}] = results
   end
@@ -65,15 +66,23 @@ defmodule Anemos.EventTest do
     """)
 
     # Matching context
-    {:ok, results} = Anemos.Runtime.dispatch(:test_ctx_filter, %{
-      name: "MOTION", context: "garage", payload: %{}
-    })
+    {:ok, results} =
+      Anemos.Runtime.dispatch(:test_ctx_filter, %{
+        name: "MOTION",
+        context: "garage",
+        payload: %{}
+      })
+
     assert [%{type: :log, value: "garage motion"}] = results
 
     # Wrong context
-    {:ok, results} = Anemos.Runtime.dispatch(:test_ctx_filter, %{
-      name: "MOTION", context: "kitchen", payload: %{}
-    })
+    {:ok, results} =
+      Anemos.Runtime.dispatch(:test_ctx_filter, %{
+        name: "MOTION",
+        context: "kitchen",
+        payload: %{}
+      })
+
     assert results == []
   end
 

@@ -124,21 +124,47 @@ in a single call without a supervision tree:
 
 ```elixir
 source = File.read!("priv/examples/garage-lights.rule")
-{:ok, results} = Anemos.run(source, event: "SENSOR_MOTION_DETECTED")
+
+{:ok, results} =
+  Anemos.run(source,
+    event: "SENSOR_MOTION_DETECTED",
+    context_path: "garage.motion.sensor"
+  )
 ```
+
+`context_path` is required here because the rule is wrapped in a `context`
+block. `context` is a security boundary and fails closed: omitting the path
+is not "run everything", it is "I decline to say where I am standing", and a
+declared boundary refuses that.
 
 ### CLI
 
 ```bash
-mix anemos.run <file.rule> --event <EVENT_NAME>
+mix anemos.run <file.rule> --event <EVENT_NAME> [options]
 ```
 
+| Option | Meaning |
+| --- | --- |
+| `--event`, `-e` | Event name to dispatch. Required. |
+| `--context`, `-c` | Context path the caller occupies, matched against each rule's `context` block. |
+| `--context-data K=V` | External data that `?var` resolves against. Repeatable. |
+| `--stub-modules` | Register the demonstration doubles some examples need. |
+| `--help`, `-h` | Usage summary. |
+
+`--context` and `--context-data` are different things: the first is *where
+the caller stands*, the second is *what it brought with it*.
+
 ```bash
-$ mix anemos.run priv/examples/garage-lights.rule --event SENSOR_MOTION_DETECTED
+$ mix anemos.run priv/examples/garage-lights.rule \
+    --event SENSOR_MOTION_DETECTED --context garage.motion.sensor
+Parsed priv/examples/garage-lights.rule.
 Dispatched SENSOR_MOTION_DETECTED -- 1 operation(s):
 
   [DEVICE::set "garage.lights" "on"]
 ```
+
+The task exits `0` only when every operation succeeded, so it can gate a
+script or a CI step.
 
 ## Language Constructs
 
@@ -155,6 +181,30 @@ rule name {
   }
 }
 ```
+
+### Provenance
+
+`signed_by` names a signer the source must carry. It is written at source
+level, outside any declaration, because a detached signature covers the
+whole file — not one rule inside it.
+
+```
+signed_by :operator
+
+condition night {
+  when SUNSET { log "dark" }
+}
+```
+
+Whether an unsigned source loads is the runtime's `:unsigned_policy`
+setting: `:permit` (the default), `:warn`, or `:strict`. A source naming
+any signer is never treated as unsigned — it is making a provenance
+claim, and `:permit` does not launder it. Where several signers are
+named, all of them must verify.
+
+`signed_by` is also accepted as rule metadata, where it means the same
+thing. Source level is the placement to prefer; it is the only one
+available to a file that declares no rule.
 
 ### Conditions
 
@@ -273,12 +323,22 @@ nextevent STEP_TWO
 
 ; Dispatch to a different rule by name
 nextrule other-rule
+
+; Either one may carry arguments to its target
+nextevent STEP_TWO with { stage: "two", file: @path }
+nextrule other-rule with { who: ?sender }
 ```
 
 `return` and `done` stop execution immediately — statements after them
 are not reached. `nextevent` re-dispatches within the same rule's when
 blocks. `nextrule` invokes another rule directly, bypassing event
 subscription matching.
+
+A `with { }` block delivers its pairs to the target as event context
+data, so the target reads them with `?key` exactly as it would read a
+real event payload. The pairs are resolved against the *sending* body's
+bindings and merged over the originating event's context rather than
+replacing it, so the target still sees what got it there.
 
 ### Scheduled Triggers
 
@@ -389,6 +449,50 @@ Full operator precedence (14 levels, matching the language spec):
 
 Arithmetic (`+`, `-`, `*`, `/`, `%`), bitwise (`&`, `|`, `^`, `<<`, `>>`, `~`),
 comparison, logical, and membership operators all at correct precedence.
+
+#### `AND` compounds, `OR` alternates
+
+Over booleans these are ordinary conjunction and disjunction. Over any
+other operands they carry values, and the two differ: **`AND` answers
+every operand, `OR` answers the first available one.**
+
+```
+; AND — "let update have the value A *and* the value B"
+let update = (:host IN A "1.1.1.1") AND (:host IN AAAA "::1")
+; @update == [["host", "IN", "A", "1.1.1.1"], ["host", "IN", "AAAA", "::1"]]
+
+; OR — "let pick have the value A, *or else* B"
+let pick = ?preferred OR ?fallback
+; @pick is whichever of the two the host actually sent
+```
+
+A compound is an ordinary list by the time it reaches a binding, so it
+flows into a call like `[INFRA::ddns_update ... update]` as an argument.
+The `update-ddns` example above depends on this: it builds an A record
+and an AAAA record and sends both.
+
+For `AND`, a `false` or `nil` operand answers for the whole expression
+and nothing is compounded, so `if ?missing AND ?present` stays false
+rather than becoming a truthy list. `true` carries nothing and drops
+out. For `OR`, `false` and `nil` drop out instead, and the first operand
+carrying a value wins.
+
+Neither short-circuits. An operand may be a `[MODULE::verb]` call whose
+side effect is the point, and it happens whether or not its value turns
+out to be reachable.
+
+The two spellings are not symmetric, and the reason is that only one of
+them changed meaning. `||` is the same operator as `OR` — alternation
+was already what it did, so there was nothing to preserve. `&&` stays
+purely logical and answers its right operand, which is how you ask for
+that behaviour deliberately now that `AND` no longer provides it:
+
+```
+(A) AND (B)   ; [A, B]  — both values
+(A) &&  (B)   ; B       — purely logical
+(A) OR  (B)   ; A       — the first available
+(A) ||  (B)   ; A       — same operator as OR
+```
 
 ### Event Protocol
 

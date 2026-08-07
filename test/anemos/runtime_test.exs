@@ -140,7 +140,9 @@ defmodule Anemos.RuntimeTest do
     }
     """)
 
-    {:ok, results} = Anemos.Runtime.dispatch(:test_ctx, "GREET", %{context_data: %{"name" => "ian"}})
+    {:ok, results} =
+      Anemos.Runtime.dispatch(:test_ctx, "GREET", %{context_data: %{"name" => "ian"}})
+
     assert [%{type: :log, value: "ian"}] = results
   end
 
@@ -179,14 +181,19 @@ defmodule Anemos.RuntimeTest do
     }
 
     rule use-cap {
-      when DO_IT {
-        demand test-cap
-        log "after demand"
+      context "test" {
+        when DO_IT {
+          demand test-cap
+          log "after demand"
+        }
       }
     }
     """)
 
-    {:ok, results} = Anemos.Runtime.dispatch(:test_demand, "DO_IT")
+    # The capability declares `context test`, so the demanding rule has to
+    # stand in it and the event has to name it. Before A-07 the context line
+    # constrained nothing and this passed with the rule unscoped.
+    {:ok, results} = Anemos.Runtime.dispatch(:test_demand, "DO_IT", %{context_path: "test"})
     log_values = for %{type: :log, value: v} <- results, do: v
     assert "cap executed" in log_values
     assert "after demand" in log_values
@@ -199,20 +206,26 @@ defmodule Anemos.RuntimeTest do
   end
 
   test "at interval fires through runtime" do
+    import ExUnit.CaptureLog
+
     start_supervised!({Anemos.Runtime, name: :test_at_rt})
 
-    Anemos.Runtime.load(:test_at_rt, """
-    rule tick {
-      at interval(50ms) {
-        log "tick"
-      }
-    }
-    """)
+    # 1s is the scheduler's interval floor; anything shorter is rejected
+    # outright rather than armed. See Anemos.Runtime.Scheduler.
+    log =
+      capture_log(fn ->
+        Anemos.Runtime.load(:test_at_rt, """
+        rule tick {
+          at interval(1s) {
+            log "tick"
+          }
+        }
+        """)
 
-    # Give the interval time to fire
-    Process.sleep(150)
+        Process.sleep(1_200)
+      end)
 
-    # Verify scheduler process is running
+    assert log =~ "tick"
     assert Process.alive?(Process.whereis(:"test_at_rt.scheduler"))
   end
 

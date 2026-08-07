@@ -108,7 +108,18 @@ defmodule Anemos.TripleTest do
     {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
 
     {:ok, ops, _} = compiled.handler.("EV", %{}, %{})
-    assert [%{type: :log, value: %{type: :triple_query, subject: {:var, "a"}, predicate: "worksOn", object: {:var, "p"}}}] = ops
+
+    assert [
+             %{
+               type: :log,
+               value: %{
+                 type: :triple_query,
+                 subject: {:var, "a"},
+                 predicate: "worksOn",
+                 object: {:var, "p"}
+               }
+             }
+           ] = ops
   end
 
   # --- Runtime integration ---

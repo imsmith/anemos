@@ -19,9 +19,13 @@ defmodule Anemos.PipeIntegrationTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(rules: compiled.rules, registry: registry)
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
 
-    results = Dispatcher.dispatch(dispatcher, "BATCH", %{context_data: %{"scores" => [10, 60, 30, 80, 45]}})
+    results =
+      Dispatcher.dispatch(dispatcher, "BATCH", %{
+        context_data: %{"scores" => [10, 60, 30, 80, 45]}
+      })
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     log_op = Enum.find(ops, &(&1.type == :log))
     assert log_op.value == [60, 80]
@@ -42,9 +46,11 @@ defmodule Anemos.PipeIntegrationTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(rules: compiled.rules, registry: registry)
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
 
-    results = Dispatcher.dispatch(dispatcher, "DATA", %{context_data: %{"values" => [-1, 2, -3, 4, 5]}})
+    results =
+      Dispatcher.dispatch(dispatcher, "DATA", %{context_data: %{"values" => [-1, 2, -3, 4, 5]}})
+
     ops = for {:ok, op} <- List.flatten(results), do: op
     log_op = Enum.find(ops, &(&1.type == :log))
     # filter: [2, 4, 5], map: [4, 8, 10], reduce: 22
@@ -66,7 +72,7 @@ defmodule Anemos.PipeIntegrationTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(rules: compiled.rules, registry: registry)
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"single" => 5}})
     ops = for {:ok, op} <- List.flatten(results), do: op
@@ -89,7 +95,7 @@ defmodule Anemos.PipeIntegrationTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(rules: compiled.rules, registry: registry)
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"items" => []}})
     ops = for {:ok, op} <- List.flatten(results), do: op
@@ -112,7 +118,7 @@ defmodule Anemos.PipeIntegrationTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(rules: compiled.rules, registry: registry)
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"nums" => [1, 2, 3]}})
     ops = for {:ok, op} <- List.flatten(results), do: op
@@ -135,7 +141,7 @@ defmodule Anemos.PipeIntegrationTest do
     {:ok, registry} = ModuleRegistry.start_link([])
 
     {:ok, dispatcher} =
-      Dispatcher.start_link(rules: compiled.rules, registry: registry)
+      Anemos.Runtime.Standalone.start_link(rules: compiled.rules, registry: registry)
 
     results = Dispatcher.dispatch(dispatcher, "EV", %{context_data: %{"nums" => [10, 20, 30]}})
     ops = for {:ok, op} <- List.flatten(results), do: op

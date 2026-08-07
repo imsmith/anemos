@@ -50,6 +50,7 @@ defmodule Anemos.Runtime.ContextStore do
   @spec resolve(pid() | atom(), String.t(), String.t()) :: {:ok, term()} | :error
   def resolve(store, context_path, name) do
     full_key = "#{context_path}.#{name}"
+
     case Agent.get(store, &Map.get(&1, full_key)) do
       nil -> :error
       value -> {:ok, value}

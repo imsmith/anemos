@@ -3,9 +3,38 @@ defmodule Anemos.Runtime.DataStore do
   GenServer holding named datasets for data blocks.
 
   Entries are keyed by `{name, scope_tag}` where `scope_tag` is `:global`
-  or `{:local, pid}`. Local entries shadow global entries during membership
-  and get lookups. When a locally-scoped process dies, all entries scoped
-  to that pid are automatically removed.
+  or `{:local, discriminator}`. Local entries shadow global entries in every
+  lookup.
+
+  ## What a scope discriminator is
+
+  Any term. It is *not* required to be a pid, and in the interpreter it
+  usually is not: rules do not run as separate processes — every rule body
+  executes inside the dispatcher — so a pid discriminator would collapse
+  every rule's inline `data` block into one scope. `Anemos.Runtime.Dispatcher`
+  therefore scopes rule-local blocks by rule *name*, and the compiled
+  `memberof()` closure passes the same rule name as `:scope_hint`.
+
+  Every lookup takes that hint the same way. `get/3` previously hardcoded
+  `self()` while `member?/4` and `member_any?/4` honoured a `:scope_hint`,
+  so `get` could not reach a rule-scoped entry at all — two lookup functions
+  with two different scope models (A-24). The hint defaults to `self()`,
+  which is what a host process registering data for itself wants.
+
+  ## Cleanup
+
+  Two paths, because only one of them can exist for a given discriminator:
+
+    * **pid discriminators are monitored.** When the process dies, every
+      entry scoped to it is removed. This is automatic and needs no caller.
+
+    * **every other discriminator must be dropped explicitly**, with
+      `drop_scope/2` or `deregister/3`. There is no process to watch, so
+      there is nothing to make cleanup automatic — an unloaded policy's
+      rule-scoped entries persist until something says to remove them, and
+      before `drop_scope/2` existed nothing could. Reloading a policy
+      re-registered under the same key, so entries did not multiply, but
+      they also never went away.
 
   ## Registering a dataset
 
@@ -49,7 +78,8 @@ defmodule Anemos.Runtime.DataStore do
   @doc """
   Registers (or replaces) a named dataset under a scope tag.
 
-  `scope_tag` is `:global` or `{:local, pid}`.
+  `scope_tag` is `:global` or `{:local, discriminator}` — see the moduledoc
+  for what may be a discriminator and how each kind is cleaned up.
 
   ## Options
 
@@ -71,13 +101,21 @@ defmodule Anemos.Runtime.DataStore do
   end
 
   @doc """
+  Removes every entry registered under `scope_tag`.
+
+  This is the cleanup path for scopes that cannot be monitored — a rule
+  name, or any other non-pid discriminator. Idempotent.
+  """
+  @spec drop_scope(GenServer.server(), term()) :: :ok
+  def drop_scope(store, scope_tag) do
+    GenServer.call(store, {:drop_scope, scope_tag})
+  end
+
+  @doc """
   Returns true if `value` is a member of the named dataset.
 
   Checks local scope first (by `scope_hint` if provided, otherwise `self()`),
-  then global.
-
-  The optional `scope_hint` allows callers to specify a scope discriminator
-  other than their pid — for example, a rule name string for per-rule scoping.
+  then global. `get/3` resolves scope identically.
   """
   @spec member?(GenServer.server(), String.t(), term(), keyword()) :: boolean()
   def member?(store, name, value, opts \\ []) do
@@ -97,11 +135,13 @@ defmodule Anemos.Runtime.DataStore do
   @doc """
   Returns the full dataset for `name`, or `nil` if not found.
 
-  Checks local scope first, then global.
+  Checks local scope first (by `scope_hint` if provided, otherwise `self()`),
+  then global — the same resolution `member?/4` performs.
   """
-  @spec get(GenServer.server(), String.t()) :: term() | nil
-  def get(store, name) do
-    GenServer.call(store, {:get, name, self()})
+  @spec get(GenServer.server(), String.t(), keyword()) :: term() | nil
+  def get(store, name, opts \\ []) do
+    scope_hint = Keyword.get(opts, :scope_hint, self())
+    GenServer.call(store, {:get, name, scope_hint})
   end
 
   @doc """
@@ -138,12 +178,21 @@ defmodule Anemos.Runtime.DataStore do
 
   def handle_call({:deregister, name, scope_tag}, _from, state) do
     entries = Map.delete(state.entries, {name, scope_tag})
-    {:reply, :ok, %{state | entries: entries}}
+    {:reply, :ok, demonitor_if_unused(%{state | entries: entries}, scope_tag)}
   end
 
-  def handle_call({:member?, name, caller_pid, value}, _from, state) do
+  def handle_call({:drop_scope, scope_tag}, _from, state) do
+    entries =
+      state.entries
+      |> Enum.reject(fn {{_name, tag}, _entry} -> tag == scope_tag end)
+      |> Map.new()
+
+    {:reply, :ok, demonitor_if_unused(%{state | entries: entries}, scope_tag)}
+  end
+
+  def handle_call({:member?, name, discriminator, value}, _from, state) do
     result =
-      case resolve_entry(state.entries, name, caller_pid) do
+      case resolve_entry(state.entries, name, discriminator) do
         nil -> false
         entry -> dataset_member?(entry.dataset, value)
       end
@@ -151,10 +200,10 @@ defmodule Anemos.Runtime.DataStore do
     {:reply, result, state}
   end
 
-  def handle_call({:member_any?, names, caller_pid, value}, _from, state) do
+  def handle_call({:member_any?, names, discriminator, value}, _from, state) do
     result =
       Enum.any?(names, fn name ->
-        case resolve_entry(state.entries, name, caller_pid) do
+        case resolve_entry(state.entries, name, discriminator) do
           nil -> false
           entry -> dataset_member?(entry.dataset, value)
         end
@@ -163,9 +212,9 @@ defmodule Anemos.Runtime.DataStore do
     {:reply, result, state}
   end
 
-  def handle_call({:get, name, caller_pid}, _from, state) do
+  def handle_call({:get, name, discriminator}, _from, state) do
     result =
-      case resolve_entry(state.entries, name, caller_pid) do
+      case resolve_entry(state.entries, name, discriminator) do
         nil -> nil
         entry -> entry.dataset
       end
@@ -202,7 +251,10 @@ defmodule Anemos.Runtime.DataStore do
   # ---------------------------------------------------------------------------
 
   # Monitor a pid for local scope entries (once per pid).
-  # Non-pid scope discriminators (e.g., rule name strings) are not monitored.
+  #
+  # A non-pid discriminator is deliberately not monitored: there is no
+  # process behind a rule name to watch. That is not an oversight to be
+  # fixed here but the reason `drop_scope/2` exists — see the moduledoc.
   defp maybe_monitor({:local, pid}, monitors) when is_pid(pid) do
     if Map.has_key?(monitors, pid) do
       monitors
@@ -212,13 +264,34 @@ defmodule Anemos.Runtime.DataStore do
     end
   end
 
-  defp maybe_monitor({:local, _name}, monitors), do: monitors
+  defp maybe_monitor({:local, _discriminator}, monitors), do: monitors
   defp maybe_monitor(:global, monitors), do: monitors
 
+  # Drops the monitor for a pid scope once nothing is registered under it.
+  # Without this, the monitors map is a second leak: monitors accumulate for
+  # pids whose entries have all been removed, and the store keeps a link to
+  # a process it no longer holds anything for.
+  defp demonitor_if_unused(state, {:local, pid}) when is_pid(pid) do
+    still_used? = Enum.any?(state.entries, fn {{_n, tag}, _e} -> tag == {:local, pid} end)
+
+    case {still_used?, Map.fetch(state.monitors, pid)} do
+      {false, {:ok, ref}} ->
+        Process.demonitor(ref, [:flush])
+        %{state | monitors: Map.delete(state.monitors, pid)}
+
+      _ ->
+        state
+    end
+  end
+
+  defp demonitor_if_unused(state, _scope_tag), do: state
+
   # Resolve by checking local scope first, then global.
-  defp resolve_entry(entries, name, caller_pid) do
-    case Map.fetch(entries, {name, {:local, caller_pid}}) do
-      {:ok, entry} -> entry
+  defp resolve_entry(entries, name, discriminator) do
+    case Map.fetch(entries, {name, {:local, discriminator}}) do
+      {:ok, entry} ->
+        entry
+
       :error ->
         case Map.fetch(entries, {name, :global}) do
           {:ok, entry} -> entry

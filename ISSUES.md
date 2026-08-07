@@ -18,8 +18,8 @@ than removed.
 | --- | --- | --- | --- |
 | A-01 | CRITICAL | Child crash silently discards every loaded policy | **Fixed** — two-tier supervision + `PolicyStore`; 12 regression tests |
 | A-02 | CRITICAL | Unbounded event recursion never terminates | **Fixed** — depth ceiling 10,000, structured error; 5 regression tests |
-| A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | Open |
-| A-04 | CRITICAL | Every `condition` fires unconditionally | Open |
+| A-03 | CRITICAL | Process dictionary leaks operations between unrelated rules | **Fixed** — accumulator threaded through the throw payload; no `Process.put` remains in `compiler.ex` |
+| A-04 | CRITICAL | Every `condition` fires unconditionally | **Fixed** — `build_condition_evaluator/3` compiles the trigger; body operations routed via `:on_side_effects` |
 | A-05 | HIGH | `signed_by` parsed and never verified | **Fixed** — `LoadAuthority.Signed` + `TrustStore`. A-59 closed; A-60 still limits `:strict` |
 | A-06 | HIGH | Context isolation fails open, two ways | **Fixed** — `ContextScope.within?/2`, segment-aware and fail-closed |
 | A-07 | HIGH | Capability context scoping is decorative | **Fixed** — enforced in the server; denial bypasses PAM flags |
@@ -28,15 +28,15 @@ than removed.
 | A-10 | HIGH | `ModuleRegistry` verb routing can be hijacked | **Mitigated** — write-once + logged; not authorization, see entry |
 | A-11 | HIGH | No input validation between DSL and host verbs | **Fixed** — optional `arg_schema/1` enforced pre-dispatch + `PathGuard` confinement |
 | A-12 | HIGH | `load/2` has no trust boundary | **Fixed** — `LoadAuthority` behaviour, byte ceiling, `:load` removed from `act/1` |
-| A-13 | MEDIUM | Demand fails open on unknown capabilities | Fixed — pending suite verification |
-| A-14 | MEDIUM | Unbounded timers permit resource exhaustion | Fixed — pending suite verification |
+| A-13 | MEDIUM | Demand fails open on unknown capabilities | **Fixed** — verified, suite green |
+| A-14 | MEDIUM | Unbounded timers permit resource exhaustion | **Fixed** — verified, suite green |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
 | A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
 | A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
 | A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | Open |
-| A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | In progress |
-| A-68 | MEDIUM | A secret-redaction assertion passes vacuously | In progress |
+| A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
+| A-68 | MEDIUM | A secret-redaction assertion passes vacuously | **Fixed** — 2676230, split out with explicit metadata capture |
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | Open — decision |
@@ -55,7 +55,7 @@ than removed.
 | A-24 | MEDIUM | `DataStore` scope discriminators inconsistent; cleanup unreachable | **Fixed** — `get/3` takes `:scope_hint`; explicit `drop_scope/2` |
 | A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Open |
 | A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | Partially fixed — unhandled protocol now surfaces through `load/2`; `memberof` still fails open |
-| A-27 | LOW | No CI, no linting, no static analysis | Open |
+| A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55; no CI workflow, there is no git remote |
 | A-28 | LOW | `comn` path dependency makes the repo unbuildable | Open |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | Open |
 | A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
@@ -2294,12 +2294,19 @@ naive nesting yields `[[A, B], C]` rather than `[A, B, C]`.
 `%BinaryOp{op: :and}` nodes into a single operand list *before* evaluating, then evaluate
 each leaf. No runtime marker is needed and the triple-versus-compound question never arises.
 
-### Open — not decided, do not assume
+### Both open questions now answered
 
-- **`OR`.** The decision above is about `AND` only. `OR` presumably remains alternation, but
-  that has not been stated and must not be extended by analogy.
-- **Mixed operands** — `true AND (triple)`. Compound, error, or coerce? Needs a stated
-  answer, whichever is chosen.
+- **`OR`** — decided 2026-08-07: alternation, made explicit. `AND` answers every operand,
+  `OR` answers the first available one. `false` and `nil` are the identity and drop out;
+  when every operand is falsey the first one answers, where pairwise `||` returned the
+  last. That single case is the whole observable behaviour change: 10 of the 12 new tests
+  passed before the change. The spine is flattened as `AND`'s is, `:or` and `:||` together
+  since — unlike `AND` and `&&` — the two spellings have no divergence in meaning to keep.
+  `true` answers only in first position: strict duality would make `(A) OR true` answer
+  `true`, and a fallback that discards the value it was a fallback for is useless in value
+  position.
+- **Mixed operands** — answered by the A-73 work itself: `true` is the identity of
+  conjunction and drops out, a falsey operand is absorbing. See the `Compiler` moduledoc.
 
 ---
 

@@ -178,11 +178,41 @@ defmodule Anemos.Compiler do
   for the same reason it was not available to A-46 — operand types are not
   knowable at compile time, since a `?var` is whatever the host sent.
 
-  ### `&&` and `OR` are unchanged
+  ### `&&` is unchanged
 
   `&&` remains purely logical `l && r`, which also leaves an author a way to
-  ask for the old behaviour deliberately. `OR` is untouched: the A-73 decision
-  covers `AND` only and alternation must not be extended by analogy.
+  ask for the old answer-the-right-operand behaviour deliberately.
+
+  ## `OR` is alternation, made explicit
+
+  `AND` answers *every* operand; `OR` answers the *first available* one. That
+  was already roughly true — Elixir's `||` answers its left operand whenever
+  that operand is truthy — so this is not a change of meaning the way `AND`
+  was. What changes is that the algebra is now stated and applied over the
+  whole spine at once instead of pairwise:
+
+      let pick = ?missing OR ?present            # "here"
+      let pick = ?a OR ?b OR ?c                  # the first one the host sent
+
+  `false` and `nil` are the **identity** of disjunction and drop out. The first
+  operand carrying a value answers. When every operand is falsey there is
+  nothing to choose between them, so the *first* one answers — pairwise `||`
+  returned the *last*, and that single case is the whole observable behaviour
+  change.
+
+  `true` answers only when it is the first available operand. Strict duality
+  with `AND`, where a falsey operand is absorbing wherever it sits, would make
+  `(A) OR true` answer `true`; it answers `A`. Alternation is ordered, and a
+  fallback that discarded the value it was a fallback for would make `OR`
+  useless in value position.
+
+  `:or` and `:||` flatten into one spine. Unlike `AND` and `&&` there is no
+  divergence in meaning to preserve between the two spellings, because `OR` is
+  only becoming explicit about what `||` was already doing.
+
+  Evaluation stays eager over the whole spine: A-56 forbids short-circuiting,
+  since an operand may be a `[MODULE::verb]` call whose side effect is the
+  point, and that holds whether or not its value turns out to be reachable.
 
   ## Expression position invokes modules (A-56)
 
@@ -1240,6 +1270,17 @@ defmodule Anemos.Compiler do
     |> combine_and()
   end
 
+  # `OR` gets the same treatment for the same reason: decided once over the
+  # whole spine, on the AST, so the answer does not depend on how a pairwise
+  # rule would read an operand that happens to be a list.
+  defp eval_condition(%AST.BinaryOp{op: op} = node, context, bindings)
+       when op in [:or, :||] do
+    node
+    |> flatten_or_spine()
+    |> Enum.map(&resolve_expr(&1, context, bindings))
+    |> combine_or()
+  end
+
   defp eval_condition(%AST.BinaryOp{op: op, left: left, right: right}, context, bindings) do
     l = resolve_expr(left, context, bindings)
     r = resolve_expr(right, context, bindings)
@@ -1272,13 +1313,10 @@ defmodule Anemos.Compiler do
       op when op in [:le, :<=] ->
         l <= r
 
-      # Logical. `:and` never reaches here — it has its own clause above
-      # (A-73). `&&` stays purely logical on purpose.
+      # Logical. Neither `:and` nor `:or` reaches here — both have their own
+      # clause above. `&&` stays purely logical on purpose (A-73).
       :&& ->
         l && r
-
-      op when op in [:or, :||] ->
-        l || r
 
       # Membership / string
       :in ->
@@ -1389,6 +1427,30 @@ defmodule Anemos.Compiler do
         [single] -> single
         compound -> compound
       end
+    end
+  end
+
+  # `OR` is alternation, so unlike `AND` the spine is ordered and the answer is
+  # positional. `:or` and `:||` are flattened together: they are one operator in
+  # two spellings, and nothing distinguishes them the way `AND` and `&&` are
+  # distinguished, because `OR` is not changing meaning here — only becoming
+  # explicit about the algebra Elixir's `||` was applying implicitly.
+  defp flatten_or_spine(%AST.BinaryOp{op: op, left: left, right: right}) when op in [:or, :||],
+    do: flatten_or_spine(left) ++ flatten_or_spine(right)
+
+  defp flatten_or_spine(node), do: [node]
+
+  # One decision over the whole operand list, every operand already evaluated —
+  # A-56 forbids short-circuiting here exactly as it does for `AND`.
+  defp combine_or(values) do
+    case Enum.reject(values, &falsey?/1) do
+      # `false` and `nil` are the identity of disjunction and drop out; the
+      # first operand that carries a value answers for the whole expression.
+      [first | _] -> first
+      # Every operand is falsey, so there is nothing to choose between them.
+      # The first one answers, matching `AND`, rather than the last one, which
+      # is what pairwise `||` happened to return.
+      [] -> hd(values)
     end
   end
 

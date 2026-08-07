@@ -51,4 +51,57 @@ defmodule Anemos.ParserTruncationTest do
   test "an empty source is still valid and produces no declarations" do
     assert {:ok, %Anemos.AST.Program{declarations: []}} = Parser.parse("")
   end
+
+  # A-74. A-65 fixed eight functions of this shape. These are eight more it did
+  # not reach, found by feeding every example file truncated at every byte —
+  # 5,955 inputs, of which 87 crashed. The rule that decides who needs a clause
+  # like this: whoever knows what must come next owns the end-of-input check.
+  # Each function below is a position in the language where something is
+  # required to follow, so running out there is an error it has to name.
+  @unguarded [
+    {"capability", ~s|capability|},
+    {"condition", ~s|condition|},
+    {"context", ~s|rule r { context|},
+    {"when", ~s|rule r { when|},
+    {"a compound event's open paren", ~s|rule r { when (|},
+    {"let", ~s|rule r { when EV { let|},
+    {"emit ... to", ~s|rule r { when EV { emit [EVENT::x to|},
+    {"channel(", ~s|rule r { when EV { emit [EVENT::x to channel(|}
+  ]
+
+  for {position, source} <- @unguarded do
+    test "source truncated after #{position} returns an error rather than raising" do
+      assert {:error, message} = Parser.parse(unquote(source))
+      assert is_binary(message)
+      refute message == ""
+    end
+  end
+
+  test "no truncation of any shipped example crashes the parser" do
+    # The experiment that found A-74, kept as a regression: every prefix of
+    # every example, byte by byte. Any parser function that reads the next
+    # token without first checking there is one will be caught here.
+    crashes =
+      for path <- Path.wildcard("priv/examples/*.rule"),
+          source = File.read!(path),
+          n <- 0..byte_size(source),
+          prefix = binary_part(source, 0, n),
+          match?({:crash, _}, safe_parse(prefix)) do
+        {path, n}
+      end
+
+    assert crashes == [],
+           "#{length(crashes)} truncations crashed, e.g. #{inspect(Enum.take(crashes, 3))}"
+  end
+
+  # Narrow on purpose. `FunctionClauseError` is this defect's signature — a
+  # parser function with no clause for the empty token list — and
+  # `ArgumentError` was A-65's, from `hd/1` on the same. Any *other* exception
+  # is not the shape under test and should fail the run loudly rather than be
+  # swallowed into a count.
+  defp safe_parse(source) do
+    Parser.parse(source)
+  rescue
+    e in [FunctionClauseError, ArgumentError] -> {:crash, Exception.message(e)}
+  end
 end

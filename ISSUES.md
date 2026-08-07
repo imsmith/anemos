@@ -39,7 +39,8 @@ than removed.
 | A-68 | MEDIUM | A secret-redaction assertion passes vacuously | **Fixed** — 2676230, split out with explicit metadata capture |
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
-| A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | Open — decision |
+| A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | **Fixed** — deleted, after proving it unreachable; last Dialyzer finding in `parser.ex` |
+| A-74 | HIGH | Eight more parser functions crash on truncated input | **Fixed** — `[]` clauses added; `parse_destination/1` made total; 5,955-input sweep is a regression test |
 | A-72 | MEDIUM | `log` of any non-`String.Chars` value crashed the dispatcher | **Fixed** |
 | A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | **Fixed** — `AND` compounds; spine flattened on the AST; `&&` unchanged. `OR` decided separately 2026-08-07 |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
@@ -2368,6 +2369,121 @@ each leaf. No runtime marker is needed and the triple-versus-compound question n
   position.
 - **Mixed operands** — answered by the A-73 work itself: `true` is the identity of
   conjunction and drops out, a falsey operand is absorbing. See the `Compiler` moduledoc.
+
+---
+
+## A-71 — `parse_declaration([])` is unreachable
+
+**Filed:** 2026-08-06 · **Severity:** LOW · **decision, not a defect report** · **Fixed 2026-08-07**
+
+### What it was
+
+`parse_declaration/1` carried a final clause for the empty token list:
+
+```elixir
+defp parse_declaration([]) do
+  {:error, "Unexpected end of input"}
+end
+```
+
+Dialyzer reported it as unreachable (`parser.ex:pattern_match`, "the pattern `[]` can never
+match the type `[any(), ...]`"). It was one of two remaining Dialyzer findings.
+
+### Why it looked like a fence worth keeping
+
+There are 17 `parse_*([])` clauses in the file, and they are not decoration — A-65 was
+exactly the defect of *missing* them. Deleting one on a static analyser's say-so is the
+shape of mistake that reintroduces A-65.
+
+### What actually decides it
+
+Two questions look like one at this call site, and separating them settles the entry:
+
+1. **"Is there anything left to walk?"** — loop termination. Structural, and it belongs to
+   `parse_declarations/2`, whose `[]` clause is the base case of its own recursion.
+2. **"Is running out of input acceptable *at this point*?"** — a question about the
+   language. It belongs to whoever knows what must come next.
+
+**Whoever knows what must come next owns the end-of-input check.** At the top of a source
+nothing is required to follow — a file may legitimately end after any complete declaration —
+so the answer to (2) is "fine", and it coincides with (1). One level down the answer flips,
+which is why `parse_rule/1` has its own `[]` clause returning an error.
+
+So the deleted clause was not dead by an accident of clause ordering. It answered (2) with
+*"error"* at the one level where the correct answer is *"fine"*, contradicting the answer
+`parse_declarations/2` had already given. It had been unreachable since `4e51660`, the
+commit that introduced both functions.
+
+### Proven before deleting
+
+Reasoning about control flow was not treated as sufficient, per the standing rule about
+orphan-looking code. The clause was armed to raise and then hunted:
+
+| Attempt | Reached it |
+| --- | --- |
+| Full suite, 778 tests | 0 times |
+| 5,955 truncated sources (every example cut at every byte, plus hand-built stubs) | 0 times |
+
+Deleted, with the reasoning recorded on `parse_declarations/2`'s base case so the *absence*
+of an `[]` clause on the dispatcher reads as deliberate. Dialyzer in `parser.ex` is clean.
+
+---
+
+## A-74 — Eight more parser functions crash on truncated input
+
+**Filed:** 2026-08-07 · **Severity:** HIGH · **[REPRODUCED]** · same class as A-65 · **Fixed 2026-08-07**
+
+### Symptom
+
+Found by the experiment run for A-71: every shipped example truncated at every byte, 5,955
+inputs. 87 of them did not return `{:error, _}` — they raised `FunctionClauseError`. The
+minimal cases are trivially small:
+
+```text
+"capability"                                  -> crash
+"condition"                                   -> crash
+"rule r { context"                            -> crash
+"rule r { when"                               -> crash
+"rule r { when ("                             -> crash
+"rule r { when EV { let"                      -> crash
+"rule r { when EV { emit [EVENT::x to"        -> crash
+"rule r { when EV { emit [EVENT::x to channel(" -> crash
+```
+
+A single word crashes the parser.
+
+### Why it happens
+
+The same shape A-65 fixed in eight *other* functions: a function whose clauses all destructure
+a non-empty list, with no clause for `[]`. `parse_rule/1` answers the end-of-input question
+for its position; `parse_when/1` has five clauses and answers it for none of them.
+
+Affected: `parse_capability/1`, `parse_compound_event/2`, `parse_condition_decl/1`,
+`parse_context/1`, `parse_destination/1`, `parse_dotted_path_until_rparen/1`, `parse_let/1`,
+`parse_when/1`.
+
+### Why it matters
+
+`Parser.parse/1` promises `{:ok, _} | {:error, String.t()}` and every caller matching
+`{:error, _}` got an exception instead — including `LoadAuthority.gate/3`, the only path
+from source to an AST. Under the multi-tenant decision, policy text is untrusted input, and
+a truncated file is exactly what a partially-written or hostile `.rule` looks like. This is
+the input the trust boundary is most likely to meet.
+
+### A second layer, exposed by the fix
+
+Making the eight total immediately broke `parse_destination/1`: two `case` blocks matched
+only `{:ok, path, rest}` from `parse_dotted_path_until_rparen/1`, so the newly-reachable
+error return became a `CaseClauseError`. The error path had never been written because it
+had never been reachable. A sweep for the same shape found no other instance — the remaining
+single-clause `case`s all carry `_ ->` fallbacks (which swallow diagnostics, an A-31
+concern, but do not crash).
+
+### Coverage
+
+Eight targeted tests, plus the sweep itself kept as a regression test: every prefix of every
+shipped example must parse or error, never raise. It re-runs in the suite. Post-fix the same
+5,955 inputs produce 0 raises, down from 96.
 
 ---
 

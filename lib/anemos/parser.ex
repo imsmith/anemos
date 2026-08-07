@@ -102,6 +102,24 @@ defmodule Anemos.Parser do
     end
   end
 
+  # A-71. Two different questions look like one here, and only one of them is
+  # this clause's.
+  #
+  # "Is there anything left to walk?" is loop termination, and it is this
+  # clause. "Is running out of input acceptable *at this point*?" is a question
+  # about the language, and it belongs to whoever knows what must come next —
+  # which is why `parse_rule/1`, `parse_when/1` and their siblings each answer
+  # it for their own position with an `[]` clause of their own. At the top of a
+  # source nothing is required to follow, so a file may end after any complete
+  # declaration and the two answers happen to coincide: empty means both "stop"
+  # and "fine".
+  #
+  # Because this clause gives that answer, `parse_declaration/1` — which is
+  # called only from the clause below, and so only on a non-empty list — never
+  # needs one. It used to carry an `[]` clause reading "Unexpected end of
+  # input", which contradicted the answer already given and was unreachable
+  # from the commit that introduced it. Proven so before deleting: armed to
+  # raise, it was not hit by the suite or by 5,955 truncated sources.
   defp parse_declarations([], acc), do: {:ok, acc, []}
 
   defp parse_declarations(tokens, acc) do
@@ -157,10 +175,6 @@ defmodule Anemos.Parser do
 
   defp parse_declaration([{type, meta, _} | _]) do
     {:error, "Expected declaration (rule, condition, ...) but got #{type} on line #{meta[:line]}"}
-  end
-
-  defp parse_declaration([]) do
-    {:error, "Unexpected end of input"}
   end
 
   # --- Rule ---
@@ -274,6 +288,10 @@ defmodule Anemos.Parser do
     {:error, "Expected context path on line #{meta[:line]}"}
   end
 
+  defp parse_context([]) do
+    {:error, "Expected context path but got end of input"}
+  end
+
   # Context body: when blocks or statements
   defp parse_context_body([{:rbrace, _, _} | _] = tokens, acc), do: {:ok, acc, tokens}
 
@@ -382,6 +400,10 @@ defmodule Anemos.Parser do
     {:error, "Expected event name after 'when' on line #{meta[:line]}"}
   end
 
+  defp parse_when([]) do
+    {:error, "Expected event name after 'when' but got end of input"}
+  end
+
   # Parse compound event expressions like: INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed
   # Returns a structured tuple: {:compound, :or, [events]} or {:compound, :and, [events]}
   defp parse_compound_event([{:rparen, _, _} | _] = tokens, acc) do
@@ -408,6 +430,10 @@ defmodule Anemos.Parser do
 
   defp parse_compound_event([{_, meta, _} | _], _acc) do
     {:error, "Unexpected token in compound event on line #{meta[:line]}"}
+  end
+
+  defp parse_compound_event([], _acc) do
+    {:error, "Unterminated compound event: expected ')' but got end of input"}
   end
 
   defp build_compound_event(parts) do
@@ -752,6 +778,10 @@ defmodule Anemos.Parser do
     {:error, "Expected 'let <name> = <expr>' or 'let [triple]' on line #{meta[:line]}"}
   end
 
+  defp parse_let([]) do
+    {:error, "Expected 'let <name> = <expr>' or 'let [triple]' but got end of input"}
+  end
+
   # --- Set ---
 
   defp parse_set([{:identifier, meta, name}, {:operator, _, :=} | rest]) do
@@ -899,6 +929,9 @@ defmodule Anemos.Parser do
         with {:ok, rest} <- expect(rest, :rparen) do
           {:ok, {:channel, path}, rest}
         end
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -908,6 +941,9 @@ defmodule Anemos.Parser do
         with {:ok, rest} <- expect(rest, :rparen) do
           {:ok, {:service, path}, rest}
         end
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -919,12 +955,20 @@ defmodule Anemos.Parser do
     {:error, "Expected destination on line #{meta[:line]}"}
   end
 
+  defp parse_destination([]) do
+    {:error, "Expected destination but got end of input"}
+  end
+
   defp parse_dotted_path_until_rparen([{:identifier, _, path} | rest]) do
     {:ok, path, rest}
   end
 
   defp parse_dotted_path_until_rparen([{_, meta, _} | _]) do
     {:error, "Expected dotted path on line #{meta[:line]}"}
+  end
+
+  defp parse_dotted_path_until_rparen([]) do
+    {:error, "Expected dotted path but got end of input"}
   end
 
   defp parse_optional_as([{:keyword, _, :as} | rest]) do
@@ -2100,6 +2144,10 @@ defmodule Anemos.Parser do
     {:error, "Expected capability name on line #{meta[:line]}"}
   end
 
+  defp parse_capability([]) do
+    {:error, "Expected capability name but got end of input"}
+  end
+
   # --- Condition declaration ---
 
   # Allow keywords used as condition names
@@ -2121,6 +2169,10 @@ defmodule Anemos.Parser do
 
   defp parse_condition_decl([{_, meta, _} | _]) do
     {:error, "Expected condition name on line #{meta[:line]}"}
+  end
+
+  defp parse_condition_decl([]) do
+    {:error, "Expected condition name but got end of input"}
   end
 
   # --- Helpers ---

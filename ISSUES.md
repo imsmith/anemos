@@ -41,7 +41,7 @@ than removed.
 | A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | **Fixed** — deleted, after proving it unreachable; last Dialyzer finding in `parser.ex` |
 | A-74 | HIGH | Eight more parser functions crash on truncated input | **Fixed** — `[]` clauses added; `parse_destination/1` made total; 5,955-input sweep is a regression test |
-| A-75 | MEDIUM | Parser totality is untested against *malformed* input — only against truncated | Open |
+| A-75 | MEDIUM | Parser totality is untested against *malformed* input — only against truncated | **Fixed** — mutation fuzzer added; it found 4 more crashes, all fixed |
 | A-72 | MEDIUM | `log` of any non-`String.Chars` value crashed the dispatcher | **Fixed** |
 | A-73 | HIGH | `AND` over non-boolean operands silently discards the left one | **Fixed** — `AND` compounds; spine flattened on the AST; `&&` unchanged. `OR` decided separately 2026-08-07 |
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
@@ -2545,6 +2545,74 @@ malformed in its third declaration is reported by `parse_program/1` against the 
 tokens — which may name a position some distance from the actual mistake. A fuzzer will
 produce many such cases; they are diagnostics-quality findings and belong in A-31 unless one
 of them raises or hangs, which makes it this entry's.
+
+---
+
+### Fixed 2026-08-07 — fuzzer built, and it earned its keep immediately
+
+`Anemos.SourceMutator` (test support) plus `Anemos.ParserFuzzTest`. Ten mutation kinds —
+chunk delete/duplicate/swap/substitute, bracket insert/drop, byte flip/insert/delete,
+invalid UTF-8 — chained one to three deep so a defect needing two independent edits is
+reachable.
+
+**The oracle does not `rescue`.** Each parse runs in an unlinked process and the monitor
+reports how it ended, so an exception, an exit, a throw and a non-terminating parse are all
+observed the same way instead of three being caught by a `rescue` naming the wrong types and
+the fourth being missed. That also delivers the termination check this entry asked for.
+
+**Validated against a known-bad parser before being trusted.** Run against
+`lib/anemos/parser.ex` as of `73c3637~1`, the generator reports the A-74 crashes — including
+`parse_destination/1`'s `CaseClauseError`, reached by a *malformed* input rather than a
+truncated one. A fuzzer nobody has watched fail is decoration.
+
+### What it found
+
+Four more crashes, none reachable by A-74's truncation sweep:
+
+| Function | Why truncation missed it |
+| --- | --- |
+| `parse_set/1` | `set` does not appear in any shipped example, so no prefix reaches it. Substitution put it there. |
+| `collect_simple_list/2` | Has an `[]` clause. The gap was an unexpected *token type*, not end of input. |
+| `collect_memberof_names/2` | Same shape as above, plus no `[]`. |
+| `expect_operator/2` | No `[]`, unlike the `expect/2` it sits beside. |
+
+`collect_simple_list/2` is the one worth noting: it had its end-of-input clause and was still
+non-total. A-74's rule — *whoever knows what must come next owns the end-of-input check* —
+generalises: a function dispatching on token shape must be total over **both** an empty list
+and a token it does not expect. The `collect_*` pair now stop collecting and let the caller's
+`expect/2` report the position, rather than duplicating a diagnostic and losing the line.
+
+### A static sweep, adjudicated by Dialyzer
+
+Rather than wait for the fuzzer to surface these one at a time, every `defp` in `parser.ex`
+was scanned for totality over token lists. Clauses were added where the rule said they
+belonged, and **Dialyzer was used to decide which of those were dead** — the discipline A-71
+established. It flagged exactly one, `parse_format_block/1`, whose only call site matches
+`[{:identifier, _, _}, {:lbrace, _, _} | _]` and so guarantees two tokens. Removed and
+documented.
+
+That leaves exactly three functions in the file with no `[]` clause, each because a caller
+has already answered: `parse_declaration/1`, `parse_bracket_expr/1`, `parse_format_block/1`.
+All three now say so in a comment, so the next totality sweep does not "fix" them.
+
+### Standing coverage
+
+2,000 cases run in the suite (~1s). `ANEMOS_FUZZ_SEED` and `ANEMOS_FUZZ_CASES` override for
+soaking; 72,000 cases across six seeds are clean. Two supporting tests guard the fuzzer
+itself: one asserts that more than 30% of mutations get past the lexer, so a generator
+degraded into producing pure garbage cannot pass by testing nothing, and one asserts every
+mutation kind applies without raising, so a broken mutator is not reported as a parser fault.
+
+### Not addressed
+
+Diagnostics quality remains A-31's. The fuzzer produces many inputs whose reported line sits
+some distance from the real mistake, because `parse_declarations/2` treats a failed
+declaration as "end of parseable declarations" once anything has parsed. Those are not
+failures here — the contract is a tuple, not a good message.
+
+The corpus is the three shipped examples. Mutations of a wider corpus, or generation from the
+grammar rather than mutation of samples, would reach constructs no example uses. `set` was
+found only because substitution happened to insert the keyword.
 
 ---
 

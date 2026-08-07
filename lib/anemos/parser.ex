@@ -798,6 +798,10 @@ defmodule Anemos.Parser do
     {:error, "Expected 'set <name> = <expr>' on line #{meta[:line]}"}
   end
 
+  defp parse_set([]) do
+    {:error, "Expected 'set <name> = <expr>' but got end of input"}
+  end
+
   # --- Log ---
 
   defp parse_log(tokens) do
@@ -1351,6 +1355,13 @@ defmodule Anemos.Parser do
 
   # --- Bracket expressions: commands [MODULE::verb ...] or triple patterns [:s :p :o] ---
 
+  # No `[]` clause and no catch-all, deliberately — the same arrangement as
+  # `parse_declaration/1` (A-71) and for the same reason. All three call sites
+  # (`parse_statement/1` via `parse_command_statement/1`, `parse_let/1`, and
+  # `parse_atom_expression/1`) select this function by matching
+  # `[{:lbracket, _, _} | _]` themselves, so the caller has already answered
+  # both "is there a token?" and "is it a `[`?". A clause here would answer a
+  # question nobody can ask, which is dead code A-71 spent an entry removing.
   defp parse_bracket_expr([{:lbracket, _, _} | rest]) do
     case rest do
       # Command: [MODULE::verb args...]
@@ -1419,10 +1430,18 @@ defmodule Anemos.Parser do
     {:error, "Expected atom, query var, or identifier in triple on line #{meta[:line]}"}
   end
 
+  defp parse_triple_element([]) do
+    {:error, "Expected atom, query var, or identifier in triple but got end of input"}
+  end
+
   defp expect_operator([{:operator, _, expected} | rest], expected), do: {:ok, rest}
 
   defp expect_operator([{_, meta, _} | _], expected) do
     {:error, "Expected #{expected} on line #{meta[:line]}"}
+  end
+
+  defp expect_operator([], expected) do
+    {:error, "Expected #{expected} but got end of input"}
   end
 
   # Verb can be a keyword or identifier
@@ -1947,6 +1966,14 @@ defmodule Anemos.Parser do
     {:ok, {:format_block, fmt_kw, raw}, rest}
   end
 
+  # No `[]` clause, and the third of only three places in this file that go
+  # without one (see `parse_declaration/1` for the rule). The sole call site
+  # selects this function by matching
+  # `[{:identifier, _, _fmt_kw}, {:lbrace, _, _} | _]`, so two tokens are
+  # already guaranteed. One was added here during the A-75 sweep and Dialyzer
+  # immediately reported it unreachable, which is the check working: the rule
+  # says who *should* own the end-of-input answer, and Dialyzer says where the
+  # caller already gave it.
   defp parse_format_block([{_, meta, _} | _]) do
     {:error, "Expected format block identifier on line #{meta[:line]}"}
   end
@@ -2018,6 +2045,10 @@ defmodule Anemos.Parser do
 
   defp parse_subscribe([{_, meta, _} | _]) do
     {:error, "Expected 'subscribe' in dynamic block on line #{meta[:line]}"}
+  end
+
+  defp parse_subscribe([]) do
+    {:error, "Expected 'subscribe' in dynamic block but got end of input"}
   end
 
   # Collect URI tokens: a string literal is the URI directly.
@@ -2103,7 +2134,12 @@ defmodule Anemos.Parser do
     collect_simple_list(rest, [Atom.to_string(kw) | acc])
   end
 
-  defp collect_simple_list([], acc), do: {acc, []}
+  # A-75. Anything that cannot be a list value ends the list, including no
+  # token at all. Stopping is right rather than erroring here: this is a
+  # collect-until-terminator loop, and the caller's `expect(rest, :rbrace)`
+  # already reports the offending token with its line. Erroring here would
+  # duplicate that diagnostic and lose the position.
+  defp collect_simple_list(tokens, acc), do: {acc, tokens}
 
   # --- Capability declaration ---
 
@@ -2211,6 +2247,10 @@ defmodule Anemos.Parser do
   defp collect_memberof_names([{:keyword, _, kw} | rest], acc) do
     {Enum.reverse([Atom.to_string(kw) | acc]), rest}
   end
+
+  # A-75. As `collect_simple_list/2`: stop on anything that cannot be a name,
+  # end of input included, and let the caller's `expect(rest, :rparen)` name it.
+  defp collect_memberof_names(tokens, acc), do: {Enum.reverse(acc), tokens}
 
   defp expect([{expected, _, _} | rest], expected), do: {:ok, rest}
 

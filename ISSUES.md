@@ -34,7 +34,7 @@ than removed.
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
 | A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
 | A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
-| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | Open |
+| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Mitigated** — floor raised to req 0.6.1 by override; belongs in `comn`. 17 advisories → 2, no HIGH |
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
 | A-68 | MEDIUM | A secret-redaction assertion passes vacuously | **Fixed** — 2676230, split out with explicit metadata capture |
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
@@ -2641,6 +2641,64 @@ failures here — the contract is a tuple, not a good message.
 The corpus is the three shipped examples. Mutations of a wider corpus, or generation from the
 grammar rather than mutation of samples, would reach constructs no example uses. `set` was
 found only because substitution happened to insert the keyword.
+
+---
+
+## A-66 — `req` decompression-bomb advisory, reached via `comn`
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · **Mitigated 2026-08-08**
+
+### What the audit found, and what it missed
+
+The entry named one advisory against `req`. Running `mix hex.audit` after A-28 made the
+dependency tree visible found **seventeen**, across four packages:
+
+| Package | Advisories | Reached via |
+| --- | --- | --- |
+| `req` 0.5.17 | 2 (1 HIGH) | `comn` → `{:req, "~> 0.5"}` |
+| `mint` 1.7.1 | 8 (4 HIGH) | `comn` → `req` → `finch` → `mint` |
+| `hpax` 1.0.3 | 1 (HIGH) | …→ `mint` → `hpax` |
+| `cowlib` 2.16.0 | 6 (3 HIGH) | `comn` → `gnat` → `cowlib` |
+
+The original entry was not wrong, it was narrow: it named the advisory someone had
+mentioned rather than the output of the tool that enumerates them.
+
+### Now
+
+Two remain — one LOW, one MEDIUM, both `cowlib`, **and neither has a fixed release**.
+`cowlib` 2.19.0 is the newest published version and the advisories name it as affected
+(EEF-CVE-2026-43966 affects "from 2.9.0", with remediation shipped in `cowboy` 2.16.0+ and
+`gun` 2.4.0+ rather than in `cowlib` itself). Nothing to upgrade to. **No HIGH remains.**
+
+### What was actually checked, rather than assumed
+
+- **req 0.5.18 does not fix it.** The obvious conservative move — a patch bump inside
+  `comn`'s existing `~> 0.5` — was tried first and `hex.audit` still flags it. The minor
+  bump is unavoidable.
+- **0.6.1 is the fix, per the advisory**, not 0.7.x. `~> 0.6.1` resolves to 0.6.3 and clears
+  both `req` advisories, so the floor is set there rather than at the newest release. The
+  smallest move that works is the one least likely to break `comn`.
+- **`~> 0.5` was not the constraint it looks like.** It permits `< 1.0.0`, so a plain
+  `mix deps.update req` jumps to 0.7.2 — which is how the first attempt landed two minor
+  versions out. Worth knowing before assuming `comn` pinned anything.
+
+### The honest limit on this
+
+**Anemos's suite is not evidence that `req` 0.6.3 works.** `Req` is used in exactly one
+module of `comn` — `lib/comn/repo/file/ipfs.ex` — and Anemos reaches `Comn.Repo.File.Local`,
+never IPFS. So 790 passing tests exercise none of the changed code. `comn`'s own `mix.lock`
+still holds `req` 0.5.17, meaning `comn` has never been built against 0.6.x either.
+
+The green suite here says the bump does not break *Anemos*. It says nothing about `comn`.
+
+### Where the fix belongs
+
+In `comn`, which declares `req` and is the only thing that calls it. The override in
+`mix.exs` is a floor, not a design: Anemos overriding its dependency's dependency is a
+stopgap that should be deleted once `comn` raises its own. Same for `gnat`/`cowlib` if a
+fixed `cowlib` ever ships.
+
+This is the fifth comn-side finding recorded in this repository rather than in that one.
 
 ---
 

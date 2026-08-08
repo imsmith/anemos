@@ -77,9 +77,11 @@ No sibling checkouts are required. The one substantial dependency,
 tag, and `mix.lock` records the exact commit — so a fresh clone builds
 the same tree that was tested.
 
-`mix deps.get` currently reports a HIGH advisory against `req`, reached
-transitively through `comn`. It is tracked as A-66 in `ISSUES.md` and is
-not yet resolved.
+`mix deps.get` reports two remaining advisories, both against `cowlib`
+(one LOW, one MEDIUM), reached transitively through `comn`'s NATS client.
+Neither has a fixed release to move to — `cowlib` 2.19.0 is the newest
+published version and is itself named as affected. No HIGH advisories
+remain. Tracked as A-66 in `ISSUES.md`.
 
 ### Supervise the runtime
 

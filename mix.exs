@@ -71,6 +71,16 @@ defmodule Anemos.MixProject do
       # deliberate act with its own commit, not something a fresh `mix deps.get`
       # does on its own. v0.5.1 is the tip of comn's main at time of writing.
       {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.1"},
+      # A-66. Security floor, not a dependency Anemos uses — it overrides comn's
+      # `{:req, "~> 0.5"}`, which resolved to 0.5.17 and carries a HIGH
+      # decompression-bomb advisory (EEF-CVE-2026-49755) fixed in req 0.6.1.
+      # 0.5.18 was checked and is still vulnerable, so the minor bump is
+      # unavoidable; 0.6.1 is the floor rather than 0.7.x because it is the
+      # smallest move that clears both advisories.
+      #
+      # This belongs in comn, which is what declares and uses req. Remove it
+      # once comn raises its own floor.
+      {:req, "~> 0.6.1", override: true},
       {:nimble_parsec, "~> 1.4"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

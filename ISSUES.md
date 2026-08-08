@@ -58,7 +58,7 @@ than removed.
 | A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Open |
 | A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | Partially fixed — unhandled protocol now surfaces through `load/2`; `memberof` still fails open |
 | A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55; no CI workflow, there is no git remote |
-| A-28 | LOW | `comn` path dependency makes the repo unbuildable | Open |
+| A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.1`; `mix.lock` records the commit |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | Open |
 | A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
@@ -1027,6 +1027,34 @@ a sibling checkout is required.
 
 Related: `mix.lock` is tracked in git **and** listed in `.gitignore` — the two declarations
 contradict each other.
+
+### Fixed 2026-08-08
+
+    {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.1"}
+
+`mix.lock` now records `d3d8a4f8f2e1f483abe4525ba2fda0b734b222b5`, so a fresh clone builds
+without a sibling checkout and gets the same commit this branch was tested against.
+
+Pinned to a **tag**, not a branch: updating `comn` should be a deliberate act with its own
+commit and its own test run, rather than something a routine `mix deps.get` does on its own.
+`v0.5.1` was verified to be the exact tip of `comn`'s `main` — zero commits of drift — and
+the local checkout was level with `origin/main` with nothing unpushed, so the git dep
+delivers precisely what the path dep had been delivering. Suite unchanged at 48 doctests,
+790 tests, 0 failures against it.
+
+The `.gitignore` contradiction is resolved in favour of tracking. The entry was inert —
+`.gitignore` does not apply to already-tracked files — but it read as an instruction to
+untrack, and the lock is now the thing carrying the pin.
+
+**Scope note.** This entry was originally framed partly around publishing to Hex. That
+framing is dropped: the defect worth fixing was that the repo could not be built by anyone
+without a sibling checkout at a specific relative path, and that is what is fixed. Whether
+Anemos is ever published is a separate question and not one this register needs an opinion
+on.
+
+Not addressed here: `mix deps.get` reports a HIGH advisory against `req`, reached
+transitively through `comn` — that is A-66, and moving to a git dep neither causes nor cures
+it. It is merely visible now, which is an improvement.
 
 ---
 

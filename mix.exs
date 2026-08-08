@@ -67,7 +67,10 @@ defmodule Anemos.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:comn, path: "../comn"},
+      # Pinned to a tag rather than a branch: updating comn should be a
+      # deliberate act with its own commit, not something a fresh `mix deps.get`
+      # does on its own. v0.5.1 is the tip of comn's main at time of writing.
+      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.1"},
       {:nimble_parsec, "~> 1.4"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

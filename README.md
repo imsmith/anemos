@@ -63,6 +63,24 @@ More examples in `priv/examples/`.
 Anemos is a language interpreter, not an application. Start a blank runtime
 in your supervision tree, then load modules and policies into it dynamically.
 
+### Building it
+
+```bash
+git clone <this repo>
+cd anemos
+mix deps.get
+mix test
+```
+
+No sibling checkouts are required. The one substantial dependency,
+[comn](https://github.com/imsmith/comn), is a git dependency pinned to a
+tag, and `mix.lock` records the exact commit — so a fresh clone builds
+the same tree that was tested.
+
+`mix deps.get` currently reports a HIGH advisory against `req`, reached
+transitively through `comn`. It is tracked as A-66 in `ISSUES.md` and is
+not yet resolved.
+
 ### Supervise the runtime
 
 ```elixir

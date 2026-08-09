@@ -69,18 +69,13 @@ defmodule Anemos.MixProject do
     [
       # Pinned to a tag rather than a branch: updating comn should be a
       # deliberate act with its own commit, not something a fresh `mix deps.get`
-      # does on its own. v0.5.1 is the tip of comn's main at time of writing.
-      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.1"},
-      # A-66. Security floor, not a dependency Anemos uses — it overrides comn's
-      # `{:req, "~> 0.5"}`, which resolved to 0.5.17 and carries a HIGH
-      # decompression-bomb advisory (EEF-CVE-2026-49755) fixed in req 0.6.1.
-      # 0.5.18 was checked and is still vulnerable, so the minor bump is
-      # unavoidable; 0.6.1 is the floor rather than 0.7.x because it is the
-      # smallest move that clears both advisories.
+      # does on its own.
       #
-      # This belongs in comn, which is what declares and uses req. Remove it
-      # once comn raises its own floor.
-      {:req, "~> 0.6.1", override: true},
+      # `req` is resolved through comn's own `{:req, "~> 0.5"}` — which permits
+      # `< 1.0.0`, so mix.lock reaches 0.7.2. An override pinning it here was
+      # removed once comn was tested green against 0.7.2 (A-66); Anemos should
+      # not be legislating its dependency's dependencies.
+      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.1"},
       {:nimble_parsec, "~> 1.4"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

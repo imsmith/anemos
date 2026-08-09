@@ -34,7 +34,7 @@ than removed.
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
 | A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
 | A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
-| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Mitigated** — floor raised to req 0.6.1 by override; belongs in `comn`. 17 advisories → 2, no HIGH |
+| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Fixed** — req 0.7.2, validated by `comn`'s own suite; override removed. 17 advisories → 2, no HIGH |
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
 | A-68 | MEDIUM | A secret-redaction assertion passes vacuously | **Fixed** — 2676230, split out with explicit metadata capture |
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
@@ -2682,23 +2682,27 @@ Two remain — one LOW, one MEDIUM, both `cowlib`, **and neither has a fixed rel
   `mix deps.update req` jumps to 0.7.2 — which is how the first attempt landed two minor
   versions out. Worth knowing before assuming `comn` pinned anything.
 
-### The honest limit on this
+### Closed 2026-08-08 — validated in `comn`, override removed
 
-**Anemos's suite is not evidence that `req` 0.6.3 works.** `Req` is used in exactly one
-module of `comn` — `lib/comn/repo/file/ipfs.ex` — and Anemos reaches `Comn.Repo.File.Local`,
-never IPFS. So 790 passing tests exercise none of the changed code. `comn`'s own `mix.lock`
-still holds `req` 0.5.17, meaning `comn` has never been built against 0.6.x either.
+The gap in the first pass was that Anemos could not validate the bump. `Req` is used in
+exactly one module of `comn` — `lib/comn/repo/file/ipfs.ex` — and Anemos reaches
+`Comn.Repo.File.Local`, never IPFS, so 790 passing tests exercised none of the changed code.
+The interim `{:req, "~> 0.6.1", override: true}` was a floor set without that evidence.
 
-The green suite here says the bump does not break *Anemos*. It says nothing about `comn`.
+`comn` has since been tested green against **req 0.7.2** by its owner, which is the
+validation that was missing. The override is deleted and Anemos resolves `req` through
+`comn`'s own `{:req, "~> 0.5"}` — which permits `< 1.0.0` and so reaches 0.7.2 unaided.
 
-### Where the fix belongs
+Note for anyone tracing this later: a git dependency's `mix.lock` is **not** consulted. Only
+the top-level project's lock resolves versions, so `comn`'s lock never governed what Anemos
+built against, and no new `comn` tag was required to move Anemos to 0.7.2 — only the removal
+of the override. What a new tag *would* carry is `comn`'s own recorded lock, which matters
+for anyone building `comn` directly.
 
-In `comn`, which declares `req` and is the only thing that calls it. The override in
-`mix.exs` is a floor, not a design: Anemos overriding its dependency's dependency is a
-stopgap that should be deleted once `comn` raises its own. Same for `gnat`/`cowlib` if a
-fixed `cowlib` ever ships.
+`cowlib`'s two remaining advisories are unchanged and still have no fixed release.
 
-This is the fifth comn-side finding recorded in this repository rather than in that one.
+Related, still true: several comn-side findings have been recorded in this repository rather
+than raised in that one.
 
 ---
 

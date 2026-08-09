@@ -58,7 +58,7 @@ than removed.
 | A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Open |
 | A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | Partially fixed — unhandled protocol now surfaces through `load/2`; `memberof` still fails open |
 | A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55; no CI workflow, there is no git remote |
-| A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.1`; `mix.lock` records the commit |
+| A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.2`; `mix.lock` records the commit |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | Open |
 | A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
@@ -1030,10 +1030,11 @@ contradict each other.
 
 ### Fixed 2026-08-08
 
-    {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.1"}
+    {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.2"}
 
-`mix.lock` now records `d3d8a4f8f2e1f483abe4525ba2fda0b734b222b5`, so a fresh clone builds
-without a sibling checkout and gets the same commit this branch was tested against.
+`mix.lock` now records `69d112b36e66ecac68feb2cd587b48de59680cf7`, so a fresh clone builds
+without a sibling checkout and gets the same commit this branch was tested against. (Pinned
+to v0.5.1 when first fixed; moved to v0.5.2 the same day, once that tag existed.)
 
 Pinned to a **tag**, not a branch: updating `comn` should be a deliberate act with its own
 commit and its own test run, rather than something a routine `mix deps.get` does on its own.
@@ -2696,8 +2697,13 @@ validation that was missing. The override is deleted and Anemos resolves `req` t
 Note for anyone tracing this later: a git dependency's `mix.lock` is **not** consulted. Only
 the top-level project's lock resolves versions, so `comn`'s lock never governed what Anemos
 built against, and no new `comn` tag was required to move Anemos to 0.7.2 — only the removal
-of the override. What a new tag *would* carry is `comn`'s own recorded lock, which matters
+of the override. What a new tag *does* carry is `comn`'s own recorded lock, which matters
 for anyone building `comn` directly.
+
+`comn` v0.5.2 (`69d112b`) was published shortly after and the pin moved to it. It contains
+**no `lib/` changes** — the diff against v0.5.1 is architecture diagrams and `mix.lock` —
+so the bump could not alter Anemos's behaviour, and the green suite against it is a
+regression check rather than evidence about new code.
 
 `cowlib`'s two remaining advisories are unchanged and still have no fixed release.
 

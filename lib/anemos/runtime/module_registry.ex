@@ -36,6 +36,8 @@ defmodule Anemos.Runtime.ModuleRegistry do
 
   require Logger
 
+  alias Anemos.Runtime.StateTable
+
   @behaviour Comn
 
   @doc """
@@ -44,10 +46,17 @@ defmodule Anemos.Runtime.ModuleRegistry do
   ## Options
 
     * `:name` — process registration name (optional)
+    * `:state_table` — an `Anemos.Runtime.StateTable` the bindings are kept
+      in, so that this process restarting does not lose them (A-43).
+      Optional; without it a restarted registry is empty.
   """
   def start_link(opts) do
     name = Keyword.get(opts, :name)
-    Agent.start_link(fn -> %{} end, name: name)
+    table = Keyword.get(opts, :state_table)
+
+    Agent.start_link(fn -> %{table: table, modules: StateTable.get(table, :modules, %{})} end,
+      name: name
+    )
   end
 
   @doc """
@@ -76,15 +85,21 @@ defmodule Anemos.Runtime.ModuleRegistry do
     replace? = Keyword.get(opts, :replace, false)
 
     registry
-    |> Agent.get_and_update(fn state ->
-      case Map.fetch(state, name) do
-        :error -> {:bound, Map.put(state, name, module)}
+    |> Agent.get_and_update(fn %{modules: modules} = state ->
+      case Map.fetch(modules, name) do
+        :error -> {:bound, bind(state, name, module)}
         {:ok, ^module} -> {:unchanged, state}
-        {:ok, current} when replace? -> {{:replaced, current}, Map.put(state, name, module)}
+        {:ok, current} when replace? -> {{:replaced, current}, bind(state, name, module)}
         {:ok, current} -> {{:refused, current}, state}
       end
     end)
     |> log_outcome(name, module)
+  end
+
+  defp bind(%{table: table, modules: modules} = state, name, module) do
+    modules = Map.put(modules, name, module)
+    :ok = StateTable.put(table, :modules, modules)
+    %{state | modules: modules}
   end
 
   defp log_outcome(:bound, name, module) do
@@ -125,7 +140,7 @@ defmodule Anemos.Runtime.ModuleRegistry do
 
   """
   @spec registered?(pid() | atom(), String.t()) :: boolean()
-  def registered?(registry, name), do: Agent.get(registry, &Map.has_key?(&1, name))
+  def registered?(registry, name), do: Agent.get(registry, &Map.has_key?(&1.modules, name))
 
   @doc """
   Lists every bound module name, sorted. For auditing what a runtime can reach.
@@ -138,7 +153,7 @@ defmodule Anemos.Runtime.ModuleRegistry do
 
   """
   @spec names(pid() | atom()) :: [String.t()]
-  def names(registry), do: registry |> Agent.get(&Map.keys/1) |> Enum.sort()
+  def names(registry), do: registry |> Agent.get(&Map.keys(&1.modules)) |> Enum.sort()
 
   @doc """
   Looks up a module by name.
@@ -154,7 +169,7 @@ defmodule Anemos.Runtime.ModuleRegistry do
   """
   @spec lookup(pid() | atom(), String.t()) :: {:ok, module()} | :error
   def lookup(registry, name) do
-    case Agent.get(registry, &Map.get(&1, name)) do
+    case Agent.get(registry, &Map.get(&1.modules, name)) do
       nil -> :error
       mod -> {:ok, mod}
     end

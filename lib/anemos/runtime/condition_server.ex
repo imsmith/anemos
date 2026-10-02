@@ -13,6 +13,8 @@ defmodule Anemos.Runtime.ConditionServer do
 
   use GenServer
 
+  alias Anemos.Runtime.StateTable
+
   @doc """
   Starts a condition server.
 
@@ -70,10 +72,15 @@ defmodule Anemos.Runtime.ConditionServer do
       side_effect_handler: Keyword.get(opts, :side_effect_handler),
       on_side_effects: Keyword.get(opts, :on_side_effects),
       on_transition: Keyword.get(opts, :on_transition),
-      value: false
+      state_table: Keyword.get(opts, :state_table)
     }
 
-    {:ok, state}
+    # A-42. A condition that was true before this process was replaced — by
+    # a dispatcher restart, or by its own crash — is still true. Coming back
+    # false would make the next true evaluation a transition, and fire every
+    # CONDITION_<name> rule a second time.
+    value = StateTable.get(state.state_table, {:condition, state.name}, false)
+    {:ok, Map.put(state, :value, value)}
   end
 
   @impl true
@@ -88,14 +95,21 @@ defmodule Anemos.Runtime.ConditionServer do
         {false, true} ->
           run_side_effects(state, context)
           if state.on_transition, do: state.on_transition.(state.name)
-          {:noreply, %{state | value: true}}
+          {:noreply, remember(state, true)}
 
         {_old, new_val} ->
-          {:noreply, %{state | value: new_val}}
+          {:noreply, remember(state, new_val)}
       end
     else
       {:noreply, state}
     end
+  end
+
+  defp remember(%{value: value} = state, value), do: state
+
+  defp remember(state, value) do
+    :ok = StateTable.put(state.state_table, {:condition, state.name}, value)
+    %{state | value: value}
   end
 
   defp run_side_effects(%{side_effect_handler: nil}, _context), do: :ok

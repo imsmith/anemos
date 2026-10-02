@@ -52,6 +52,7 @@ defmodule Anemos.Runtime do
     PolicyStore,
     RuleSupervisor,
     Scheduler,
+    StateTable,
     StoreSupervisor,
     TrustStore
   }
@@ -397,6 +398,9 @@ defmodule Anemos.Runtime do
   def init(opts) do
     name = Keyword.fetch!(opts, :name)
 
+    # Owned by this supervisor process, so it outlives every child below.
+    state_table = StateTable.new(name)
+
     # Ordered by dependency, shallowest first. Everything after a given
     # child depends on it: the dispatcher reads the module registry, the
     # policy store and the store supervisor; the scheduler dispatches into
@@ -411,9 +415,9 @@ defmodule Anemos.Runtime do
        name: TrustStore.name_for(name),
        keyring: Keyword.get(opts, :keyring, %{}),
        unsigned_policy: Keyword.get(opts, :unsigned_policy, :permit)},
-      {ModuleRegistry, name: registry_name(name)},
-      {ContextStore, name: context_store_name(name)},
-      {PolicyStore, name: policy_store_name(name)},
+      {ModuleRegistry, name: registry_name(name), state_table: state_table},
+      {ContextStore, name: context_store_name(name), state_table: state_table},
+      {PolicyStore, name: policy_store_name(name), state_table: state_table},
       {StoreSupervisor, name: store_supervisor_name(name)},
       {RuleSupervisor, name: rule_supervisor_name(name)},
       {Dispatcher,
@@ -421,8 +425,10 @@ defmodule Anemos.Runtime do
        registry: registry_name(name),
        policy_store: policy_store_name(name),
        store_supervisor: store_supervisor_name(name),
-       rule_supervisor: rule_supervisor_name(name)},
-      {Scheduler, name: scheduler_name(name), runtime_name: name}
+       rule_supervisor: rule_supervisor_name(name),
+       state_table: state_table},
+      {Scheduler,
+       name: scheduler_name(name), runtime_name: name, policy_store: policy_store_name(name)}
     ]
 
     # Last: it loads into everything above, and a restart of any of them

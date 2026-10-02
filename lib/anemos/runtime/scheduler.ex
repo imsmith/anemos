@@ -88,6 +88,9 @@ defmodule Anemos.Runtime.Scheduler do
 
     * `:name` — process registration name (optional)
     * `:runtime_name` — the Anemos.Runtime name for dispatching events (required)
+    * `:policy_store` — the runtime's `PolicyStore`; a scheduler given one
+      arms every loaded schedule when it starts, so its own restart does
+      not leave `at` blocks that never fire (optional)
     * `:dispatch_fn` — override dispatch function for testing (optional)
     * `:min_interval_ms` — interval floor (optional, see moduledoc)
     * `:max_schedules` — cap on armed timers (optional, see moduledoc)
@@ -135,19 +138,29 @@ defmodule Anemos.Runtime.Scheduler do
     runtime_name = Keyword.fetch!(opts, :runtime_name)
     dispatch_fn = Keyword.get(opts, :dispatch_fn)
 
-    {:ok,
-     %{
-       runtime_name: runtime_name,
-       dispatch_fn: dispatch_fn,
-       min_interval_ms:
-         limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
-       max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
-       # event_name => {timer_ref, spec}. The single source of truth for what
-       # is armed; the previous separate `schedules` list accumulated a copy
-       # of every spec ever handed to schedule/2, including the duplicates
-       # whose timers had been displaced, and nothing ever read it.
-       timers: %{}
-     }}
+    loaded =
+      case Keyword.get(opts, :policy_store) do
+        nil -> []
+        store -> store |> Anemos.Runtime.PolicyStore.all() |> Enum.flat_map(& &1.schedules)
+      end
+
+    state = %{
+      runtime_name: runtime_name,
+      dispatch_fn: dispatch_fn,
+      min_interval_ms:
+        limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
+      max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
+      # event_name => {timer_ref, spec}. The single source of truth for what
+      # is armed; the previous separate `schedules` list accumulated a copy
+      # of every spec ever handed to schedule/2, including the duplicates
+      # whose timers had been displaced, and nothing ever read it.
+      timers: %{}
+    }
+
+    # Failures were reported to whoever loaded the policy, and are logged
+    # again by arm_all/2; there is no caller here to hand them to.
+    {state, _failures} = arm_all(loaded, state)
+    {:ok, state}
   end
 
   defp limit(opts, opt_key, env_key, default) do
@@ -156,26 +169,7 @@ defmodule Anemos.Runtime.Scheduler do
 
   @impl true
   def handle_call({:schedule, new_schedules}, _from, state) do
-    {state, failures} =
-      Enum.reduce(new_schedules, {state, []}, fn sched, {state, failures} ->
-        case arm(sched, state) do
-          {:ok, timer_ref} ->
-            # Cancel before overwriting. The displaced entry's timer is
-            # otherwise unreachable and keeps firing (A-19).
-            state = disarm(state, sched.event_name)
-
-            {%{state | timers: Map.put(state.timers, sched.event_name, {timer_ref, sched})},
-             failures}
-
-          {:error, reason} ->
-            Logger.warning(
-              "schedule #{sched.event_name} not armed: #{inspect(reason)} — it will never fire"
-            )
-
-            {state, [{sched.event_name, reason} | failures]}
-        end
-      end)
-
+    {state, failures} = arm_all(new_schedules, state)
     reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
     {:reply, reply, state}
   end
@@ -186,6 +180,27 @@ defmodule Anemos.Runtime.Scheduler do
 
   def handle_call(:schedules, _from, state) do
     {:reply, Enum.map(state.timers, fn {_name, {_ref, sched}} -> sched end), state}
+  end
+
+  defp arm_all(schedules, state) do
+    Enum.reduce(schedules, {state, []}, fn sched, {state, failures} ->
+      case arm(sched, state) do
+        {:ok, timer_ref} ->
+          # Cancel before overwriting. The displaced entry's timer is
+          # otherwise unreachable and keeps firing (A-19).
+          state = disarm(state, sched.event_name)
+
+          {%{state | timers: Map.put(state.timers, sched.event_name, {timer_ref, sched})},
+           failures}
+
+        {:error, reason} ->
+          Logger.warning(
+            "schedule #{sched.event_name} not armed: #{inspect(reason)} — it will never fire"
+          )
+
+          {state, [{sched.event_name, reason} | failures]}
+      end
+    end)
   end
 
   # Cap is checked against timers actually armed, so it holds cumulatively

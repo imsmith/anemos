@@ -45,6 +45,10 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 - Two-tier supervision: `StoreSupervisor` for infrastructure stores, `RuleSupervisor` as
   the per-rule tier
 - `PolicyStore` — loaded policy survives a dispatcher crash
+- Hot reload — `load/3` with `policy: id` deploys a policy over itself; `unload/2`,
+  `policies/1`; `Anemos.Runtime.Watcher` keeps a directory of `.rule` files deployed
+- `StateTable` — `set` bindings, dwell timers, condition values, module registrations,
+  context data and the policy record survive the restart of any process in the runtime
 - Bounded event recursion, ceiling 10,000
 - `LoadAuthority` — pluggable authorization on `load/3`, with an unwaivable byte ceiling
 - `arg_schema/1` — optional per-verb argument validation enforced before dispatch
@@ -94,7 +98,6 @@ No lexer or parser support. Verified by attempting to parse each one.
 - Regex and string sigils — `~r`, `~s`
 - Size literals — `KB`, `MB`, `GB`, `TB`
 - `systemd()` destination
-- Hot reload / file watching
 - Signing (producing signatures). Anemos verifies; something else signs — deliberate, see
   `ISSUES.md` A-05
 

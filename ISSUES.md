@@ -32,7 +32,7 @@ than removed.
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | **Fixed** — verified, suite green |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
-| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
+| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | **Fixed for named policies** — a collision between two is refused; a policy redeployed over itself no longer logs. Anonymous loads unchanged |
 | A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
 | A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Fixed** — req 0.7.2, validated by `comn`'s own suite; override removed. 17 advisories → 2, no HIGH |
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
@@ -80,10 +80,10 @@ than removed.
 | A-60 | HIGH | `signed_by` is rule-only syntax, so `:strict` cannot load a condition file | **Fixed** — `signed_by` is a source-level declaration; rule-level still accepted |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
-| A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
-| A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
-| A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
-| A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | Open |
+| A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | **Fixed** — kept in `StateTable`, an ETS table the runtime supervisor owns |
+| A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | **Fixed** — deadline stored with the binding; re-armed for the time remaining |
+| A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | **Fixed** — each condition's value kept in `StateTable`; a redeployed condition whose text changed still reads false |
+| A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | **Fixed** — `StateTable`; found A-76 on the way |
 | A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; the class is unaudited |
 | A-45 | LOW | Lexer post-processing errors report column 1, violating the stated contract | Open |
 | A-46 | HIGH | The language has no boolean literals; `== true` is inverted from intent | **Fixed** — `{:boolean, _, true\|false}` token; mismatch warns, no coercion |
@@ -91,6 +91,10 @@ than removed.
 | A-48 | MEDIUM | `until` on a condition trigger cannot latch | Open |
 | A-49 | MEDIUM | Multiple trigger blocks in one condition run each other's side effects | Open |
 | A-50 | MEDIUM | Condition-body operations are computed and dropped; needs dispatcher wiring | **Fixed** — wired via `run_ops/5`; body runs before woken listeners |
+| A-76 | CRITICAL | A registry or context-store crash silently discarded every loaded policy | **Fixed** — `PolicyStore` and `ContextStore` are backed by `StateTable` |
+| A-77 | MEDIUM | A dispatcher restart left every `at` schedule disarmed | **Fixed** — the scheduler arms from `PolicyStore` when it starts |
+| A-78 | LOW | A live `data` subscription is duplicated by a dispatcher restart | Open |
+| A-79 | LOW | Runtime state does not survive the node | Open — by decision, see entry |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -2878,3 +2882,63 @@ Either document in the moduledoc (currently `@moduledoc false`) that this is a l
 application whose supervision tree is host-started via `Anemos.Runtime.start_link/1`, or
 fold the discovery calls into a proper child and drop the empty supervisor. The current
 shape gives a reader no signal either way.
+
+---
+
+## A-76 — A registry or context-store crash silently discarded every loaded policy
+
+**Filed:** 2026-10-02 · **Severity:** CRITICAL · found while fixing A-43 · **Fixed**
+
+`PolicyStore` sits after `ModuleRegistry` and `ContextStore` under a
+`:rest_for_one` supervisor. If either of those died, the policy store was
+restarted with them and came back empty, and the dispatcher behind it replayed
+nothing. `dispatch/3` then answered `{:ok, []}` forever. This is A-01 again,
+reached through a different child: the store that made policy survive a
+dispatcher crash did not survive its own.
+
+Fixed by keeping the policy store's record, the context store's data and the
+registry's bindings in `Anemos.Runtime.StateTable`, an ETS table owned by the
+runtime supervisor process. Regression test:
+`test/anemos/runtime/restart_state_test.exs`, "A-43".
+
+---
+
+## A-77 — A dispatcher restart left every `at` schedule disarmed
+
+**Filed:** 2026-10-02 · **Severity:** MEDIUM · **Fixed**
+
+The scheduler restarts behind the dispatcher and started with no timers. Rules
+came back from the policy store; their `at` blocks never fired again. The
+scheduler now arms every loaded schedule when it starts.
+
+An interval's phase restarts with the scheduler, and a natural-language date is
+resolved again relative to the restart. Neither is addressed.
+
+---
+
+## A-78 — A live `data` subscription is duplicated by a dispatcher restart
+
+**Filed:** 2026-10-02 · **Severity:** LOW
+
+The dispatcher holds the `{handler, ref}` of each `subscribe` feed so that a
+deploy can cancel it. That map is process state. A restarted dispatcher
+replays the policy store, subscribes again, and has no reference to the first
+feed, which keeps delivering. Updates are idempotent (`DataStore.update/4`
+replaces the dataset), so the visible cost is a leaked subscription per
+restart, not wrong data. The references are not in `StateTable` because a
+`reference()` from a handler may not mean anything to a handler that has also
+restarted.
+
+---
+
+## A-79 — Runtime state does not survive the node
+
+**Filed:** 2026-10-02 · **Severity:** LOW · open by decision
+
+`StateTable` lives as long as the runtime supervisor. Stopping the node loses
+`set` bindings, condition values and armed dwell timers. Policy text loaded
+through `Anemos.Runtime.Watcher` comes back from the directory; state does not.
+
+Writing it to disk needs two decisions that were not made here: the storage
+(the house rule is SQLite, which is a new dependency for this library), and
+what to do with an `Anemos.Secret` held in a `set` binding.

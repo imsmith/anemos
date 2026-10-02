@@ -30,6 +30,7 @@ defmodule Anemos.Runtime.Dispatcher do
     ModuleRegistry,
     PolicyStore,
     StoreSupervisor,
+    StateTable,
     SubscribableRegistry,
     TripleStore
   }
@@ -187,6 +188,8 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def init(opts) do
+    state_table = Keyword.get(opts, :state_table)
+
     state = %{
       rules: [],
       index: %{},
@@ -201,7 +204,10 @@ defmodule Anemos.Runtime.Dispatcher do
       data_store: nil,
       subscribable_registry: nil,
       channel_connector: Anemos.Channel.Logger,
-      rule_bindings: %{},
+      state_table: state_table,
+      # A-40. Whatever the previous dispatcher had accumulated, if there
+      # was one.
+      rule_bindings: StateTable.get(state_table, :rule_bindings, %{}),
       # {data block name, scope} => {handler, ref} for live `subscribe`
       # feeds, so the feed can be cancelled when its block goes.
       subscriptions: %{}
@@ -226,7 +232,12 @@ defmodule Anemos.Runtime.Dispatcher do
         st
       end)
 
-    {:ok, state}
+    # State belongs to a loaded rule. If the policy store came back empty,
+    # what the table remembers is about rules that are no longer here.
+    loaded = Enum.map(state.rules, & &1.name)
+    state = %{state | rule_bindings: Map.take(state.rule_bindings, loaded)}
+
+    {:ok, state |> rearm_dwell_timers() |> persist()}
   end
 
   @impl true
@@ -276,7 +287,7 @@ defmodule Anemos.Runtime.Dispatcher do
         {results ++ condition_results, state}
       end)
 
-    {:reply, results, state}
+    {:reply, results, persist(state)}
   end
 
   @impl true
@@ -288,7 +299,12 @@ defmodule Anemos.Runtime.Dispatcher do
     # recoverable on restart.
     :ok = PolicyStore.put(state.policy_store, compiled)
 
+    # A condition loaded again is a new condition and reads false. Its
+    # remembered value belongs to the one it replaces.
+    forget_conditions(state, names(compiled, :conditions))
+
     {state, failures} = apply_compiled(compiled, state)
+    state = persist(state)
 
     # Same convention as Scheduler.schedule/2: :ok means every declaration
     # in this result is live, {:error, failures} means the policy loaded but
@@ -322,7 +338,14 @@ defmodule Anemos.Runtime.Dispatcher do
         :ok = PolicyStore.put(state.policy_store, id, compiled, fingerprints)
 
         prior = %{unchanged: unchanged(old, fingerprints), own: own_rules(old)}
+
+        forget_conditions(
+          state,
+          Enum.reject(names(compiled, :conditions), &({:condition, &1} in prior.unchanged))
+        )
+
         {state, failures} = apply_compiled(compiled, state, prior)
+        state = persist(state)
         reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
         {:reply, {reply, diff}, state}
 
@@ -344,7 +367,7 @@ defmodule Anemos.Runtime.Dispatcher do
         :ok = PolicyStore.delete(state.policy_store, id)
         others = Enum.reject(entries, &(&1.id == id))
         {state, diff} = retire(state, old, %Anemos.CompilationResult{}, others)
-        {:reply, {:ok, diff}, refresh_stores(state)}
+        {:reply, {:ok, diff}, state |> refresh_stores() |> persist()}
     end
   end
 
@@ -382,7 +405,7 @@ defmodule Anemos.Runtime.Dispatcher do
       |> purge_rule_state(drop)
       |> drop_rule_data(drop)
 
-    {:reply, :ok, %{state | rules: remaining, index: build_index(remaining)}}
+    {:reply, :ok, persist(%{state | rules: remaining, index: build_index(remaining)})}
   end
 
   @impl true
@@ -418,6 +441,50 @@ defmodule Anemos.Runtime.Dispatcher do
     state = refresh_stores(state)
     :ok = SubscribableRegistry.register(state.subscribable_registry, protocol, handler_module)
     {:reply, :ok, state}
+  end
+
+  # The bindings are written out whole at the end of every callback that can
+  # change them, never midway: a dispatch that crashes leaves the table as
+  # the last completed callback left it.
+  #
+  # ponytail: copies the whole bindings map per dispatch. Per-rule keys if a
+  # runtime ever holds enough `set` state for that to show.
+  defp persist(state) do
+    :ok = StateTable.put(state.state_table, :rule_bindings, state.rule_bindings)
+    state
+  end
+
+  defp forget_conditions(state, names) do
+    Enum.each(names, &StateTable.delete(state.state_table, {:condition, &1}))
+  end
+
+  # A-41. A timer armed by the previous dispatcher died with it, and nothing
+  # re-arms a signal that is already steady. Each is armed again for what is
+  # left of its wait — at once, if the deadline passed while nothing was
+  # here to fire it.
+  defp rearm_dwell_timers(state) do
+    now = System.monotonic_time(:millisecond)
+
+    rule_bindings =
+      Map.new(state.rule_bindings, fn {rule_name, bindings} ->
+        {rule_name,
+         Map.new(bindings, fn
+           {{:dwell, event_name} = key, %{state: :armed, deadline: deadline} = dwell} ->
+             ref =
+               Process.send_after(
+                 self(),
+                 {:dwell_fire, rule_name, event_name},
+                 max(deadline - now, 0)
+               )
+
+             {key, %{dwell | timer_ref: ref}}
+
+           other ->
+             other
+         end)}
+      end)
+
+    %{state | rule_bindings: rule_bindings}
   end
 
   # Rule, condition and capability names are global in a runtime. A policy
@@ -470,6 +537,7 @@ defmodule Anemos.Runtime.Dispatcher do
       |> drop_rule_data(gone_rules)
 
     gone_conditions = names(old, :conditions) -- names(new, :conditions)
+    forget_conditions(state, gone_conditions)
     Enum.each(gone_conditions, &StoreSupervisor.delete(state.store_supervisor, {:condition, &1}))
 
     Enum.each(
@@ -540,7 +608,8 @@ defmodule Anemos.Runtime.Dispatcher do
           # deadlocks. The operations are picked up from the mailbox in
           # handle_call({:dispatch, ...}) and executed there, inside the
           # dispatch cycle that produced them.
-          fn name, ops -> send(dispatcher_pid, {:condition_side_effects, name, ops}) end
+          fn name, ops -> send(dispatcher_pid, {:condition_side_effects, name, ops}) end,
+          state.state_table
         )
     end)
 
@@ -807,7 +876,7 @@ defmodule Anemos.Runtime.Dispatcher do
             state
           end
 
-        {:noreply, new_state}
+        {:noreply, persist(new_state)}
 
       _ ->
         # Stale fire — rule was cancelled or already fired. Drop silently.
@@ -1492,7 +1561,14 @@ defmodule Anemos.Runtime.Dispatcher do
       case {current.state, truthy?} do
         {:listening, true} ->
           ref = Process.send_after(self(), {:dwell_fire, rule.name, event_name}, ms)
-          %{state: :armed, timer_ref: ref, last_context: context}
+
+          # The deadline is what a restarted dispatcher re-arms from (A-41).
+          %{
+            state: :armed,
+            timer_ref: ref,
+            last_context: context,
+            deadline: System.monotonic_time(:millisecond) + ms
+          }
 
         {:listening, false} ->
           current

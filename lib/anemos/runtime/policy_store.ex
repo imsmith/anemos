@@ -20,17 +20,37 @@ defmodule Anemos.Runtime.PolicyStore do
 
   use Agent
 
+  alias Anemos.Runtime.StateTable
+
   @doc """
   Starts a policy store.
 
   ## Options
 
     * `:name` — process registration name (optional)
+    * `:state_table` — an `Anemos.Runtime.StateTable` the record is kept
+      in. This store survives a dispatcher crash on its own; the table is
+      what lets it survive its *own* restart, which the supervisor forces
+      whenever a child ahead of it — the module registry, say — dies
+      (optional)
   """
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
+    table = Keyword.get(opts, :state_table)
     initial = %{policies: [], connector: Anemos.Channel.Logger}
-    Agent.start_link(fn -> initial end, name: Keyword.get(opts, :name))
+
+    Agent.start_link(
+      fn -> table |> StateTable.get(:policy_store, initial) |> Map.put(:table, table) end,
+      name: Keyword.get(opts, :name)
+    )
+  end
+
+  defp update(store, fun) do
+    Agent.update(store, fn s ->
+      s = fun.(s)
+      :ok = StateTable.put(s.table, :policy_store, Map.delete(s, :table))
+      s
+    end)
   end
 
   @doc """
@@ -40,7 +60,7 @@ defmodule Anemos.Runtime.PolicyStore do
   @spec put(Agent.agent(), Anemos.CompilationResult.t()) :: :ok
   def put(store, %Anemos.CompilationResult{} = compiled) do
     entry = %{id: nil, compiled: compiled, fingerprints: %{}}
-    Agent.update(store, fn s -> %{s | policies: s.policies ++ [entry]} end)
+    update(store, fn s -> %{s | policies: s.policies ++ [entry]} end)
   end
 
   @typedoc """
@@ -64,7 +84,7 @@ defmodule Anemos.Runtime.PolicyStore do
   def put(store, id, %Anemos.CompilationResult{} = compiled, fingerprints) when is_binary(id) do
     entry = %{id: id, compiled: compiled, fingerprints: fingerprints}
 
-    Agent.update(store, fn s ->
+    update(store, fn s ->
       %{s | policies: Enum.reject(s.policies, &(&1.id == id)) ++ [entry]}
     end)
   end
@@ -72,7 +92,7 @@ defmodule Anemos.Runtime.PolicyStore do
   @doc "Forgets the policy `id`."
   @spec delete(Agent.agent(), String.t()) :: :ok
   def delete(store, id) when is_binary(id) do
-    Agent.update(store, fn s -> %{s | policies: Enum.reject(s.policies, &(&1.id == id))} end)
+    update(store, fn s -> %{s | policies: Enum.reject(s.policies, &(&1.id == id))} end)
   end
 
   @doc "Every loaded policy in load order, with its identity."
@@ -96,7 +116,7 @@ defmodule Anemos.Runtime.PolicyStore do
   def drop_rules(store, rule_names) do
     drop = MapSet.new(rule_names)
 
-    Agent.update(store, fn s ->
+    update(store, fn s ->
       policies =
         Enum.map(s.policies, fn %{compiled: compiled} = entry ->
           rules = Enum.reject(compiled.rules, &MapSet.member?(drop, &1.name))
@@ -118,7 +138,7 @@ defmodule Anemos.Runtime.PolicyStore do
   """
   @spec put_connector(Agent.agent(), module()) :: :ok
   def put_connector(store, connector) do
-    Agent.update(store, fn s -> %{s | connector: connector} end)
+    update(store, fn s -> %{s | connector: connector} end)
   end
 
   @doc """

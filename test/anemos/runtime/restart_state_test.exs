@@ -184,3 +184,65 @@ rule ok { at 08:00 { log "t" } }|)
     assert logs(rt, "TICK") == [nil]
   end
 end
+
+defmodule Anemos.Runtime.RestartStateDecisionsTest do
+  @moduledoc "Decisions taken 2026-10-02: fired one-shots stay fired; a policy may unload another."
+  use ExUnit.Case, async: false
+
+  alias Anemos.Runtime
+  alias Anemos.Runtime.{Dispatcher, Scheduler}
+
+  setup context do
+    name = :"rd_#{:erlang.phash2(context.test)}"
+    start_supervised!({Runtime, name: name})
+    %{rt: name, scheduler: :"#{name}.scheduler"}
+  end
+
+  defp one_shot(event, ms) do
+    %Anemos.CompilationResult{
+      schedules: [
+        %Anemos.CompiledSchedule{event_name: event, time_spec: {:delay_ms, ms}, recurrence: nil}
+      ],
+      rules: [
+        %Anemos.CompiledRule{
+          name: "r",
+          subscriptions: [event],
+          meta: %{context_path: nil},
+          handler: fn _e, _c, b -> {:ok, [%{type: :log, value: "ran"}], b} end
+        }
+      ]
+    }
+  end
+
+  test "a one-shot that fired is recorded, and not armed again by a restart",
+       %{rt: rt, scheduler: s} do
+    :ok = Dispatcher.load(:"#{rt}.dispatcher", one_shot("AT_ONCE", 20))
+    :ok = Scheduler.schedule(s, [hd(one_shot("AT_ONCE", 20).schedules)])
+    Process.sleep(100)
+
+    assert %DateTime{} = Scheduler.fired_at(s, "AT_ONCE")
+    assert [%{event: "AT_ONCE", fired_at: %DateTime{}}] = Runtime.describe(rt).schedules
+
+    old = Process.whereis(s)
+    Process.exit(old, :kill)
+    Process.sleep(50)
+    assert Process.whereis(s) not in [nil, old]
+
+    assert Scheduler.schedules(s) == []
+    # Declared again by name: it is a new request and arms.
+    :ok = Scheduler.schedule(s, [hd(one_shot("AT_ONCE", 20).schedules)])
+    assert [_] = Scheduler.schedules(s)
+  end
+
+  test "a policy can unload another by name", %{rt: rt} do
+    :ok = Runtime.load(rt, ~s|rule a { when EV { log "a" } }|, policy: "victim")
+    :ok = Runtime.load(rt, ~s|rule janitor { when CLEAN { [POLICY::unload "victim"] } }|)
+
+    assert {:ok, [%{unload_requested: "victim"}]} = Runtime.dispatch(rt, "CLEAN")
+    Process.sleep(50)
+
+    assert Runtime.policies(rt) |> Enum.map(& &1.id) == [nil]
+    assert {:ok, []} = Runtime.dispatch(rt, "EV")
+    assert "POLICY" in Runtime.describe(rt).modules
+  end
+end

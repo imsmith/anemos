@@ -56,6 +56,8 @@ defmodule Anemos.Runtime.Dispatcher do
     * `:store_supervisor` — pid or name of a `StoreSupervisor` (required)
     * `:policy_store` — pid or name of a `PolicyStore` (required)
     * `:rule_supervisor` — pid or name of a `RuleSupervisor` (optional)
+    * `:runtime` — the `Anemos.Runtime` name, handed to host verbs as
+      `:_runtime` so a verb can address the runtime it runs in (optional)
     * `:name` — process registration name (optional)
 
   Rules, conditions and capabilities are *not* passed here. They are read
@@ -209,6 +211,7 @@ defmodule Anemos.Runtime.Dispatcher do
       store_supervisor: Keyword.fetch!(opts, :store_supervisor),
       policy_store: Keyword.fetch!(opts, :policy_store),
       rule_supervisor: Keyword.get(opts, :rule_supervisor),
+      runtime: Keyword.get(opts, :runtime),
       condition_servers: %{},
       condition_contexts: %{},
       capability_servers: %{},
@@ -259,6 +262,7 @@ defmodule Anemos.Runtime.Dispatcher do
   def handle_call({:dispatch, event_name, context}, _from, state) do
     started = System.monotonic_time(:microsecond)
     state = refresh_stores(state)
+    context = with_runtime(context, state)
     comn_ctx = build_comn_context(event_name, context)
 
     {{results, became_true}, state} =
@@ -566,6 +570,9 @@ defmodule Anemos.Runtime.Dispatcher do
     reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
     {:reply, reply, state}
   end
+
+  defp with_runtime(context, %{runtime: nil}), do: context
+  defp with_runtime(context, %{runtime: runtime}), do: Map.put(context, :_runtime, runtime)
 
   @trace_limit 200
 
@@ -1040,6 +1047,8 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case Map.get(rule_state, dwell_key) do
       %{state: :armed, last_context: context} when context != nil ->
+        context = with_runtime(context, state)
+
         rule =
           Enum.find(state.rules, fn r -> r.name == rule_name and event_name in r.subscriptions end)
 

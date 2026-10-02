@@ -94,9 +94,9 @@ than removed.
 | A-76 | CRITICAL | A registry or context-store crash silently discarded every loaded policy | **Fixed** — `PolicyStore` and `ContextStore` are backed by `StateTable` |
 | A-77 | MEDIUM | A dispatcher restart left every `at` schedule disarmed | **Fixed** — the scheduler arms from `PolicyStore` when it starts |
 | A-78 | LOW | A live `data` subscription is duplicated by a dispatcher restart | Open |
-| A-79 | LOW | Runtime state does not survive the node | Open — by decision, see entry |
+| A-79 | LOW | Runtime state does not survive the node | **Decided 2026-10-02** — left to the ecosystem; agento/llmagent already have a durable-state facility to integrate with |
 | A-80 | HIGH | An `at` time that does not exist crashed the scheduler, and with A-77 crash-looped the runtime | **Fixed** — arming is total; the declaration is reported inert |
-| A-81 | MEDIUM | `unload/2` is not gated by the load authority | Open |
+| A-81 | MEDIUM | `unload/2` is not gated by the load authority | **Decided 2026-10-02** — unsigned unloads stay permitted; the gated path is `[POLICY::unload "id"]` from a loaded (so authorised) policy |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -2916,10 +2916,11 @@ scheduler now arms every loaded schedule when it starts.
 An interval's phase restarts with the scheduler, and a natural-language date is
 resolved again relative to the restart. Neither is addressed.
 
-A one-shot `at 08:00` that has already fired is armed again by a scheduler
-restart, because nothing records that it fired. Before this fix it was never
-armed again at all; which of the two is right depends on what a bare `at
-08:00` means across a restart, and that is not decided.
+A one-shot that has fired is recorded in `StateTable` (`fired_at` in
+`describe/1`) and not armed again by a restart or a redeploy. The record is
+forgotten when the policy is unloaded, when a policy declaring it arrives
+fresh, or when it is armed by name through `Scheduler.schedule/2`. Decided
+2026-10-02; durable across the node once A-79's facility is integrated.
 
 ---
 
@@ -2952,6 +2953,9 @@ through `Anemos.Runtime.Watcher` comes back from the directory; state does not.
 Writing it to disk needs two decisions that were not made here: the storage
 (the house rule is SQLite, which is a new dependency for this library), and
 what to do with an `Anemos.Secret` held in a `set` binding.
+
+**Decision, 2026-10-02:** not Anemos's to solve. agento and llmagent already
+have a durable-state facility; `StateTable` is the seam it integrates with.
 
 ---
 
@@ -2986,7 +2990,7 @@ can call it can remove any policy by name. `LoadRequest` now carries the
 `policy` a load would deploy as, so an authority can stop tenant A deploying
 over tenant B, but it is never consulted about removal.
 
-Not fixed here because the behaviour is not obvious. Under
-`LoadAuthority.Signed` with `unsigned_policy: :strict`, an unload has no
-signature to present; refusing it means a signed policy can never be removed,
-and permitting it means removal is the one unauthenticated operation.
+**Decision, 2026-10-02:** both. `unload/2` stays ungated. The gated path is a
+policy that says `[POLICY::unload "id"]` — it came through `load/3` and the
+authority there, so a signed policy can retire another. See
+`Anemos.Runtime.Modules.Policy`.

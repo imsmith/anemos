@@ -249,6 +249,13 @@ defmodule Anemos.Runtime do
   end
 
   defp install(name, policy, compiled, fingerprints) do
+    scheduler = scheduler_name(name)
+
+    # A policy arriving fresh declares its one-shots afresh; a redeploy of
+    # a policy already here does not re-run what it has already run.
+    if policy not in Enum.map(policies(name), & &1.id),
+      do: Scheduler.forget(scheduler, Enum.map(compiled.schedules, & &1.event_name))
+
     case Dispatcher.deploy(dispatcher_name(name), policy, compiled, fingerprints) do
       {:refused, message} ->
         {:error, message}
@@ -260,7 +267,7 @@ defmodule Anemos.Runtime do
         own = MapSet.new(compiled.schedules, & &1.event_name)
 
         schedule_failures =
-          scheduler_name(name)
+          scheduler
           |> Scheduler.sync()
           |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
           |> Enum.filter(fn {:schedule, event_name, _} -> MapSet.member?(own, event_name) end)
@@ -277,12 +284,17 @@ defmodule Anemos.Runtime do
   it declared: rules and their state, conditions, capabilities, global data
   blocks and their live feeds, and any schedule no other policy declares.
 
-  **Privileged, and not gated.** `load/3` asks the load authority; this does
-  not (A-81). Whoever can call it can remove any policy by name.
+  Not gated: whoever can call it can remove any policy by name. The gated
+  way is from inside a policy — `[POLICY::unload "id"]`, see
+  `Anemos.Runtime.Modules.Policy` — where the authority that admitted the
+  calling policy stands for the removal (A-81).
   """
   @spec unload(atom(), String.t()) :: :ok | {:error, :not_loaded}
   def unload(name, policy_id) when is_binary(policy_id) do
+    schedules = for %{id: ^policy_id, schedules: s} <- policies(name), e <- s, do: e
+
     with :ok <- Dispatcher.undeploy(dispatcher_name(name), policy_id) do
+      _ = Scheduler.forget(scheduler_name(name), schedules)
       _ = Scheduler.sync(scheduler_name(name))
       :ok
     end
@@ -412,9 +424,16 @@ defmodule Anemos.Runtime do
   """
   @spec describe(atom()) :: map()
   def describe(name) do
+    scheduler = scheduler_name(name)
+
     schedules =
-      for s <- Scheduler.schedules(scheduler_name(name)) do
-        %{event: s.event_name, time_spec: s.time_spec, recurrence: s.recurrence}
+      for s <- Scheduler.schedules(scheduler) do
+        %{
+          event: s.event_name,
+          time_spec: s.time_spec,
+          recurrence: s.recurrence,
+          fired_at: Scheduler.fired_at(scheduler, s.event_name)
+        }
       end
 
     dispatcher_name(name)
@@ -485,7 +504,10 @@ defmodule Anemos.Runtime do
        name: TrustStore.name_for(name),
        keyring: Keyword.get(opts, :keyring, %{}),
        unsigned_policy: Keyword.get(opts, :unsigned_policy, :permit)},
-      {ModuleRegistry, name: registry_name(name), state_table: state_table},
+      {ModuleRegistry,
+       name: registry_name(name),
+       state_table: state_table,
+       modules: %{"POLICY" => Anemos.Runtime.Modules.Policy}},
       {ContextStore, name: context_store_name(name), state_table: state_table},
       {PolicyStore, name: policy_store_name(name), state_table: state_table},
       {StoreSupervisor, name: store_supervisor_name(name)},
@@ -496,9 +518,13 @@ defmodule Anemos.Runtime do
        policy_store: policy_store_name(name),
        store_supervisor: store_supervisor_name(name),
        rule_supervisor: rule_supervisor_name(name),
-       state_table: state_table},
+       state_table: state_table,
+       runtime: name},
       {Scheduler,
-       name: scheduler_name(name), runtime_name: name, policy_store: policy_store_name(name)}
+       name: scheduler_name(name),
+       runtime_name: name,
+       policy_store: policy_store_name(name),
+       state_table: state_table}
     ]
 
     # Last: it loads into everything above, and a restart of any of them

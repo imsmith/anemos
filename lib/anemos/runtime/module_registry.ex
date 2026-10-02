@@ -49,12 +49,16 @@ defmodule Anemos.Runtime.ModuleRegistry do
     * `:state_table` — an `Anemos.Runtime.StateTable` the bindings are kept
       in, so that this process restarting does not lose them (A-43).
       Optional; without it a restarted registry is empty.
+    * `:modules` — `%{name => module}` bound at start, under whatever the
+      table remembers (optional)
   """
   def start_link(opts) do
     name = Keyword.get(opts, :name)
     table = Keyword.get(opts, :state_table)
+    seed = Keyword.get(opts, :modules, %{})
 
-    Agent.start_link(fn -> %{table: table, modules: StateTable.get(table, :modules, %{})} end,
+    Agent.start_link(
+      fn -> %{table: table, modules: Map.merge(seed, StateTable.get(table, :modules, %{}))} end,
       name: name
     )
   end

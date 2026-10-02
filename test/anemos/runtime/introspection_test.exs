@@ -54,7 +54,7 @@ defmodule Anemos.Runtime.IntrospectionTest do
       d = Runtime.describe(rt)
 
       assert [%{id: "home.rule"}] = d.policies
-      assert d.modules == ["FAIL"]
+      assert d.modules == ["FAIL", "POLICY"]
 
       rules = Map.new(d.rules, &{&1.name, &1})
 

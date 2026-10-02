@@ -1684,7 +1684,10 @@ defmodule Anemos.Runtime.Dispatcher do
   def invoke_verb(registry, mod_name, verb, args, context) do
     case ModuleRegistry.lookup(registry, mod_name) do
       {:ok, mod} ->
-        validate_then_handle(mod, mod_name, verb, args, context)
+        # One Elixir module can stand behind many registered names — a
+        # bridge that serves every discovered tool, say — and it needs to
+        # know which name it was called by.
+        validate_then_handle(mod, mod_name, verb, args, Map.put(context, :_module, mod_name))
 
       :error ->
         {:error,
@@ -1695,7 +1698,9 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @doc """
-  Builds the context a host verb sees: the event context plus `:_rule_source`.
+  Builds the context a host verb sees: the event context plus `:_rule_source`,
+  `:_runtime` (the runtime's name, when run under one) and, added at the
+  call, `:_module` (the name the verb was addressed by).
 
   One definition, used by `run_ops/5` for statement-position calls and by
   `dispatch_immediate/6` to precompute `:_verb_context` for expression-position

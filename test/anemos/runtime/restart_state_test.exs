@@ -246,3 +246,24 @@ defmodule Anemos.Runtime.RestartStateDecisionsTest do
     assert "POLICY" in Runtime.describe(rt).modules
   end
 end
+
+defmodule Anemos.Runtime.VerbContextTest do
+  use ExUnit.Case, async: false
+
+  defmodule Echo do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+    @impl true
+    def handle_verb(verb, args, ctx), do: {:ok, {ctx[:_module], verb, args, ctx[:_runtime]}}
+  end
+
+  test "a verb learns the runtime it runs in and the name it was called by" do
+    start_supervised!({Anemos.Runtime, name: :vc})
+    :ok = Anemos.Runtime.register(:vc, "ONE", Echo)
+    :ok = Anemos.Runtime.register(:vc, "TWO", Echo)
+    :ok = Anemos.Runtime.load(:vc, ~s|rule r { when EV { log [ONE::go 1] \n log [TWO::run] } }|)
+
+    assert {:ok, [%{value: {"ONE", "go", [1], :vc}}, %{value: {"TWO", "run", [], :vc}}]} =
+             Anemos.Runtime.dispatch(:vc, "EV")
+  end
+end

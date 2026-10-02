@@ -97,6 +97,7 @@ than removed.
 | A-79 | LOW | Runtime state does not survive the node | **Decided 2026-10-02** — left to the ecosystem; agento/llmagent already have a durable-state facility to integrate with |
 | A-80 | HIGH | An `at` time that does not exist crashed the scheduler, and with A-77 crash-looped the runtime | **Fixed** — arming is total; the declaration is reported inert |
 | A-81 | MEDIUM | `unload/2` is not gated by the load authority | **Decided 2026-10-02** — unsigned unloads stay permitted; the gated path is `[POLICY::unload "id"]` from a loaded (so authorised) policy |
+| A-82 | LOW | A verb whose name is hex letters (`[M::a]`, `[M::be]`) lexes as an IPv6 address | Open |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -2994,3 +2995,15 @@ over tenant B, but it is never consulted about removal.
 policy that says `[POLICY::unload "id"]` — it came through `load/3` and the
 authority there, so a signed policy can retire another. See
 `Anemos.Runtime.Modules.Policy`.
+
+---
+
+## A-82 — A verb whose name is hex letters lexes as an IPv6 address
+
+**Filed:** 2026-10-02 · **Severity:** LOW
+
+`[ONE::a 1]` fails to parse: "Expected MODULE::verb or triple pattern". The
+lexer's IPv6 rule takes `::` followed by hex digits as a compressed address,
+and `a`, `b`, `dead`, `cafe` are all hex. The existing disambiguation covers
+`::extension` (the identifier does not start with a hex letter) and not this.
+Workaround: verb names that start with a letter after `f`.

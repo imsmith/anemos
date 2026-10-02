@@ -425,25 +425,30 @@ defmodule Anemos.Runtime do
   timers; each condition its current value.
 
   Bindings are returned as they are. An `Anemos.Secret` stays wrapped.
+
+  Options: `:timeout` (default 5000 ms), for each of the calls this makes.
   """
-  @spec describe(atom()) :: map()
-  def describe(name) do
+  @spec describe(atom(), keyword()) :: map()
+  def describe(name, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 5_000)
     scheduler = scheduler_name(name)
 
     schedules =
-      for s <- Scheduler.schedules(scheduler) do
+      for s <- GenServer.call(scheduler, :schedules, timeout) do
         %{
           event: s.event_name,
           time_spec: s.time_spec,
           recurrence: s.recurrence,
-          fired_at: Scheduler.fired_at(scheduler, s.event_name)
+          fired_at: GenServer.call(scheduler, {:fired_at, s.event_name}, timeout)
         }
       end
 
-    dispatcher_name(name)
-    |> Dispatcher.describe()
+    dispatcher = dispatcher_name(name)
+
+    dispatcher
+    |> GenServer.call(:describe, timeout)
     |> Map.merge(%{
-      policies: policies(name),
+      policies: GenServer.call(dispatcher, :policies, timeout),
       schedules: Enum.sort_by(schedules, & &1.event),
       modules: ModuleRegistry.names(registry_name(name))
     })

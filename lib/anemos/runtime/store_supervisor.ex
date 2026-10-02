@@ -193,6 +193,17 @@ defmodule Anemos.Runtime.StoreSupervisor do
     })
   end
 
+  @doc """
+  Stops and forgets the server for a condition or capability that is no
+  longer declared. Idempotent.
+  """
+  @spec delete(Supervisor.supervisor(), {:condition | :capability, String.t()}) :: :ok
+  def delete(sup, {kind, _name} = id) when kind in [:condition, :capability] do
+    _ = Supervisor.terminate_child(sup, id)
+    _ = Supervisor.delete_child(sup, id)
+    :ok
+  end
+
   defp replace_child(sup, %{id: id} = child_spec) do
     _ = Supervisor.terminate_child(sup, id)
     _ = Supervisor.delete_child(sup, id)

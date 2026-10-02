@@ -80,6 +80,24 @@ defmodule Anemos.Runtime do
   conditions, and capabilities to the dispatcher and arms any schedules.
   Can be called multiple times — policies accumulate.
 
+  ## Deploying: `policy: id`
+
+  A load that names its policy replaces whatever was last loaded under that
+  name, exactly: afterwards the runtime holds what this source declares and
+  nothing the previous version declared that this one does not.
+
+      Anemos.Runtime.load(:anemos, File.read!(path), policy: "garage/lights.rule")
+
+  A rule or condition whose text did not change keeps its state — `set`
+  bindings, armed dwell timers, the condition's boolean — however much of
+  the file around it was edited. One whose text changed starts from nothing.
+  A source that fails to load changes nothing; the deployed version keeps
+  running. Declaring a rule, condition or capability name that another
+  named policy holds is refused, and nothing is loaded.
+
+  Without `:policy` the load is anonymous: it can only add, and replace
+  rules by name.
+
   ## This is the trust boundary
 
   Whoever controls `source` controls every verb registered in this runtime.
@@ -136,28 +154,136 @@ defmodule Anemos.Runtime do
     # get an AST for the compiler, which is what keeps a second entry
     # point from quietly growing a second set of security properties
     # (A-59).
-    with {:ok, ast} <- LoadAuthority.gate(name, source, opts),
-         {:ok, compiled} <- Anemos.Compiler.compile(ast) do
-      dispatcher_failures =
-        dispatcher_name(name)
-        |> Dispatcher.load(compiled)
-        |> failures_of(fn {kind, decl, reason} -> {kind, decl, reason} end)
-
-      schedule_failures =
-        if compiled.schedules == [] do
-          []
-        else
-          scheduler_name(name)
-          |> Scheduler.schedule(compiled.schedules)
-          |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
-        end
-
-      case dispatcher_failures ++ schedule_failures do
-        [] -> :ok
-        failures -> {:partial, failures}
-      end
+    with {:ok, policy} <- policy_id(opts),
+         {:ok, ast} <- LoadAuthority.gate(name, source, opts),
+         {:ok, compiled, fingerprints} <- compile(ast) do
+      install(name, policy, compiled, fingerprints)
     end
   end
+
+  defp policy_id(opts) do
+    case Keyword.fetch(opts, :policy) do
+      :error -> {:ok, nil}
+      {:ok, id} when is_binary(id) and id != "" -> {:ok, id}
+      {:ok, _other} -> {:error, "the :policy option must be a non-empty string"}
+    end
+  end
+
+  # Declaration by declaration, which is how the compiler works anyway: it
+  # carries nothing from one top-level declaration to the next. Doing it out
+  # here is what ties each compiled rule and condition back to the text it
+  # came from, so a deploy can tell which of them an edit actually touched.
+  defp compile(%Anemos.AST.Program{declarations: declarations}) do
+    Enum.reduce_while(declarations, {:ok, %Anemos.CompilationResult{}, %{}}, fn decl,
+                                                                                {:ok, acc, fps} ->
+      case Anemos.Compiler.compile(%Anemos.AST.Program{declarations: [decl]}) do
+        {:ok, one} ->
+          merged =
+            Map.merge(acc, one, fn
+              :__struct__, struct, _ -> struct
+              _field, left, right -> left ++ right
+            end)
+
+          {:cont, {:ok, merged, fingerprint(fps, one, decl)}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  # Two declarations sharing a name are one rule to the dispatcher, so their
+  # digests are folded together rather than the later one winning.
+  defp fingerprint(fps, one, decl) do
+    digest = :crypto.hash(:sha256, :erlang.term_to_binary(without_positions(decl)))
+
+    keys =
+      Enum.map(one.rules, &{:rule, &1.name}) ++ Enum.map(one.conditions, &{:condition, &1.name})
+
+    Enum.reduce(Enum.uniq(keys), fps, fn key, fps ->
+      Map.update(fps, key, digest, &:crypto.hash(:sha256, &1 <> digest))
+    end)
+  end
+
+  # The same declaration further down the file is the same declaration.
+  defp without_positions(%_{} = node) do
+    node
+    |> Map.from_struct()
+    |> Map.delete(:line)
+    |> without_positions()
+    |> Map.put(:__node__, node.__struct__)
+  end
+
+  defp without_positions(%{} = map), do: Map.new(map, fn {k, v} -> {k, without_positions(v)} end)
+  defp without_positions(list) when is_list(list), do: Enum.map(list, &without_positions/1)
+
+  defp without_positions(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> without_positions() |> List.to_tuple()
+
+  defp without_positions(other), do: other
+
+  defp install(name, nil, compiled, _fingerprints) do
+    dispatcher_failures =
+      dispatcher_name(name)
+      |> Dispatcher.load(compiled)
+      |> failures_of(fn {kind, decl, reason} -> {kind, decl, reason} end)
+
+    finish(dispatcher_failures ++ arm(name, compiled.schedules))
+  end
+
+  defp install(name, policy, compiled, fingerprints) do
+    case Dispatcher.deploy(dispatcher_name(name), policy, compiled, fingerprints) do
+      {:refused, message} ->
+        {:error, message}
+
+      {result, %{removed_schedules: removed}} ->
+        scheduler = scheduler_name(name)
+        :ok = Scheduler.unschedule(scheduler, removed)
+
+        # A schedule's name is its time. One that is already armed is the
+        # same timer, and re-arming it would restart an interval's phase on
+        # every save of an unrelated rule.
+        armed = scheduler |> Scheduler.schedules() |> MapSet.new(& &1.event_name)
+        fresh = Enum.reject(compiled.schedules, &MapSet.member?(armed, &1.event_name))
+
+        dispatcher_failures =
+          failures_of(result, fn {kind, decl, reason} -> {kind, decl, reason} end)
+
+        finish(dispatcher_failures ++ arm(name, fresh))
+    end
+  end
+
+  defp arm(_name, []), do: []
+
+  defp arm(name, schedules) do
+    scheduler_name(name)
+    |> Scheduler.schedule(schedules)
+    |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
+  end
+
+  defp finish([]), do: :ok
+  defp finish(failures), do: {:partial, failures}
+
+  @doc """
+  Removes a policy that was loaded with `policy: policy_id`, and everything
+  it declared: rules and their state, conditions, capabilities, global data
+  blocks and their live feeds, and any schedule no other policy declares.
+  """
+  @spec unload(atom(), String.t()) :: :ok | {:error, :not_loaded}
+  def unload(name, policy_id) when is_binary(policy_id) do
+    with {:ok, %{removed_schedules: removed}} <-
+           Dispatcher.undeploy(dispatcher_name(name), policy_id) do
+      Scheduler.unschedule(scheduler_name(name), removed)
+    end
+  end
+
+  @doc """
+  The loaded policies in load order, each as
+  `%{id, rules, conditions, capabilities, schedules, data_blocks}` with the
+  names it declares. A load that named no policy has `id: nil`.
+  """
+  @spec policies(atom()) :: [map()]
+  def policies(name), do: Dispatcher.policies(dispatcher_name(name))
 
   # Both Dispatcher.load/2 and Scheduler.schedule/2 answer :ok or
   # {:error, failures}; they differ only in the shape of a failure entry.
@@ -329,7 +455,16 @@ defmodule Anemos.Runtime do
         :dispatcher,
         :scheduler
       ],
-      api: [:load, :register, :dispatch, :connect, :put_context, :condition_state],
+      api: [
+        :load,
+        :unload,
+        :policies,
+        :register,
+        :dispatch,
+        :connect,
+        :put_context,
+        :condition_state
+      ],
       # Reported so that "we never configured an authority" is a fact an
       # operator can read off the running system rather than an absence.
       load_authority: LoadAuthority.configured()

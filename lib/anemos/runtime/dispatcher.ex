@@ -112,6 +112,44 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.call(dispatcher, {:unload, rule_names})
   end
 
+  @typedoc "What a deploy changed that the caller has to act on."
+  @type deploy_diff :: %{removed_schedules: [String.t()]}
+
+  @doc """
+  Deploys `compiled` as the policy `id`, over whatever was last deployed
+  under that id.
+
+  Afterwards the dispatcher holds what `compiled` declares and nothing the
+  previous version declared that it does not. A rule or condition whose
+  fingerprint is unchanged keeps its state; see the `{:deploy, ...}`
+  callback.
+
+  Answers `{load_result, diff}`, where `load_result` is what `load/2` would
+  answer and `diff` names the schedules the caller must disarm — the
+  scheduler is not the dispatcher's to call. A policy that declares a name
+  another identified policy holds is not loaded at all: `{:refused, message}`.
+  """
+  @spec deploy(pid() | atom(), String.t(), Anemos.CompilationResult.t(), map()) ::
+          {:ok | {:error, [term()]}, deploy_diff()} | {:refused, String.t()}
+  def deploy(dispatcher, id, compiled, fingerprints) when is_binary(id) do
+    GenServer.call(dispatcher, {:deploy, id, compiled, fingerprints})
+  end
+
+  @doc """
+  Removes the policy `id` and everything it declared.
+  """
+  @spec undeploy(pid() | atom(), String.t()) :: {:ok, deploy_diff()} | {:error, :not_loaded}
+  def undeploy(dispatcher, id) when is_binary(id) do
+    GenServer.call(dispatcher, {:undeploy, id})
+  end
+
+  @doc """
+  The loaded policies in load order, each with the names it declares. A load
+  that named no policy has `id: nil`.
+  """
+  @spec policies(pid() | atom()) :: [map()]
+  def policies(dispatcher), do: GenServer.call(dispatcher, :policies)
+
   @doc """
   Returns the names of the rules currently loaded, without duplicates.
 
@@ -163,7 +201,10 @@ defmodule Anemos.Runtime.Dispatcher do
       data_store: nil,
       subscribable_registry: nil,
       channel_connector: Anemos.Channel.Logger,
-      rule_bindings: %{}
+      rule_bindings: %{},
+      # {data block name, scope} => {handler, ref} for live `subscribe`
+      # feeds, so the feed can be cancelled when its block goes.
+      subscriptions: %{}
     }
 
     policy_store = state.policy_store
@@ -257,6 +298,72 @@ defmodule Anemos.Runtime.Dispatcher do
     {:reply, reply, state}
   end
 
+  # A deploy is a load that knows what it replaces. Everything the previous
+  # version of the policy declared and this one does not is torn down, in
+  # this one call, so no event is ever dispatched against half of each.
+  #
+  # State follows the text. A rule or condition whose fingerprint matches
+  # the previous version's is the same declaration — the edit was elsewhere
+  # in the file — and keeps its `set` bindings, armed dwell timers and
+  # boolean state. One whose text changed starts from nothing, for the
+  # reason merge_rules/3 gives.
+  @impl true
+  def handle_call({:deploy, id, compiled, fingerprints}, _from, state) do
+    state = refresh_stores(state)
+    entries = PolicyStore.entries(state.policy_store)
+    old = Enum.find(entries, &(&1.id == id))
+    others = Enum.reject(entries, &(&1.id == id))
+
+    case conflicts(id, compiled, others) do
+      [] ->
+        {state, diff} = retire(state, old, compiled, others)
+
+        # Recorded before applying, as in {:load, _}.
+        :ok = PolicyStore.put(state.policy_store, id, compiled, fingerprints)
+
+        {state, failures} = apply_compiled(compiled, state, unchanged(old, fingerprints))
+        reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
+        {:reply, {reply, diff}, state}
+
+      conflicts ->
+        {:reply, {:refused, Enum.join(conflicts, "; ")}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:undeploy, id}, _from, state) do
+    state = refresh_stores(state)
+    entries = PolicyStore.entries(state.policy_store)
+
+    case Enum.find(entries, &(&1.id == id)) do
+      nil ->
+        {:reply, {:error, :not_loaded}, state}
+
+      old ->
+        :ok = PolicyStore.delete(state.policy_store, id)
+        others = Enum.reject(entries, &(&1.id == id))
+        {state, diff} = retire(state, old, %Anemos.CompilationResult{}, others)
+        {:reply, {:ok, diff}, refresh_stores(state)}
+    end
+  end
+
+  @impl true
+  def handle_call(:policies, _from, state) do
+    policies =
+      for %{id: id, compiled: c} <- PolicyStore.entries(state.policy_store) do
+        %{
+          id: id,
+          rules: c.rules |> Enum.map(& &1.name) |> Enum.uniq(),
+          conditions: Enum.map(c.conditions, & &1.name),
+          capabilities: Enum.map(c.capabilities, & &1.name),
+          schedules: c.schedules |> Enum.map(& &1.event_name) |> Enum.uniq(),
+          data_blocks: Enum.map(c.data_blocks, & &1.name)
+        }
+      end
+
+    {:reply, policies, state}
+  end
+
   @impl true
   def handle_call({:unload, rule_names}, _from, state) do
     state = refresh_stores(state)
@@ -312,18 +419,107 @@ defmodule Anemos.Runtime.Dispatcher do
     {:reply, :ok, state}
   end
 
+  # Rule, condition and capability names are global in a runtime. A policy
+  # that declares one another *identified* policy holds is refused whole:
+  # replacing it would silently stop part of an unrelated policy (A-61), and
+  # here, unlike in an anonymous load, both parties have names to report.
+  defp conflicts(id, compiled, others) do
+    for %{id: other, compiled: theirs} when is_binary(other) <- others,
+        {kind, field} <- [rule: :rules, condition: :conditions, capability: :capabilities],
+        name <- names(compiled, field),
+        name in names(theirs, field) do
+      "policy #{inspect(id)} declares #{kind} #{inspect(name)}, which policy " <>
+        "#{inspect(other)} already declares"
+    end
+  end
+
+  defp names(compiled, field),
+    do: compiled |> Map.fetch!(field) |> Enum.map(& &1.name) |> Enum.uniq()
+
+  defp data_keys(compiled) do
+    for %{scope: scope} = data <- compiled.data_blocks, scope in [nil, :global] do
+      {data.name, :global}
+    end
+  end
+
+  # The rules and conditions whose text did not change between two versions
+  # of a policy.
+  defp unchanged(nil, _fingerprints), do: MapSet.new()
+
+  defp unchanged(%{fingerprints: old}, new) do
+    for {key, digest} <- new, Map.get(old, key) == digest, into: MapSet.new(), do: key
+  end
+
+  # Tears down what `old` declared and `new` does not. `others` are the
+  # policies that stay loaded: a schedule's name is its time, so two policies
+  # can share one timer and it must outlive either of them alone.
+  defp retire(state, nil, _new, _others), do: {state, %{removed_schedules: []}}
+
+  defp retire(state, %{compiled: old}, new, others) do
+    gone_rules = MapSet.new(names(old, :rules) -- names(new, :rules))
+
+    rules = Enum.reject(state.rules, &MapSet.member?(gone_rules, &1.name))
+
+    state =
+      %{state | rules: rules, index: build_index(rules)}
+      |> purge_rule_state(gone_rules)
+      |> drop_rule_data(gone_rules)
+
+    gone_conditions = names(old, :conditions) -- names(new, :conditions)
+    Enum.each(gone_conditions, &StoreSupervisor.delete(state.store_supervisor, {:condition, &1}))
+
+    Enum.each(
+      names(old, :capabilities) -- names(new, :capabilities),
+      &StoreSupervisor.delete(state.store_supervisor, {:capability, &1})
+    )
+
+    state =
+      Enum.reduce(data_keys(old) -- data_keys(new), state, fn {name, scope} = key, st ->
+        DataStore.deregister(st.data_store, name, scope)
+        unsubscribe(st, key)
+      end)
+
+    still_declared =
+      for %{compiled: c} <- others, s <- c.schedules, into: MapSet.new(), do: s.event_name
+
+    removed_schedules =
+      (Enum.map(old.schedules, & &1.event_name) -- Enum.map(new.schedules, & &1.event_name))
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(still_declared, &1))
+
+    state = %{state | condition_contexts: Map.drop(state.condition_contexts, gone_conditions)}
+    {state, %{removed_schedules: removed_schedules}}
+  end
+
+  defp unsubscribe(state, key) do
+    case Map.pop(state.subscriptions, key) do
+      {{handler, ref}, subscriptions} ->
+        handler.unsubscribe(ref)
+        %{state | subscriptions: subscriptions}
+
+      {nil, _} ->
+        state
+    end
+  end
+
   # Turns one compilation result into running processes and index entries.
   # Called both from {:load, _} and from init/1 when replaying the policy
   # store, so a rebuilt dispatcher is wired identically to a freshly loaded
   # one.
-  defp apply_compiled(compiled, state) do
+  #
+  # `unchanged` is the set of `{:rule | :condition, name}` a deploy found
+  # identical to what is already running. It is empty for a plain load and
+  # for the init/1 replay, where every server must be installed afresh.
+  defp apply_compiled(compiled, state, unchanged \\ MapSet.new()) do
     dispatcher_pid = self()
 
     # Condition and capability servers are (re)started under the store
     # supervisor, not linked here. put_condition/4 replaces any existing
     # server for the name so that a restarted dispatcher installs
     # callbacks pointing at itself.
-    Enum.each(compiled.conditions, fn cond_spec ->
+    compiled.conditions
+    |> Enum.reject(&MapSet.member?(unchanged, {:condition, &1.name}))
+    |> Enum.each(fn cond_spec ->
       {:ok, _pid} =
         StoreSupervisor.put_condition(
           state.store_supervisor,
@@ -359,8 +555,8 @@ defmodule Anemos.Runtime.Dispatcher do
     # subscription never starts is inert: the block exists and every
     # memberof() against it answers false, forever. That is a load failure
     # the author has to hear about, not a log line.
-    failures =
-      Enum.reduce(Map.get(compiled, :data_blocks, []), [], fn data, failures ->
+    {state, failures} =
+      Enum.reduce(Map.get(compiled, :data_blocks, []), {state, []}, fn data, {state, failures} ->
         if data.dataset do
           DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
             source: data.source
@@ -372,11 +568,12 @@ defmodule Anemos.Runtime.Dispatcher do
             subscribe_data_block(data, protocol, uri, state, failures)
 
           _ ->
-            failures
+            # Static now, whatever it was before.
+            {unsubscribe(state, {data.name, data.scope || :global}), failures}
         end
       end)
 
-    {state, merged_rules} = merge_rules(state, compiled.rules)
+    {state, merged_rules} = merge_rules(state, compiled.rules, unchanged)
 
     # Condition/capability pids are never cached in state — refresh_stores/1
     # reads them from the supervisor so a restarted server is picked up.
@@ -404,9 +601,9 @@ defmodule Anemos.Runtime.Dispatcher do
   # with several `when` blocks compiles to several `CompiledRule` structs
   # sharing one name, and dropping them individually would leave half of the
   # old definition running alongside the new one.
-  defp merge_rules(state, []), do: {state, state.rules}
+  defp merge_rules(state, [], _unchanged), do: {state, state.rules}
 
-  defp merge_rules(state, incoming) do
+  defp merge_rules(state, incoming, unchanged) do
     incoming_names = MapSet.new(incoming, & &1.name)
 
     replaced =
@@ -428,7 +625,11 @@ defmodule Anemos.Runtime.Dispatcher do
     # describe a rule body that no longer exists. Carrying them into the new
     # definition hands it state it never produced, and leaves a
     # `{:dwell_fire, ...}` in flight for a `when` block that may be gone.
-    state = purge_rule_state(state, MapSet.new(replaced))
+    #
+    # Unless the definition is the same one: a deploy that found the rule's
+    # text unchanged is replacing it with itself, and it keeps what it has.
+    changed = Enum.reject(replaced, &MapSet.member?(unchanged, {:rule, &1}))
+    state = purge_rule_state(state, MapSet.new(changed))
 
     {state, kept ++ incoming}
   end
@@ -483,6 +684,9 @@ defmodule Anemos.Runtime.Dispatcher do
     case SubscribableRegistry.lookup(state.subscribable_registry, protocol) do
       {:ok, handler} ->
         scope = data.scope || :global
+        # A block that is being re-registered already has a feed; a second
+        # one would deliver every update twice and could never be cancelled.
+        state = unsubscribe(state, {data.name, scope})
         DataStore.register(state.data_store, data.name, scope, MapSet.new())
 
         callback = fn new_data ->
@@ -491,9 +695,10 @@ defmodule Anemos.Runtime.Dispatcher do
         end
 
         case handler.subscribe(protocol, uri, callback) do
-          {:ok, _ref} ->
+          {:ok, ref} ->
             Logger.debug("Started subscription for data block '#{data.name}' via #{protocol}")
-            failures
+            subscriptions = Map.put(state.subscriptions, {data.name, scope}, {handler, ref})
+            {%{state | subscriptions: subscriptions}, failures}
 
           {:error, reason} ->
             # A-52 site 3. Same split as crash_error/2, one severity lower.
@@ -508,7 +713,7 @@ defmodule Anemos.Runtime.Dispatcher do
                 "never update; the reason is on the failure returned by load/2"
             )
 
-            [{:data_block, data.name, {:subscribe_failed, reason}} | failures]
+            {state, [{:data_block, data.name, {:subscribe_failed, reason}} | failures]}
         end
 
       :error ->
@@ -517,7 +722,7 @@ defmodule Anemos.Runtime.Dispatcher do
             "handler — it will never update"
         )
 
-        [{:data_block, data.name, {:no_subscribable_handler, protocol}} | failures]
+        {state, [{:data_block, data.name, {:no_subscribable_handler, protocol}} | failures]}
     end
   end
 

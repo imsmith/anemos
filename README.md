@@ -63,6 +63,26 @@ More examples in `priv/examples/`.
 Anemos is a language interpreter, not an application. Start a blank runtime
 in your supervision tree, then load modules and policies into it dynamically.
 
+### Building it
+
+```bash
+git clone <this repo>
+cd anemos
+mix deps.get
+mix test
+```
+
+No sibling checkouts are required. The one substantial dependency,
+[comn](https://github.com/imsmith/comn), is a git dependency pinned to a
+tag, and `mix.lock` records the exact commit — so a fresh clone builds
+the same tree that was tested.
+
+`mix deps.get` reports two remaining advisories, both against `cowlib`
+(one LOW, one MEDIUM), reached transitively through `comn`'s NATS client.
+Neither has a fixed release to move to — `cowlib` 2.19.0 is the newest
+published version and is itself named as affected. No HIGH advisories
+remain. Tracked as A-66 in `ISSUES.md`.
+
 ### Supervise the runtime
 
 ```elixir
@@ -95,6 +115,26 @@ Anemos.Runtime.load(:anemos, File.read!("policies/garage.rule"))
 Anemos.Runtime.load(:anemos, File.read!("policies/ddns.rule"))
 ```
 
+### Deploy, and keep deployed
+
+Name the policy and a load becomes a deploy: it replaces whatever was last
+loaded under that name, exactly. Declarations the new version drops are torn
+down; a rule or condition whose text did not change keeps its state.
+
+```elixir
+Anemos.Runtime.load(:anemos, source, policy: "garage.rule")
+Anemos.Runtime.unload(:anemos, "garage.rule")
+Anemos.Runtime.policies(:anemos)
+```
+
+Or hand the runtime a directory. Saving a `.rule` file deploys it, deleting
+it unloads it, and a file that does not load leaves the running version
+alone.
+
+```elixir
+{Anemos.Runtime, name: :anemos, watch: "/etc/anemos/policies"}
+```
+
 ### Dispatch events
 
 ```elixir
@@ -107,6 +147,12 @@ Anemos.Runtime.load(:anemos, File.read!("policies/ddns.rule"))
 ```elixir
 Anemos.Runtime.condition_state(:anemos, "networkchanged")
 # => true | false | nil
+```
+
+```elixir
+Anemos.Runtime.describe(:anemos)          # everything loaded, with its state
+Anemos.Runtime.explain(:anemos, "MOTION") # what the event would do
+Anemos.Runtime.trace(:anemos)             # what the last dispatches did
 ```
 
 ### Set context data

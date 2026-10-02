@@ -20,17 +20,37 @@ defmodule Anemos.Runtime.PolicyStore do
 
   use Agent
 
+  alias Anemos.Runtime.StateTable
+
   @doc """
   Starts a policy store.
 
   ## Options
 
     * `:name` — process registration name (optional)
+    * `:state_table` — an `Anemos.Runtime.StateTable` the record is kept
+      in. This store survives a dispatcher crash on its own; the table is
+      what lets it survive its *own* restart, which the supervisor forces
+      whenever a child ahead of it — the module registry, say — dies
+      (optional)
   """
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
+    table = Keyword.get(opts, :state_table)
     initial = %{policies: [], connector: Anemos.Channel.Logger}
-    Agent.start_link(fn -> initial end, name: Keyword.get(opts, :name))
+
+    Agent.start_link(
+      fn -> table |> StateTable.get(:policy_store, initial) |> Map.put(:table, table) end,
+      name: Keyword.get(opts, :name)
+    )
+  end
+
+  defp update(store, fun) do
+    Agent.update(store, fn s ->
+      s = fun.(s)
+      :ok = StateTable.put(s.table, :policy_store, Map.delete(s, :table))
+      s
+    end)
   end
 
   @doc """
@@ -39,8 +59,45 @@ defmodule Anemos.Runtime.PolicyStore do
   """
   @spec put(Agent.agent(), Anemos.CompilationResult.t()) :: :ok
   def put(store, %Anemos.CompilationResult{} = compiled) do
-    Agent.update(store, fn s -> %{s | policies: s.policies ++ [compiled]} end)
+    entry = %{id: nil, compiled: compiled, fingerprints: %{}}
+    update(store, fn s -> %{s | policies: s.policies ++ [entry]} end)
   end
+
+  @typedoc """
+  One loaded policy. `id` is `nil` for a load that named no policy.
+  `fingerprints` maps `{:rule | :condition, name}` to a digest of the
+  declaration's text, which is how a deploy tells an edited declaration from
+  one that merely sits in an edited file.
+  """
+  @type entry :: %{
+          id: String.t() | nil,
+          compiled: Anemos.CompilationResult.t(),
+          fingerprints: %{optional({:rule | :condition, String.t()}) => binary()}
+        }
+
+  @doc """
+  Records `compiled` as the policy `id`, in place of whatever was recorded
+  under that id. The policy moves to the end of the load order, which is
+  where its rules go in the dispatcher's live list when they are replaced.
+  """
+  @spec put(Agent.agent(), String.t(), Anemos.CompilationResult.t(), map()) :: :ok
+  def put(store, id, %Anemos.CompilationResult{} = compiled, fingerprints) when is_binary(id) do
+    entry = %{id: id, compiled: compiled, fingerprints: fingerprints}
+
+    update(store, fn s ->
+      %{s | policies: Enum.reject(s.policies, &(&1.id == id)) ++ [entry]}
+    end)
+  end
+
+  @doc "Forgets the policy `id`."
+  @spec delete(Agent.agent(), String.t()) :: :ok
+  def delete(store, id) when is_binary(id) do
+    update(store, fn s -> %{s | policies: Enum.reject(s.policies, &(&1.id == id))} end)
+  end
+
+  @doc "Every loaded policy in load order, with its identity."
+  @spec entries(Agent.agent()) :: [entry()]
+  def entries(store), do: Agent.get(store, & &1.policies)
 
   @doc """
   Removes the named rules from every stored compilation result.
@@ -59,10 +116,11 @@ defmodule Anemos.Runtime.PolicyStore do
   def drop_rules(store, rule_names) do
     drop = MapSet.new(rule_names)
 
-    Agent.update(store, fn s ->
+    update(store, fn s ->
       policies =
-        Enum.map(s.policies, fn compiled ->
-          %{compiled | rules: Enum.reject(compiled.rules, &MapSet.member?(drop, &1.name))}
+        Enum.map(s.policies, fn %{compiled: compiled} = entry ->
+          rules = Enum.reject(compiled.rules, &MapSet.member?(drop, &1.name))
+          %{entry | compiled: %{compiled | rules: rules}}
         end)
 
       %{s | policies: policies}
@@ -73,14 +131,14 @@ defmodule Anemos.Runtime.PolicyStore do
   Returns every loaded compilation result in load order.
   """
   @spec all(Agent.agent()) :: [Anemos.CompilationResult.t()]
-  def all(store), do: Agent.get(store, & &1.policies)
+  def all(store), do: Agent.get(store, fn s -> Enum.map(s.policies, & &1.compiled) end)
 
   @doc """
   Records the channel connector so it survives a dispatcher restart.
   """
   @spec put_connector(Agent.agent(), module()) :: :ok
   def put_connector(store, connector) do
-    Agent.update(store, fn s -> %{s | connector: connector} end)
+    update(store, fn s -> %{s | connector: connector} end)
   end
 
   @doc """

@@ -25,7 +25,13 @@ anemos-*.tar
 # Git worktrees
 /.worktrees/
 
-#Elixir bookkeeping
+# Elixir bookkeeping
 *.beam
-mix.lock
+
+# mix.lock is deliberately NOT ignored. It was listed here while `comn` was a
+# path dependency, when the lock recorded nothing about the one dependency that
+# mattered. Now that comn is a git dep, the lock is what pins its commit, so
+# ignoring it would throw away the reproducibility the pin exists to give.
+# (The entry was inert anyway — the file is tracked, and .gitignore does not
+# apply to tracked files — but it read as an instruction to untrack it.)
 

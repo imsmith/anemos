@@ -167,9 +167,10 @@ defmodule Anemos.Runtime.SupervisionTest do
       }
       """)
 
-    assert {:ok, results} = Anemos.Runtime.dispatch(:sup_t2b, "MOTION")
-    assert Enum.any?(results, &match?(%{type: :log, value: "reacted"}, &1))
-
+    # The condition is deliberately not triggered before the kill. It used
+    # to be, and the assertion below then passed only because the restart
+    # reset it to false and let it transition a second time — which is the
+    # double-fire A-42 describes, and no longer happens.
     dispatcher = Process.whereis(:"sup_t2b.dispatcher")
     Process.exit(dispatcher, :kill)
     await_restart(:"sup_t2b.dispatcher", dispatcher)

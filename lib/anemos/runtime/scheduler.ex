@@ -66,7 +66,7 @@ defmodule Anemos.Runtime.Scheduler do
   use GenServer
   require Logger
 
-  alias Anemos.Runtime.Duration
+  alias Anemos.Runtime.{Duration, StateTable}
 
   @default_min_interval_ms 1_000
   @default_max_schedules 1_000
@@ -80,6 +80,7 @@ defmodule Anemos.Runtime.Scheduler do
           | {:nld_in_past, String.t()}
           | {:unknown_duration_unit, atom()}
           | {:invalid_duration, term()}
+          | {:invalid_time_spec, term()}
 
   @doc """
   Starts the scheduler.
@@ -88,6 +89,12 @@ defmodule Anemos.Runtime.Scheduler do
 
     * `:name` — process registration name (optional)
     * `:runtime_name` — the Anemos.Runtime name for dispatching events (required)
+    * `:policy_store` — the runtime's `PolicyStore`; a scheduler given one
+      arms every loaded schedule when it starts, so its own restart does
+      not leave `at` blocks that never fire (optional)
+    * `:state_table` — an `Anemos.Runtime.StateTable`. Each firing is
+      recorded there, and a one-shot schedule that has fired is not armed
+      again when the scheduler restarts or reconciles (optional)
     * `:dispatch_fn` — override dispatch function for testing (optional)
     * `:min_interval_ms` — interval floor (optional, see moduledoc)
     * `:max_schedules` — cap on armed timers (optional, see moduledoc)
@@ -125,6 +132,31 @@ defmodule Anemos.Runtime.Scheduler do
   end
 
   @doc """
+  Makes what is armed match what is loaded: arms every schedule in the
+  policy store that is not armed, disarms every timer no loaded policy
+  declares, and leaves the rest running.
+
+  The policy store is read here, inside the scheduler, and not by the
+  caller. Two deploys finishing at once each call this after recording
+  themselves, so whichever call runs last sees both — a caller that computed
+  "arm this, disarm that" from its own view could disarm a time the other
+  had just picked up.
+
+  Answers like `schedule/2`, with a failure for every loaded spec that could
+  not be armed. A scheduler started without a `:policy_store` does nothing.
+  """
+  @spec sync(pid() | atom()) :: :ok | {:error, [{String.t(), failure_reason()}]}
+  def sync(server), do: GenServer.call(server, :sync)
+
+  @doc "Forgets that the named schedules fired, so a one-shot among them can arm again."
+  @spec forget(pid() | atom(), [String.t()]) :: :ok
+  def forget(server, event_names), do: GenServer.call(server, {:forget, event_names})
+
+  @doc "When the schedule `event_name` last fired, or nil."
+  @spec fired_at(pid() | atom(), String.t()) :: DateTime.t() | nil
+  def fired_at(server, event_name), do: GenServer.call(server, {:fired_at, event_name})
+
+  @doc """
   Returns the specs currently armed, one per event name.
   """
   @spec schedules(pid() | atom()) :: [Anemos.CompiledSchedule.t()]
@@ -135,19 +167,25 @@ defmodule Anemos.Runtime.Scheduler do
     runtime_name = Keyword.fetch!(opts, :runtime_name)
     dispatch_fn = Keyword.get(opts, :dispatch_fn)
 
-    {:ok,
-     %{
-       runtime_name: runtime_name,
-       dispatch_fn: dispatch_fn,
-       min_interval_ms:
-         limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
-       max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
-       # event_name => {timer_ref, spec}. The single source of truth for what
-       # is armed; the previous separate `schedules` list accumulated a copy
-       # of every spec ever handed to schedule/2, including the duplicates
-       # whose timers had been displaced, and nothing ever read it.
-       timers: %{}
-     }}
+    state = %{
+      policy_store: Keyword.get(opts, :policy_store),
+      state_table: Keyword.get(opts, :state_table),
+      runtime_name: runtime_name,
+      dispatch_fn: dispatch_fn,
+      min_interval_ms:
+        limit(opts, :min_interval_ms, :min_schedule_interval_ms, @default_min_interval_ms),
+      max_schedules: limit(opts, :max_schedules, :max_schedules, @default_max_schedules),
+      # event_name => {timer_ref, spec}. The single source of truth for what
+      # is armed; the previous separate `schedules` list accumulated a copy
+      # of every spec ever handed to schedule/2, including the duplicates
+      # whose timers had been displaced, and nothing ever read it.
+      timers: %{}
+    }
+
+    # Failures were reported to whoever loaded the policy, and are logged
+    # again by arm_all/2; there is no caller here to hand them to.
+    {state, _failures} = arm_all(loaded(state), state)
+    {:ok, state}
   end
 
   defp limit(opts, opt_key, env_key, default) do
@@ -156,26 +194,9 @@ defmodule Anemos.Runtime.Scheduler do
 
   @impl true
   def handle_call({:schedule, new_schedules}, _from, state) do
-    {state, failures} =
-      Enum.reduce(new_schedules, {state, []}, fn sched, {state, failures} ->
-        case arm(sched, state) do
-          {:ok, timer_ref} ->
-            # Cancel before overwriting. The displaced entry's timer is
-            # otherwise unreachable and keeps firing (A-19).
-            state = disarm(state, sched.event_name)
-
-            {%{state | timers: Map.put(state.timers, sched.event_name, {timer_ref, sched})},
-             failures}
-
-          {:error, reason} ->
-            Logger.warning(
-              "schedule #{sched.event_name} not armed: #{inspect(reason)} — it will never fire"
-            )
-
-            {state, [{sched.event_name, reason} | failures]}
-        end
-      end)
-
+    # Asked for by name: a spent one-shot is being declared again.
+    Enum.each(new_schedules, &StateTable.delete(state.state_table, {:fired, &1.event_name}))
+    {state, failures} = arm_all(new_schedules, state)
     reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
     {:reply, reply, state}
   end
@@ -184,8 +205,79 @@ defmodule Anemos.Runtime.Scheduler do
     {:reply, :ok, Enum.reduce(event_names, state, &disarm(&2, &1))}
   end
 
+  def handle_call(:sync, _from, %{policy_store: nil} = state), do: {:reply, :ok, state}
+
+  def handle_call(:sync, _from, state) do
+    desired = loaded(state)
+    names = MapSet.new(desired, & &1.event_name)
+
+    state =
+      state.timers
+      |> Map.keys()
+      |> Enum.reject(&MapSet.member?(names, &1))
+      |> Enum.reduce(state, &disarm(&2, &1))
+
+    # Already armed is the same timer: a schedule's name is its time.
+    # Re-arming it would restart an interval's phase on every deploy.
+    fresh = Enum.reject(desired, &Map.has_key?(state.timers, &1.event_name))
+    {state, failures} = arm_all(fresh, state)
+    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
+    {:reply, reply, state}
+  end
+
+  def handle_call({:forget, event_names}, _from, state) do
+    Enum.each(event_names, &StateTable.delete(state.state_table, {:fired, &1}))
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:fired_at, event_name}, _from, state) do
+    {:reply, last_fired(state, event_name), state}
+  end
+
   def handle_call(:schedules, _from, state) do
     {:reply, Enum.map(state.timers, fn {_name, {_ref, sched}} -> sched end), state}
+  end
+
+  defp loaded(%{policy_store: nil}), do: []
+
+  # A one-shot that has fired is spent. Arming it again on a restart would
+  # run it twice; it comes back only when a policy declaring it is loaded
+  # again, which forgets the record (see Anemos.Runtime).
+  defp loaded(%{policy_store: store} = state) do
+    store
+    |> Anemos.Runtime.PolicyStore.all()
+    |> Enum.flat_map(& &1.schedules)
+    |> Enum.uniq_by(& &1.event_name)
+    |> Enum.reject(&(&1.recurrence == nil and last_fired(state, &1.event_name) != nil))
+  end
+
+  defp last_fired(%{state_table: table}, event_name),
+    do: StateTable.get(table, {:fired, event_name}, nil)
+
+  defp record_fired(state, event_name) do
+    :ok = StateTable.put(state.state_table, {:fired, event_name}, DateTime.utc_now())
+    state
+  end
+
+  defp arm_all(schedules, state) do
+    Enum.reduce(schedules, {state, []}, fn sched, {state, failures} ->
+      case arm(sched, state) do
+        {:ok, timer_ref} ->
+          # Cancel before overwriting. The displaced entry's timer is
+          # otherwise unreachable and keeps firing (A-19).
+          state = disarm(state, sched.event_name)
+
+          {%{state | timers: Map.put(state.timers, sched.event_name, {timer_ref, sched})},
+           failures}
+
+        {:error, reason} ->
+          Logger.warning(
+            "schedule #{sched.event_name} not armed: #{inspect(reason)} — it will never fire"
+          )
+
+          {state, [{sched.event_name, reason} | failures]}
+      end
+    end)
   end
 
   # Cap is checked against timers actually armed, so it holds cumulatively
@@ -197,7 +289,16 @@ defmodule Anemos.Runtime.Scheduler do
          not Map.has_key?(state.timers, sched.event_name) do
       {:error, {:schedule_limit_exceeded, state.max_schedules}}
     else
-      start_timer(sched, state)
+      # Total, whatever the spec. The parser accepts `at 25:99`, and a
+      # spec that raises here would take the scheduler down every time it
+      # is armed — including from init/1, where it is armed on every
+      # restart until the runtime gives up (A-80).
+      try do
+        start_timer(sched, state)
+      rescue
+        _ in [ArgumentError, FunctionClauseError] ->
+          {:error, {:invalid_time_spec, sched.time_spec}}
+      end
     end
   end
 
@@ -224,7 +325,7 @@ defmodule Anemos.Runtime.Scheduler do
   @impl true
   def handle_info({:fire, event_name}, state) do
     do_dispatch(event_name, state)
-    {:noreply, state}
+    {:noreply, record_fired(state, event_name)}
   end
 
   # Re-arms only if the event is still armed. A `:fire_recurring` can already
@@ -234,6 +335,7 @@ defmodule Anemos.Runtime.Scheduler do
   @impl true
   def handle_info({:fire_recurring, event_name, sched}, state) do
     do_dispatch(event_name, state)
+    state = record_fired(state, event_name)
 
     if Map.has_key?(state.timers, event_name) do
       state = disarm(state, event_name)

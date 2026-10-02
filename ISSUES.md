@@ -32,9 +32,9 @@ than removed.
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | **Fixed** — verified, suite green |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
-| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | Open |
+| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | **Fixed for named policies** — a name held by a named policy is refused to every other load; a policy redeployed over itself no longer logs. Two anonymous loads unchanged |
 | A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
-| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | Open |
+| A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Fixed** — req 0.7.2, validated by `comn`'s own suite; override removed. 17 advisories → 2, no HIGH |
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
 | A-68 | MEDIUM | A secret-redaction assertion passes vacuously | **Fixed** — 2676230, split out with explicit metadata capture |
 | A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
@@ -58,7 +58,7 @@ than removed.
 | A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Open |
 | A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | Partially fixed — unhandled protocol now surfaces through `load/2`; `memberof` still fails open |
 | A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55; no CI workflow, there is no git remote |
-| A-28 | LOW | `comn` path dependency makes the repo unbuildable | Open |
+| A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.2`; `mix.lock` records the commit |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | Open |
 | A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
@@ -80,10 +80,10 @@ than removed.
 | A-60 | HIGH | `signed_by` is rule-only syntax, so `:strict` cannot load a condition file | **Fixed** — `signed_by` is a source-level declaration; rule-level still accepted |
 | A-53 | MEDIUM | CLI has no `--context`, so every scoped example now prints "No rules matched" | **Fixed** — `--context`, `--context-data`, `--stub-modules`, `--help`, exit codes |
 | A-54 | MEDIUM | `CompiledCondition.context` declared, never populated — conditions cannot demand scoped capabilities | **Fixed** — `compile_condition/1` fills it from the body's `%AST.Context{}` |
-| A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | Open |
-| A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | Open |
-| A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | Open |
-| A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | Open |
+| A-40 | MEDIUM | Persistent `set` bindings destroyed by a dispatcher restart | **Fixed** — kept in `StateTable`, an ETS table the runtime supervisor owns |
+| A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | **Fixed** — deadline stored with the binding; re-armed for the time remaining |
+| A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | **Fixed** — each condition's value kept in `StateTable`; a redeployed condition whose text changed still reads false |
+| A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | **Fixed** — `StateTable`; found A-76 on the way |
 | A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; the class is unaudited |
 | A-45 | LOW | Lexer post-processing errors report column 1, violating the stated contract | Open |
 | A-46 | HIGH | The language has no boolean literals; `== true` is inverted from intent | **Fixed** — `{:boolean, _, true\|false}` token; mismatch warns, no coercion |
@@ -91,6 +91,12 @@ than removed.
 | A-48 | MEDIUM | `until` on a condition trigger cannot latch | Open |
 | A-49 | MEDIUM | Multiple trigger blocks in one condition run each other's side effects | Open |
 | A-50 | MEDIUM | Condition-body operations are computed and dropped; needs dispatcher wiring | **Fixed** — wired via `run_ops/5`; body runs before woken listeners |
+| A-76 | CRITICAL | A registry or context-store crash silently discarded every loaded policy | **Fixed** — `PolicyStore` and `ContextStore` are backed by `StateTable` |
+| A-77 | MEDIUM | A dispatcher restart left every `at` schedule disarmed | **Fixed** — the scheduler arms from `PolicyStore` when it starts |
+| A-78 | LOW | A live `data` subscription is duplicated by a dispatcher restart | Open |
+| A-79 | LOW | Runtime state does not survive the node | **Decided 2026-10-02** — left to the ecosystem; agento/llmagent already have a durable-state facility to integrate with |
+| A-80 | HIGH | An `at` time that does not exist crashed the scheduler, and with A-77 crash-looped the runtime | **Fixed** — arming is total; the declaration is reported inert |
+| A-81 | MEDIUM | `unload/2` is not gated by the load authority | **Decided 2026-10-02** — unsigned unloads stay permitted; the gated path is `[POLICY::unload "id"]` from a loaded (so authorised) policy |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -1027,6 +1033,35 @@ a sibling checkout is required.
 
 Related: `mix.lock` is tracked in git **and** listed in `.gitignore` — the two declarations
 contradict each other.
+
+### Fixed 2026-08-08
+
+    {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.2"}
+
+`mix.lock` now records `69d112b36e66ecac68feb2cd587b48de59680cf7`, so a fresh clone builds
+without a sibling checkout and gets the same commit this branch was tested against. (Pinned
+to v0.5.1 when first fixed; moved to v0.5.2 the same day, once that tag existed.)
+
+Pinned to a **tag**, not a branch: updating `comn` should be a deliberate act with its own
+commit and its own test run, rather than something a routine `mix deps.get` does on its own.
+`v0.5.1` was verified to be the exact tip of `comn`'s `main` — zero commits of drift — and
+the local checkout was level with `origin/main` with nothing unpushed, so the git dep
+delivers precisely what the path dep had been delivering. Suite unchanged at 48 doctests,
+790 tests, 0 failures against it.
+
+The `.gitignore` contradiction is resolved in favour of tracking. The entry was inert —
+`.gitignore` does not apply to already-tracked files — but it read as an instruction to
+untrack, and the lock is now the thing carrying the pin.
+
+**Scope note.** This entry was originally framed partly around publishing to Hex. That
+framing is dropped: the defect worth fixing was that the repo could not be built by anyone
+without a sibling checkout at a specific relative path, and that is what is fixed. Whether
+Anemos is ever published is a separate question and not one this register needs an opinion
+on.
+
+Not addressed here: `mix deps.get` reports a HIGH advisory against `req`, reached
+transitively through `comn` — that is A-66, and moving to a git dep neither causes nor cures
+it. It is merely visible now, which is an improvement.
 
 ---
 
@@ -2616,6 +2651,73 @@ found only because substitution happened to insert the keyword.
 
 ---
 
+## A-66 — `req` decompression-bomb advisory, reached via `comn`
+
+**Filed:** 2026-08-06 · **Severity:** HIGH · **Mitigated 2026-08-08**
+
+### What the audit found, and what it missed
+
+The entry named one advisory against `req`. Running `mix hex.audit` after A-28 made the
+dependency tree visible found **seventeen**, across four packages:
+
+| Package | Advisories | Reached via |
+| --- | --- | --- |
+| `req` 0.5.17 | 2 (1 HIGH) | `comn` → `{:req, "~> 0.5"}` |
+| `mint` 1.7.1 | 8 (4 HIGH) | `comn` → `req` → `finch` → `mint` |
+| `hpax` 1.0.3 | 1 (HIGH) | …→ `mint` → `hpax` |
+| `cowlib` 2.16.0 | 6 (3 HIGH) | `comn` → `gnat` → `cowlib` |
+
+The original entry was not wrong, it was narrow: it named the advisory someone had
+mentioned rather than the output of the tool that enumerates them.
+
+### Now
+
+Two remain — one LOW, one MEDIUM, both `cowlib`, **and neither has a fixed release**.
+`cowlib` 2.19.0 is the newest published version and the advisories name it as affected
+(EEF-CVE-2026-43966 affects "from 2.9.0", with remediation shipped in `cowboy` 2.16.0+ and
+`gun` 2.4.0+ rather than in `cowlib` itself). Nothing to upgrade to. **No HIGH remains.**
+
+### What was actually checked, rather than assumed
+
+- **req 0.5.18 does not fix it.** The obvious conservative move — a patch bump inside
+  `comn`'s existing `~> 0.5` — was tried first and `hex.audit` still flags it. The minor
+  bump is unavoidable.
+- **0.6.1 is the fix, per the advisory**, not 0.7.x. `~> 0.6.1` resolves to 0.6.3 and clears
+  both `req` advisories, so the floor is set there rather than at the newest release. The
+  smallest move that works is the one least likely to break `comn`.
+- **`~> 0.5` was not the constraint it looks like.** It permits `< 1.0.0`, so a plain
+  `mix deps.update req` jumps to 0.7.2 — which is how the first attempt landed two minor
+  versions out. Worth knowing before assuming `comn` pinned anything.
+
+### Closed 2026-08-08 — validated in `comn`, override removed
+
+The gap in the first pass was that Anemos could not validate the bump. `Req` is used in
+exactly one module of `comn` — `lib/comn/repo/file/ipfs.ex` — and Anemos reaches
+`Comn.Repo.File.Local`, never IPFS, so 790 passing tests exercised none of the changed code.
+The interim `{:req, "~> 0.6.1", override: true}` was a floor set without that evidence.
+
+`comn` has since been tested green against **req 0.7.2** by its owner, which is the
+validation that was missing. The override is deleted and Anemos resolves `req` through
+`comn`'s own `{:req, "~> 0.5"}` — which permits `< 1.0.0` and so reaches 0.7.2 unaided.
+
+Note for anyone tracing this later: a git dependency's `mix.lock` is **not** consulted. Only
+the top-level project's lock resolves versions, so `comn`'s lock never governed what Anemos
+built against, and no new `comn` tag was required to move Anemos to 0.7.2 — only the removal
+of the override. What a new tag *does* carry is `comn`'s own recorded lock, which matters
+for anyone building `comn` directly.
+
+`comn` v0.5.2 (`69d112b`) was published shortly after and the pin moved to it. It contains
+**no `lib/` changes** — the diff against v0.5.1 is architecture diagrams and `mix.lock` —
+so the bump could not alter Anemos's behaviour, and the green suite against it is a
+regression check rather than evidence about new code.
+
+`cowlib`'s two remaining advisories are unchanged and still have no fixed release.
+
+Related, still true: several comn-side findings have been recorded in this repository rather
+than raised in that one.
+
+---
+
 ## L-01 — `Anemos.Runtime.RuleSupervisor` is dead code that ships in the published docs
 
 **Filed:** 2026-08-04 · **Reported from:** as-built architecture review
@@ -2782,3 +2884,113 @@ Either document in the moduledoc (currently `@moduledoc false`) that this is a l
 application whose supervision tree is host-started via `Anemos.Runtime.start_link/1`, or
 fold the discovery calls into a proper child and drop the empty supervisor. The current
 shape gives a reader no signal either way.
+
+---
+
+## A-76 — A registry or context-store crash silently discarded every loaded policy
+
+**Filed:** 2026-10-02 · **Severity:** CRITICAL · found while fixing A-43 · **Fixed**
+
+`PolicyStore` sits after `ModuleRegistry` and `ContextStore` under a
+`:rest_for_one` supervisor. If either of those died, the policy store was
+restarted with them and came back empty, and the dispatcher behind it replayed
+nothing. `dispatch/3` then answered `{:ok, []}` forever. This is A-01 again,
+reached through a different child: the store that made policy survive a
+dispatcher crash did not survive its own.
+
+Fixed by keeping the policy store's record, the context store's data and the
+registry's bindings in `Anemos.Runtime.StateTable`, an ETS table owned by the
+runtime supervisor process. Regression test:
+`test/anemos/runtime/restart_state_test.exs`, "A-43".
+
+---
+
+## A-77 — A dispatcher restart left every `at` schedule disarmed
+
+**Filed:** 2026-10-02 · **Severity:** MEDIUM · **Fixed**
+
+The scheduler restarts behind the dispatcher and started with no timers. Rules
+came back from the policy store; their `at` blocks never fired again. The
+scheduler now arms every loaded schedule when it starts.
+
+An interval's phase restarts with the scheduler, and a natural-language date is
+resolved again relative to the restart. Neither is addressed.
+
+A one-shot that has fired is recorded in `StateTable` (`fired_at` in
+`describe/1`) and not armed again by a restart or a redeploy. The record is
+forgotten when the policy is unloaded, when a policy declaring it arrives
+fresh, or when it is armed by name through `Scheduler.schedule/2`. Decided
+2026-10-02; durable across the node once A-79's facility is integrated.
+
+---
+
+## A-78 — A live `data` subscription is duplicated by a dispatcher restart
+
+**Filed:** 2026-10-02 · **Severity:** LOW
+
+The dispatcher holds the `{handler, ref}` of each `subscribe` feed so that a
+deploy can cancel it. That map is process state. A restarted dispatcher
+replays the policy store, subscribes again, and has no reference to the first
+feed, which keeps delivering. Updates are idempotent (`DataStore.update/4`
+replaces the dataset), so the visible cost is a leaked subscription per
+restart, not wrong data. The references are not in `StateTable` because a
+`reference()` from a handler may not mean anything to a handler that has also
+restarted.
+
+Related: the `SubscribableRegistry` is not in `StateTable`, so a store
+supervisor restart loses the host's `register_subscribable/3` calls.
+
+---
+
+## A-79 — Runtime state does not survive the node
+
+**Filed:** 2026-10-02 · **Severity:** LOW · open by decision
+
+`StateTable` lives as long as the runtime supervisor. Stopping the node loses
+`set` bindings, condition values and armed dwell timers. Policy text loaded
+through `Anemos.Runtime.Watcher` comes back from the directory; state does not.
+
+Writing it to disk needs two decisions that were not made here: the storage
+(the house rule is SQLite, which is a new dependency for this library), and
+what to do with an `Anemos.Secret` held in a `set` binding.
+
+**Decision, 2026-10-02:** not Anemos's to solve. agento and llmagent already
+have a durable-state facility; `StateTable` is the seam it integrates with.
+
+---
+
+## A-80 — An `at` time that does not exist crashed the scheduler
+
+**Filed:** 2026-10-02 · **Severity:** HIGH · found in review of the A-77 fix · **Fixed**
+
+The parser accepts `at 25:99` and `at DATE_2026.02.31`. `start_timer/2` built
+the time with `Time.new!` / `Date.new!` and raised. On its own that was one
+scheduler crash per load. With A-77's re-arm on start it became a crash on
+every restart, until the supervisor gave up and the runtime — every policy in
+it — went down. One policy file could do that.
+
+Arming is now total: a spec that cannot be turned into a time is an inert
+declaration, `{:schedule, name, {:invalid_time_spec, spec}}`, reported through
+`{:partial, _}` like an interval below the floor. The parser still accepts the
+text; rejecting it there is the better fix and belongs with A-44.
+
+The same replay hazard existed for a dwell timer: a `when ... for` body that
+crashed the dispatcher left an armed entry whose deadline had passed, which
+the restart fired at once. The timer is now marked spent, durably, before its
+body runs.
+
+---
+
+## A-81 — `unload/2` is not gated by the load authority
+
+**Filed:** 2026-10-02 · **Severity:** MEDIUM · found in review
+
+`load/3` goes through `LoadAuthority.gate/3`. `unload/2` asks nobody: whoever
+can call it can remove any policy by name. `LoadRequest` now carries the
+`policy` a load would deploy as, so an authority can stop tenant A deploying
+over tenant B, but it is never consulted about removal.
+
+**Decision, 2026-10-02:** both. `unload/2` stays ungated. The gated path is a
+policy that says `[POLICY::unload "id"]` — it came through `load/3` and the
+authority there, so a signed policy can retire another. See
+`Anemos.Runtime.Modules.Policy`.

@@ -153,9 +153,10 @@ defmodule Anemos.Runtime.StoreSupervisor do
           Supervisor.supervisor(),
           map(),
           (String.t() -> any()),
-          (String.t(), [map()] -> any()) | nil
+          (String.t(), [map()] -> any()) | nil,
+          Anemos.Runtime.StateTable.t()
         ) :: {:ok, pid()} | {:error, term()}
-  def put_condition(sup, cond_spec, on_transition, on_side_effects \\ nil) do
+  def put_condition(sup, cond_spec, on_transition, on_side_effects \\ nil, state_table \\ nil) do
     args = [
       name_str: cond_spec.name,
       subscriptions: cond_spec.subscriptions,
@@ -163,7 +164,8 @@ defmodule Anemos.Runtime.StoreSupervisor do
       side_effects: Map.get(cond_spec, :side_effects, []),
       side_effect_handler: Map.get(cond_spec, :side_effect_handler),
       on_side_effects: on_side_effects,
-      on_transition: on_transition
+      on_transition: on_transition,
+      state_table: state_table
     ]
 
     replace_child(sup, %{
@@ -191,6 +193,17 @@ defmodule Anemos.Runtime.StoreSupervisor do
       restart: :permanent,
       type: :worker
     })
+  end
+
+  @doc """
+  Stops and forgets the server for a condition or capability that is no
+  longer declared. Idempotent.
+  """
+  @spec delete(Supervisor.supervisor(), {:condition | :capability, String.t()}) :: :ok
+  def delete(sup, {kind, _name} = id) when kind in [:condition, :capability] do
+    _ = Supervisor.terminate_child(sup, id)
+    _ = Supervisor.delete_child(sup, id)
+    :ok
   end
 
   defp replace_child(sup, %{id: id} = child_spec) do

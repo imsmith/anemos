@@ -7,6 +7,8 @@ defmodule Anemos.Runtime.ContextStore do
 
   use Agent
 
+  alias Anemos.Runtime.StateTable
+
   @doc """
   Starts a context store.
 
@@ -14,12 +16,18 @@ defmodule Anemos.Runtime.ContextStore do
 
     * `:data` — initial key-value pairs as a list of `{key, value}` tuples (optional)
     * `:name` — process registration name (optional)
+    * `:state_table` — an `Anemos.Runtime.StateTable` the data is kept in,
+      so that this process restarting does not lose it (optional)
   """
   def start_link(opts) do
     name = Keyword.get(opts, :name)
-    initial_data = Keyword.get(opts, :data, [])
-    initial_map = Map.new(initial_data)
-    Agent.start_link(fn -> initial_map end, name: name)
+    table = Keyword.get(opts, :state_table)
+    initial = opts |> Keyword.get(:data, []) |> Map.new()
+
+    Agent.start_link(
+      fn -> %{table: table, data: Map.merge(initial, StateTable.get(table, :context, %{}))} end,
+      name: name
+    )
   end
 
   @doc """
@@ -27,7 +35,11 @@ defmodule Anemos.Runtime.ContextStore do
   """
   @spec put(pid() | atom(), String.t(), term()) :: :ok
   def put(store, key, value) do
-    Agent.update(store, &Map.put(&1, key, value))
+    Agent.update(store, fn %{table: table, data: data} = state ->
+      data = Map.put(data, key, value)
+      :ok = StateTable.put(table, :context, data)
+      %{state | data: data}
+    end)
   end
 
   @doc """
@@ -51,7 +63,7 @@ defmodule Anemos.Runtime.ContextStore do
   def resolve(store, context_path, name) do
     full_key = "#{context_path}.#{name}"
 
-    case Agent.get(store, &Map.get(&1, full_key)) do
+    case Agent.get(store, &Map.get(&1.data, full_key)) do
       nil -> :error
       value -> {:ok, value}
     end

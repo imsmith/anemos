@@ -36,6 +36,8 @@ defmodule Anemos.Runtime do
       declare no signer at all. Defaults to `:permit`; see
       `Anemos.Runtime.TrustStore` for why the default is the insecure one
       and when that must be revisited.
+    * `:watch` — a directory of `*.rule` files to keep deployed: saving a
+      file deploys it, deleting it unloads it. See `Anemos.Runtime.Watcher`.
   """
 
   use Supervisor
@@ -50,6 +52,7 @@ defmodule Anemos.Runtime do
     PolicyStore,
     RuleSupervisor,
     Scheduler,
+    StateTable,
     StoreSupervisor,
     TrustStore
   }
@@ -79,6 +82,26 @@ defmodule Anemos.Runtime do
   Parses and compiles the source, then adds the resulting rules,
   conditions, and capabilities to the dispatcher and arms any schedules.
   Can be called multiple times — policies accumulate.
+
+  ## Deploying: `policy: id`
+
+  A load that names its policy replaces whatever was last loaded under that
+  name, exactly: afterwards the runtime holds what this source declares and
+  nothing the previous version declared that this one does not.
+
+      Anemos.Runtime.load(:anemos, File.read!(path), policy: "garage/lights.rule")
+
+  A rule or condition whose text did not change keeps its state — `set`
+  bindings, armed dwell timers, the condition's boolean — however much of
+  the file around it was edited. One whose text changed starts from nothing.
+  A source that fails to load changes nothing; the deployed version keeps
+  running. Declaring a rule, condition or capability name that another
+  named policy holds is refused, and nothing is loaded.
+
+  Without `:policy` the load is anonymous: it can only add, and replace
+  rules by name — and not a name a named policy holds, which is refused the
+  same way. The name is passed to the load authority as
+  `Anemos.Runtime.LoadRequest`'s `policy`.
 
   ## This is the trust boundary
 
@@ -136,28 +159,154 @@ defmodule Anemos.Runtime do
     # get an AST for the compiler, which is what keeps a second entry
     # point from quietly growing a second set of security properties
     # (A-59).
-    with {:ok, ast} <- LoadAuthority.gate(name, source, opts),
-         {:ok, compiled} <- Anemos.Compiler.compile(ast) do
-      dispatcher_failures =
-        dispatcher_name(name)
-        |> Dispatcher.load(compiled)
-        |> failures_of(fn {kind, decl, reason} -> {kind, decl, reason} end)
-
-      schedule_failures =
-        if compiled.schedules == [] do
-          []
-        else
-          scheduler_name(name)
-          |> Scheduler.schedule(compiled.schedules)
-          |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
-        end
-
-      case dispatcher_failures ++ schedule_failures do
-        [] -> :ok
-        failures -> {:partial, failures}
-      end
+    with {:ok, policy} <- policy_id(opts),
+         {:ok, ast} <- LoadAuthority.gate(name, source, opts),
+         {:ok, compiled, fingerprints} <- compile(ast) do
+      install(name, policy, compiled, fingerprints)
     end
   end
+
+  defp policy_id(opts) do
+    case Keyword.fetch(opts, :policy) do
+      :error -> {:ok, nil}
+      {:ok, id} when is_binary(id) and id != "" -> {:ok, id}
+      {:ok, _other} -> {:error, "the :policy option must be a non-empty string"}
+    end
+  end
+
+  # Declaration by declaration, which is how the compiler works anyway: it
+  # carries nothing from one top-level declaration to the next. Doing it out
+  # here is what ties each compiled rule and condition back to the text it
+  # came from, so a deploy can tell which of them an edit actually touched.
+  defp compile(%Anemos.AST.Program{declarations: declarations}) do
+    Enum.reduce_while(declarations, {:ok, %Anemos.CompilationResult{}, %{}}, fn decl,
+                                                                                {:ok, acc, fps} ->
+      case Anemos.Compiler.compile(%Anemos.AST.Program{declarations: [decl]}) do
+        {:ok, one} ->
+          merged =
+            Map.merge(acc, one, fn
+              :__struct__, struct, _ -> struct
+              _field, left, right -> left ++ right
+            end)
+
+          {:cont, {:ok, merged, fingerprint(fps, one, decl)}}
+
+        {:error, _} = error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  # Two declarations sharing a name are one rule to the dispatcher, so their
+  # digests are folded together rather than the later one winning.
+  defp fingerprint(fps, one, decl) do
+    digest = :crypto.hash(:sha256, :erlang.term_to_binary(without_positions(decl)))
+
+    keys =
+      Enum.map(one.rules, &{:rule, &1.name}) ++
+        Enum.map(one.conditions, &{:condition, &1.name}) ++
+        for(%Anemos.AST.DataDecl{} <- [decl], data <- one.data_blocks, do: {:data, data.name})
+
+    Enum.reduce(Enum.uniq(keys), fps, fn key, fps ->
+      Map.update(fps, key, digest, &:crypto.hash(:sha256, &1 <> digest))
+    end)
+  end
+
+  # The same declaration further down the file is the same declaration.
+  defp without_positions(%_{} = node) do
+    node
+    |> Map.from_struct()
+    |> Map.delete(:line)
+    |> without_positions()
+    |> Map.put(:__node__, node.__struct__)
+  end
+
+  defp without_positions(%{} = map), do: Map.new(map, fn {k, v} -> {k, without_positions(v)} end)
+  defp without_positions(list) when is_list(list), do: Enum.map(list, &without_positions/1)
+
+  defp without_positions(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> without_positions() |> List.to_tuple()
+
+  defp without_positions(other), do: other
+
+  defp install(name, nil, compiled, _fingerprints) do
+    case Dispatcher.load(dispatcher_name(name), compiled) do
+      {:refused, message} ->
+        {:error, message}
+
+      result ->
+        schedule_failures =
+          if compiled.schedules == [] do
+            []
+          else
+            scheduler_name(name)
+            |> Scheduler.schedule(compiled.schedules)
+            |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
+          end
+
+        finish(failures_of(result, & &1) ++ schedule_failures)
+    end
+  end
+
+  defp install(name, policy, compiled, fingerprints) do
+    scheduler = scheduler_name(name)
+
+    # A policy arriving fresh declares its one-shots afresh; a redeploy of
+    # a policy already here does not re-run what it has already run.
+    if policy not in Enum.map(policies(name), & &1.id),
+      do: Scheduler.forget(scheduler, Enum.map(compiled.schedules, & &1.event_name))
+
+    case Dispatcher.deploy(dispatcher_name(name), policy, compiled, fingerprints) do
+      {:refused, message} ->
+        {:error, message}
+
+      result ->
+        # The scheduler reconciles against everything loaded, so its
+        # failures include other policies' inert schedules. Those were
+        # reported to whoever loaded them.
+        own = MapSet.new(compiled.schedules, & &1.event_name)
+
+        schedule_failures =
+          scheduler
+          |> Scheduler.sync()
+          |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
+          |> Enum.filter(fn {:schedule, event_name, _} -> MapSet.member?(own, event_name) end)
+
+        finish(failures_of(result, & &1) ++ schedule_failures)
+    end
+  end
+
+  defp finish([]), do: :ok
+  defp finish(failures), do: {:partial, failures}
+
+  @doc """
+  Removes a policy that was loaded with `policy: policy_id`, and everything
+  it declared: rules and their state, conditions, capabilities, global data
+  blocks and their live feeds, and any schedule no other policy declares.
+
+  Not gated: whoever can call it can remove any policy by name. The gated
+  way is from inside a policy — `[POLICY::unload "id"]`, see
+  `Anemos.Runtime.Modules.Policy` — where the authority that admitted the
+  calling policy stands for the removal (A-81).
+  """
+  @spec unload(atom(), String.t()) :: :ok | {:error, :not_loaded}
+  def unload(name, policy_id) when is_binary(policy_id) do
+    schedules = for %{id: ^policy_id, schedules: s} <- policies(name), e <- s, do: e
+
+    with :ok <- Dispatcher.undeploy(dispatcher_name(name), policy_id) do
+      _ = Scheduler.forget(scheduler_name(name), schedules)
+      _ = Scheduler.sync(scheduler_name(name))
+      :ok
+    end
+  end
+
+  @doc """
+  The loaded policies in load order, each as
+  `%{id, rules, conditions, capabilities, schedules, data_blocks}` with the
+  names it declares. A load that named no policy has `id: nil`.
+  """
+  @spec policies(atom()) :: [map()]
+  def policies(name), do: Dispatcher.policies(dispatcher_name(name))
 
   # Both Dispatcher.load/2 and Scheduler.schedule/2 answer :ok or
   # {:error, failures}; they differ only in the shape of a failure entry.
@@ -263,11 +412,83 @@ defmodule Anemos.Runtime do
     Dispatcher.condition_state(dispatcher_name(name), condition_name)
   end
 
+  @doc """
+  Everything the runtime holds, as it stands now.
+
+  `%{policies, rules, conditions, capabilities, data_blocks, schedules,
+  modules}`. Each rule carries the policy that declared it, the events it
+  listens for, its context, its `set` bindings and the state of its dwell
+  timers; each condition its current value.
+
+  Bindings are returned as they are. An `Anemos.Secret` stays wrapped.
+  """
+  @spec describe(atom()) :: map()
+  def describe(name) do
+    scheduler = scheduler_name(name)
+
+    schedules =
+      for s <- Scheduler.schedules(scheduler) do
+        %{
+          event: s.event_name,
+          time_spec: s.time_spec,
+          recurrence: s.recurrence,
+          fired_at: Scheduler.fired_at(scheduler, s.event_name)
+        }
+      end
+
+    dispatcher_name(name)
+    |> Dispatcher.describe()
+    |> Map.merge(%{
+      policies: policies(name),
+      schedules: Enum.sort_by(schedules, & &1.event),
+      modules: ModuleRegistry.names(registry_name(name))
+    })
+  end
+
+  @doc """
+  What dispatching `event_name` would do, without doing it.
+
+  `%{rules: [...], conditions: [...]}`. Each rule that listens for the event
+  is listed with the policy that declared it and an `outcome`: `:fires`,
+  `{:dwell, ms}` for a `when ... for` rule that would arm or hold its timer,
+  or `:context_mismatch` when its `context` does not admit `context`'s
+  `:context_path`. `conditions` names the conditions that would evaluate.
+
+  Nothing is evaluated: a guard, an `if`, or a verb called in an expression
+  can still change what a rule that `:fires` goes on to do.
+  """
+  @spec explain(atom(), String.t(), map()) :: %{rules: [map()], conditions: [String.t()]}
+  def explain(name, event_name, context \\ %{}) when is_binary(event_name) do
+    Dispatcher.explain(dispatcher_name(name), event_name, context)
+  end
+
+  @doc """
+  The most recent dispatches, newest first.
+
+  Each is `%{at, event, context_path, steps, conditions, results,
+  duration_us}`. `steps` is every rule the event reached, in order, with
+  what happened — `:fired`, `:dwell`, `:dwell_fired` or `:context_mismatch`
+  — including rules reached through `nextevent`, `nextrule` and `emit ...
+  as`. `conditions` names the conditions that became true. `results` gives
+  the kind of each operation; a `log` carries its text, since that was
+  written to the log anyway, and nothing else carries a value.
+
+  The last #{200} are kept, and they outlive a dispatcher crash — which is
+  when they are wanted.
+  """
+  @spec trace(atom(), pos_integer()) :: [map()]
+  def trace(name, limit \\ 50) when is_integer(limit) and limit > 0 do
+    StateTable.recent(StateTable.name_for(name), :trace, limit)
+  end
+
   # --- Supervisor callbacks ---
 
   @impl true
   def init(opts) do
     name = Keyword.fetch!(opts, :name)
+
+    # Owned by this supervisor process, so it outlives every child below.
+    state_table = StateTable.new(name)
 
     # Ordered by dependency, shallowest first. Everything after a given
     # child depends on it: the dispatcher reads the module registry, the
@@ -283,9 +504,12 @@ defmodule Anemos.Runtime do
        name: TrustStore.name_for(name),
        keyring: Keyword.get(opts, :keyring, %{}),
        unsigned_policy: Keyword.get(opts, :unsigned_policy, :permit)},
-      {ModuleRegistry, name: registry_name(name)},
-      {ContextStore, name: context_store_name(name)},
-      {PolicyStore, name: policy_store_name(name)},
+      {ModuleRegistry,
+       name: registry_name(name),
+       state_table: state_table,
+       modules: %{"POLICY" => Anemos.Runtime.Modules.Policy}},
+      {ContextStore, name: context_store_name(name), state_table: state_table},
+      {PolicyStore, name: policy_store_name(name), state_table: state_table},
       {StoreSupervisor, name: store_supervisor_name(name)},
       {RuleSupervisor, name: rule_supervisor_name(name)},
       {Dispatcher,
@@ -293,9 +517,27 @@ defmodule Anemos.Runtime do
        registry: registry_name(name),
        policy_store: policy_store_name(name),
        store_supervisor: store_supervisor_name(name),
-       rule_supervisor: rule_supervisor_name(name)},
-      {Scheduler, name: scheduler_name(name), runtime_name: name}
+       rule_supervisor: rule_supervisor_name(name),
+       state_table: state_table,
+       runtime: name},
+      {Scheduler,
+       name: scheduler_name(name),
+       runtime_name: name,
+       policy_store: policy_store_name(name),
+       state_table: state_table}
     ]
+
+    # Last: it loads into everything above, and a restart of any of them
+    # restarts it, which redeploys the directory into the fresh runtime.
+    children =
+      case Keyword.fetch(opts, :watch) do
+        {:ok, dir} ->
+          children ++
+            [{Anemos.Runtime.Watcher, name: watcher_name(name), runtime: name, dir: dir}]
+
+        :error ->
+          children
+      end
 
     # :rest_for_one, not :one_for_one. The dispatcher's state is derived
     # from the policy store and from the processes under the store
@@ -329,7 +571,19 @@ defmodule Anemos.Runtime do
         :dispatcher,
         :scheduler
       ],
-      api: [:load, :register, :dispatch, :connect, :put_context, :condition_state],
+      api: [
+        :load,
+        :unload,
+        :policies,
+        :describe,
+        :explain,
+        :trace,
+        :register,
+        :dispatch,
+        :connect,
+        :put_context,
+        :condition_state
+      ],
       # Reported so that "we never configured an authority" is a fact an
       # operator can read off the running system rather than an absence.
       load_authority: LoadAuthority.configured()
@@ -361,6 +615,10 @@ defmodule Anemos.Runtime do
   def act(_input), do: {:error, :unknown_action}
 
   # --- Name helpers ---
+
+  @doc "The registered name of the directory watcher started by `watch:`."
+  @spec watcher_name(atom()) :: atom()
+  def watcher_name(name), do: :"#{name}.watcher"
 
   defp sup_name(name), do: :"#{name}.supervisor"
   defp registry_name(name), do: :"#{name}.registry"

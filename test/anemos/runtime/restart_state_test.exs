@@ -267,3 +267,21 @@ defmodule Anemos.Runtime.VerbContextTest do
              Anemos.Runtime.dispatch(:vc, "EV")
   end
 end
+
+defmodule Anemos.Runtime.ModulesOptionTest do
+  use ExUnit.Case, async: false
+
+  defmodule Echo do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+    @impl true
+    def handle_verb(verb, _args, _ctx), do: {:ok, verb}
+  end
+
+  test "modules: binds host modules from the start" do
+    start_supervised!({Anemos.Runtime, name: :mo, modules: %{"HOST" => Echo}})
+    :ok = Anemos.Runtime.load(:mo, ~s|rule r { when EV { log [HOST::go] } }|)
+    assert {:ok, [%{value: "go"}]} = Anemos.Runtime.dispatch(:mo, "EV")
+    assert "POLICY" in Anemos.Runtime.describe(:mo).modules
+  end
+end

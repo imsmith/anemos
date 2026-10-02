@@ -38,6 +38,9 @@ defmodule Anemos.Runtime do
       and when that must be revisited.
     * `:watch` — a directory of `*.rule` files to keep deployed: saving a
       file deploys it, deleting it unloads it. See `Anemos.Runtime.Watcher`.
+    * `:modules` — `%{"NAME" => module}` bound from the start, so that a
+      policy deployed at boot already has them. `register/3` after start
+      does the same thing later.
   """
 
   use Supervisor
@@ -526,7 +529,8 @@ defmodule Anemos.Runtime do
       {ModuleRegistry,
        name: registry_name(name),
        state_table: state_table,
-       modules: %{"POLICY" => Anemos.Runtime.Modules.Policy}},
+       modules:
+         Map.merge(%{"POLICY" => Anemos.Runtime.Modules.Policy}, Keyword.get(opts, :modules, %{}))},
       {ContextStore, name: context_store_name(name), state_table: state_table},
       {PolicyStore, name: policy_store_name(name), state_table: state_table},
       {StoreSupervisor, name: store_supervisor_name(name)},

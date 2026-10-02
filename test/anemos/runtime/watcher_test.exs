@@ -181,15 +181,26 @@ rule keep { when K { log "k" } }|)
     assert Watcher.status(w) == %{"p.rule" => :ok}
   end
 
-  test "an unchanged file is not redeployed", %{rt: rt, watcher: w, tmp_dir: dir} do
+  test "a file whose policy was unloaded behind the watcher's back is deployed again",
+       %{rt: rt, watcher: w, tmp_dir: dir} do
     write(dir, "p.rule", ~s|rule a { when EV { log "a" } }|)
     :ok = Watcher.scan(w)
 
-    # Unloaded behind the watcher's back: a redeploy would bring it back.
     :ok = Runtime.unload(rt, "p.rule")
-    :ok = Watcher.scan(w)
-
     assert logs(rt, "EV") == []
+
+    :ok = Watcher.scan(w)
+    assert logs(rt, "EV") == ["a"]
+  end
+
+  test "an unchanged file is not redeployed", %{rt: rt, watcher: w, tmp_dir: dir} do
+    counter = ~s|rule count { when TICK { log $seen\n set seen = "yes" } }|
+    write(dir, "p.rule", counter)
+    :ok = Watcher.scan(w)
+    logs(rt, "TICK")
+
+    :ok = Watcher.scan(w)
+    assert logs(rt, "TICK") == ["yes"]
   end
 
   describe "signatures" do

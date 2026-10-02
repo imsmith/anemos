@@ -134,9 +134,20 @@ defmodule Anemos.Runtime.Watcher do
       |> Path.wildcard()
       |> Map.new(&{Path.relative_to(&1, state.dir), &1})
 
+    # A policy this watcher deployed that is no longer loaded — unloaded
+    # by hand, or by a rule — is forgotten here, so the file deploys again
+    # on this pass. The file is the policy; what was done behind the
+    # watcher's back does not outlast its next look.
+    loaded = MapSet.new(Anemos.Runtime.policies(state.runtime), & &1.id)
+
+    seen =
+      Map.reject(state.seen, fn {id, {_digest, status}} ->
+        status == :ok and not MapSet.member?(loaded, id)
+      end)
+
     # Unloads first. A renamed file, or a rule moved to another file, is a
     # deploy of a name the old policy still holds until it is gone.
-    {kept, gone} = Map.split(state.seen, Map.keys(present))
+    {kept, gone} = Map.split(seen, Map.keys(present))
 
     Enum.each(gone, fn {id, _} ->
       Logger.info("[anemos] policy #{id} removed, unloading")

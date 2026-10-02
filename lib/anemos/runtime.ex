@@ -36,6 +36,8 @@ defmodule Anemos.Runtime do
       declare no signer at all. Defaults to `:permit`; see
       `Anemos.Runtime.TrustStore` for why the default is the insecure one
       and when that must be revisited.
+    * `:watch` — a directory of `*.rule` files to keep deployed: saving a
+      file deploys it, deleting it unloads it. See `Anemos.Runtime.Watcher`.
   """
 
   use Supervisor
@@ -423,6 +425,18 @@ defmodule Anemos.Runtime do
       {Scheduler, name: scheduler_name(name), runtime_name: name}
     ]
 
+    # Last: it loads into everything above, and a restart of any of them
+    # restarts it, which redeploys the directory into the fresh runtime.
+    children =
+      case Keyword.fetch(opts, :watch) do
+        {:ok, dir} ->
+          children ++
+            [{Anemos.Runtime.Watcher, name: watcher_name(name), runtime: name, dir: dir}]
+
+        :error ->
+          children
+      end
+
     # :rest_for_one, not :one_for_one. The dispatcher's state is derived
     # from the policy store and from the processes under the store
     # supervisor; if either restarts, the dispatcher's view of them is
@@ -496,6 +510,10 @@ defmodule Anemos.Runtime do
   def act(_input), do: {:error, :unknown_action}
 
   # --- Name helpers ---
+
+  @doc "The registered name of the directory watcher started by `watch:`."
+  @spec watcher_name(atom()) :: atom()
+  def watcher_name(name), do: :"#{name}.watcher"
 
   defp sup_name(name), do: :"#{name}.supervisor"
   defp registry_name(name), do: :"#{name}.registry"

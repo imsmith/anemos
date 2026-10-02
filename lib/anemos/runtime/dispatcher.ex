@@ -321,7 +321,8 @@ defmodule Anemos.Runtime.Dispatcher do
         # Recorded before applying, as in {:load, _}.
         :ok = PolicyStore.put(state.policy_store, id, compiled, fingerprints)
 
-        {state, failures} = apply_compiled(compiled, state, unchanged(old, fingerprints))
+        prior = %{unchanged: unchanged(old, fingerprints), own: own_rules(old)}
+        {state, failures} = apply_compiled(compiled, state, prior)
         reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
         {:reply, {reply, diff}, state}
 
@@ -450,6 +451,9 @@ defmodule Anemos.Runtime.Dispatcher do
     for {key, digest} <- new, Map.get(old, key) == digest, into: MapSet.new(), do: key
   end
 
+  defp own_rules(nil), do: MapSet.new()
+  defp own_rules(%{compiled: compiled}), do: MapSet.new(compiled.rules, & &1.name)
+
   # Tears down what `old` declared and `new` does not. `others` are the
   # policies that stay loaded: a schedule's name is its time, so two policies
   # can share one timer and it must outlive either of them alone.
@@ -507,10 +511,14 @@ defmodule Anemos.Runtime.Dispatcher do
   # store, so a rebuilt dispatcher is wired identically to a freshly loaded
   # one.
   #
-  # `unchanged` is the set of `{:rule | :condition, name}` a deploy found
-  # identical to what is already running. It is empty for a plain load and
-  # for the init/1 replay, where every server must be installed afresh.
-  defp apply_compiled(compiled, state, unchanged \\ MapSet.new()) do
+  # `prior` is what a deploy knows about the version it replaces:
+  # `unchanged`, the `{:rule | :condition, name}` it found identical to what
+  # is already running, and `own`, the rule names that version declared.
+  # Both are empty for a plain load and for the init/1 replay, where every
+  # server must be installed afresh.
+  @no_prior %{unchanged: MapSet.new(), own: MapSet.new()}
+
+  defp apply_compiled(compiled, state, %{unchanged: unchanged} = prior \\ @no_prior) do
     dispatcher_pid = self()
 
     # Condition and capability servers are (re)started under the store
@@ -573,7 +581,7 @@ defmodule Anemos.Runtime.Dispatcher do
         end
       end)
 
-    {state, merged_rules} = merge_rules(state, compiled.rules, unchanged)
+    {state, merged_rules} = merge_rules(state, compiled.rules, prior)
 
     # Condition/capability pids are never cached in state — refresh_stores/1
     # reads them from the supervisor so a restarted server is picked up.
@@ -601,9 +609,9 @@ defmodule Anemos.Runtime.Dispatcher do
   # with several `when` blocks compiles to several `CompiledRule` structs
   # sharing one name, and dropping them individually would leave half of the
   # old definition running alongside the new one.
-  defp merge_rules(state, [], _unchanged), do: {state, state.rules}
+  defp merge_rules(state, [], _prior), do: {state, state.rules}
 
-  defp merge_rules(state, incoming, unchanged) do
+  defp merge_rules(state, incoming, %{unchanged: unchanged, own: own}) do
     incoming_names = MapSet.new(incoming, & &1.name)
 
     replaced =
@@ -612,9 +620,13 @@ defmodule Anemos.Runtime.Dispatcher do
       |> Enum.map(& &1.name)
       |> Enum.uniq()
 
-    if replaced != [] do
+    # A policy deployed over itself redefines its own rules by design; what
+    # is worth a line is a rule taken from somewhere else.
+    taken = Enum.reject(replaced, &MapSet.member?(own, &1))
+
+    if taken != [] do
       Logger.info(
-        "[anemos] redefining rule(s) #{Enum.join(replaced, ", ")} — the previous definition " <>
+        "[anemos] redefining rule(s) #{Enum.join(taken, ", ")} — the previous definition " <>
           "is no longer loaded"
       )
     end

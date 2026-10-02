@@ -460,10 +460,20 @@ defmodule Anemos.Runtime do
 
   Nothing is evaluated: a guard, an `if`, or a verb called in an expression
   can still change what a rule that `:fires` goes on to do.
+
+  Options: `:timeout` (default 5000 ms).
   """
-  @spec explain(atom(), String.t(), map()) :: %{rules: [map()], conditions: [String.t()]}
-  def explain(name, event_name, context \\ %{}) when is_binary(event_name) do
-    Dispatcher.explain(dispatcher_name(name), event_name, context)
+  @spec explain(atom(), String.t(), map(), keyword()) :: %{
+          rules: [map()],
+          conditions: [String.t()]
+        }
+  def explain(name, event_name, context \\ %{}, opts \\ []) when is_binary(event_name) do
+    Dispatcher.explain(
+      dispatcher_name(name),
+      event_name,
+      context,
+      Keyword.get(opts, :timeout, 5_000)
+    )
   end
 
   @doc """

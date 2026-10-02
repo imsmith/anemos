@@ -160,9 +160,9 @@ defmodule Anemos.Runtime.Dispatcher do
   def describe(dispatcher), do: GenServer.call(dispatcher, :describe)
 
   @doc "See `Anemos.Runtime.explain/3`."
-  @spec explain(pid() | atom(), String.t(), map()) :: map()
-  def explain(dispatcher, event_name, context \\ %{}) do
-    GenServer.call(dispatcher, {:explain, event_name, context})
+  @spec explain(pid() | atom(), String.t(), map(), timeout()) :: map()
+  def explain(dispatcher, event_name, context \\ %{}, timeout \\ 5_000) do
+    GenServer.call(dispatcher, {:explain, event_name, context}, timeout)
   end
 
   @doc """

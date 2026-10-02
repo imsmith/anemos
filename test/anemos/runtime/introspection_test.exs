@@ -164,6 +164,36 @@ defmodule Anemos.Runtime.IntrospectionTest do
       refute inspect(result) =~ "s3cret-token"
     end
 
+    test "a verb that answers something other than a tuple does not take the dispatcher down",
+         %{rt: rt} do
+      defmodule Bare do
+        @moduledoc false
+        @behaviour Anemos.Runtime.Module
+        @impl true
+        def handle_verb(_verb, _args, _context), do: :ok
+      end
+
+      :ok = Runtime.register(rt, "BARE", Bare)
+      :ok = Runtime.load(rt, ~s|rule r { when EV { [BARE::go] } }|)
+      dispatcher = Process.whereis(:"#{rt}.dispatcher")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        try do
+          Runtime.dispatch(rt, "EV")
+        rescue
+          _ -> :ok
+        catch
+          _, _ -> :ok
+        end
+      end)
+
+      assert Process.whereis(:"#{rt}.dispatcher") == dispatcher
+    end
+
+    test "is empty for a runtime that is not running" do
+      assert Runtime.trace(:no_such_runtime) == []
+    end
+
     test "is bounded", %{rt: rt} do
       for _ <- 1..250, do: Runtime.dispatch(rt, "EV")
       assert length(Runtime.trace(rt, 1_000)) == 200

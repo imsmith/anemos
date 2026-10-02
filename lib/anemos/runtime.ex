@@ -99,7 +99,9 @@ defmodule Anemos.Runtime do
   named policy holds is refused, and nothing is loaded.
 
   Without `:policy` the load is anonymous: it can only add, and replace
-  rules by name.
+  rules by name — and not a name a named policy holds, which is refused the
+  same way. The name is passed to the load authority as
+  `Anemos.Runtime.LoadRequest`'s `policy`.
 
   ## This is the trust boundary
 
@@ -201,7 +203,9 @@ defmodule Anemos.Runtime do
     digest = :crypto.hash(:sha256, :erlang.term_to_binary(without_positions(decl)))
 
     keys =
-      Enum.map(one.rules, &{:rule, &1.name}) ++ Enum.map(one.conditions, &{:condition, &1.name})
+      Enum.map(one.rules, &{:rule, &1.name}) ++
+        Enum.map(one.conditions, &{:condition, &1.name}) ++
+        for(%Anemos.AST.DataDecl{} <- [decl], data <- one.data_blocks, do: {:data, data.name})
 
     Enum.reduce(Enum.uniq(keys), fps, fn key, fps ->
       Map.update(fps, key, digest, &:crypto.hash(:sha256, &1 <> digest))
@@ -226,12 +230,22 @@ defmodule Anemos.Runtime do
   defp without_positions(other), do: other
 
   defp install(name, nil, compiled, _fingerprints) do
-    dispatcher_failures =
-      dispatcher_name(name)
-      |> Dispatcher.load(compiled)
-      |> failures_of(fn {kind, decl, reason} -> {kind, decl, reason} end)
+    case Dispatcher.load(dispatcher_name(name), compiled) do
+      {:refused, message} ->
+        {:error, message}
 
-    finish(dispatcher_failures ++ arm(name, compiled.schedules))
+      result ->
+        schedule_failures =
+          if compiled.schedules == [] do
+            []
+          else
+            scheduler_name(name)
+            |> Scheduler.schedule(compiled.schedules)
+            |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
+          end
+
+        finish(failures_of(result, & &1) ++ schedule_failures)
+    end
   end
 
   defp install(name, policy, compiled, fingerprints) do
@@ -239,29 +253,20 @@ defmodule Anemos.Runtime do
       {:refused, message} ->
         {:error, message}
 
-      {result, %{removed_schedules: removed}} ->
-        scheduler = scheduler_name(name)
-        :ok = Scheduler.unschedule(scheduler, removed)
+      result ->
+        # The scheduler reconciles against everything loaded, so its
+        # failures include other policies' inert schedules. Those were
+        # reported to whoever loaded them.
+        own = MapSet.new(compiled.schedules, & &1.event_name)
 
-        # A schedule's name is its time. One that is already armed is the
-        # same timer, and re-arming it would restart an interval's phase on
-        # every save of an unrelated rule.
-        armed = scheduler |> Scheduler.schedules() |> MapSet.new(& &1.event_name)
-        fresh = Enum.reject(compiled.schedules, &MapSet.member?(armed, &1.event_name))
+        schedule_failures =
+          scheduler_name(name)
+          |> Scheduler.sync()
+          |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
+          |> Enum.filter(fn {:schedule, event_name, _} -> MapSet.member?(own, event_name) end)
 
-        dispatcher_failures =
-          failures_of(result, fn {kind, decl, reason} -> {kind, decl, reason} end)
-
-        finish(dispatcher_failures ++ arm(name, fresh))
+        finish(failures_of(result, & &1) ++ schedule_failures)
     end
-  end
-
-  defp arm(_name, []), do: []
-
-  defp arm(name, schedules) do
-    scheduler_name(name)
-    |> Scheduler.schedule(schedules)
-    |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
   end
 
   defp finish([]), do: :ok
@@ -271,12 +276,15 @@ defmodule Anemos.Runtime do
   Removes a policy that was loaded with `policy: policy_id`, and everything
   it declared: rules and their state, conditions, capabilities, global data
   blocks and their live feeds, and any schedule no other policy declares.
+
+  **Privileged, and not gated.** `load/3` asks the load authority; this does
+  not (A-81). Whoever can call it can remove any policy by name.
   """
   @spec unload(atom(), String.t()) :: :ok | {:error, :not_loaded}
   def unload(name, policy_id) when is_binary(policy_id) do
-    with {:ok, %{removed_schedules: removed}} <-
-           Dispatcher.undeploy(dispatcher_name(name), policy_id) do
-      Scheduler.unschedule(scheduler_name(name), removed)
+    with :ok <- Dispatcher.undeploy(dispatcher_name(name), policy_id) do
+      _ = Scheduler.sync(scheduler_name(name))
+      :ok
     end
   end
 

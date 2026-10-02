@@ -67,7 +67,7 @@ defmodule Anemos.Runtime.WatcherTest do
     assert %{"p.rule" => {:error, _}} = Watcher.status(w)
     assert logs(rt, "EV") == ["good"]
 
-    # The same broken content is not retried or logged again.
+    # The same broken content is tried again, quietly: nothing new to say.
     assert capture_log(fn -> :ok = Watcher.scan(w) end) == ""
 
     write(dir, "p.rule", ~s|rule a { when EV { log "fixed" } }|)
@@ -87,6 +87,98 @@ defmodule Anemos.Runtime.WatcherTest do
     assert logs(rt, "EV") == []
     assert Runtime.policies(rt) == []
     assert Watcher.status(w) == %{}
+  end
+
+  test "a renamed file is still deployed after the rename", %{rt: rt, watcher: w, tmp_dir: dir} do
+    write(dir, "b.rule", ~s|rule a { when EV { log "a" } }|)
+    :ok = Watcher.scan(w)
+
+    File.rename!(Path.join(dir, "b.rule"), Path.join(dir, "a.rule"))
+    capture_log(fn -> :ok = Watcher.scan(w) end)
+
+    assert logs(rt, "EV") == ["a"]
+    assert [%{id: "a.rule"}] = Runtime.policies(rt)
+  end
+
+  test "a rule moved from one file to another ends up loaded", %{rt: rt, watcher: w, tmp_dir: dir} do
+    write(dir, "x.rule", ~s|rule a { when EV { log "a" } }
+rule keep { when K { log "k" } }|)
+    :ok = Watcher.scan(w)
+
+    write(dir, "x.rule", ~s|rule keep { when K { log "k" } }|)
+    write(dir, "b.rule", ~s|rule a { when EV { log "a" } }|)
+
+    capture_log(fn ->
+      :ok = Watcher.scan(w)
+      :ok = Watcher.scan(w)
+    end)
+
+    assert logs(rt, "EV") == ["a"]
+    assert Watcher.status(w) == %{"x.rule" => :ok, "b.rule" => :ok}
+  end
+
+  test "a directory that goes missing unloads nothing", %{rt: rt, watcher: w, tmp_dir: dir} do
+    write(dir, "p.rule", ~s|rule count { when TICK { log $seen\n set seen = "yes" } }|)
+    :ok = Watcher.scan(w)
+    logs(rt, "TICK")
+
+    away = dir <> ".away"
+    File.rename!(dir, away)
+    log = capture_log(fn -> :ok = Watcher.scan(w) end)
+    File.rename!(away, dir)
+    :ok = Watcher.scan(w)
+
+    assert log =~ "is not a directory"
+    assert logs(rt, "TICK") == ["yes"]
+  end
+
+  test "a file deleted while the watcher was down is unloaded when it comes back",
+       %{rt: rt, watcher: w, tmp_dir: dir} do
+    write(dir, "p.rule", ~s|rule a { when EV { log "a" } }|)
+    :ok = Watcher.scan(w)
+
+    :ok = stop_supervised(Watcher)
+    File.rm!(Path.join(dir, "p.rule"))
+    w2 = start_supervised!({Watcher, runtime: rt, dir: dir, interval_ms: :manual})
+    :ok = Watcher.scan(w2)
+
+    refute w2 == w
+    assert Runtime.policies(rt) == []
+  end
+
+  test "a policy that loaded with inert declarations is tried again", %{
+    rt: rt,
+    watcher: w,
+    tmp_dir: dir
+  } do
+    write(dir, "p.rule", """
+    data live {
+      dynamic {
+        subscribe feed "feed://x"
+      }
+    }
+    """)
+
+    capture_log(fn -> :ok = Watcher.scan(w) end)
+    assert %{"p.rule" => {:partial, _}} = Watcher.status(w)
+
+    defmodule Feed do
+      @moduledoc false
+      @behaviour Anemos.Subscribable
+      @impl true
+      def subscribe(_protocol, _uri, _callback), do: {:ok, make_ref()}
+      @impl true
+      def unsubscribe(_ref), do: :ok
+      @impl true
+      def periodic?, do: false
+      @impl true
+      def interval(_spec), do: 60_000
+    end
+
+    :ok = Runtime.Dispatcher.register_subscribable(:"#{rt}.dispatcher", "feed", Feed)
+    :ok = Watcher.scan(w)
+
+    assert Watcher.status(w) == %{"p.rule" => :ok}
   end
 
   test "an unchanged file is not redeployed", %{rt: rt, watcher: w, tmp_dir: dir} do

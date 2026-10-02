@@ -80,6 +80,7 @@ defmodule Anemos.Runtime.Scheduler do
           | {:nld_in_past, String.t()}
           | {:unknown_duration_unit, atom()}
           | {:invalid_duration, term()}
+          | {:invalid_time_spec, term()}
 
   @doc """
   Starts the scheduler.
@@ -128,6 +129,23 @@ defmodule Anemos.Runtime.Scheduler do
   end
 
   @doc """
+  Makes what is armed match what is loaded: arms every schedule in the
+  policy store that is not armed, disarms every timer no loaded policy
+  declares, and leaves the rest running.
+
+  The policy store is read here, inside the scheduler, and not by the
+  caller. Two deploys finishing at once each call this after recording
+  themselves, so whichever call runs last sees both — a caller that computed
+  "arm this, disarm that" from its own view could disarm a time the other
+  had just picked up.
+
+  Answers like `schedule/2`, with a failure for every loaded spec that could
+  not be armed. A scheduler started without a `:policy_store` does nothing.
+  """
+  @spec sync(pid() | atom()) :: :ok | {:error, [{String.t(), failure_reason()}]}
+  def sync(server), do: GenServer.call(server, :sync)
+
+  @doc """
   Returns the specs currently armed, one per event name.
   """
   @spec schedules(pid() | atom()) :: [Anemos.CompiledSchedule.t()]
@@ -138,13 +156,8 @@ defmodule Anemos.Runtime.Scheduler do
     runtime_name = Keyword.fetch!(opts, :runtime_name)
     dispatch_fn = Keyword.get(opts, :dispatch_fn)
 
-    loaded =
-      case Keyword.get(opts, :policy_store) do
-        nil -> []
-        store -> store |> Anemos.Runtime.PolicyStore.all() |> Enum.flat_map(& &1.schedules)
-      end
-
     state = %{
+      policy_store: Keyword.get(opts, :policy_store),
       runtime_name: runtime_name,
       dispatch_fn: dispatch_fn,
       min_interval_ms:
@@ -159,7 +172,7 @@ defmodule Anemos.Runtime.Scheduler do
 
     # Failures were reported to whoever loaded the policy, and are logged
     # again by arm_all/2; there is no caller here to hand them to.
-    {state, _failures} = arm_all(loaded, state)
+    {state, _failures} = arm_all(loaded(state), state)
     {:ok, state}
   end
 
@@ -178,8 +191,37 @@ defmodule Anemos.Runtime.Scheduler do
     {:reply, :ok, Enum.reduce(event_names, state, &disarm(&2, &1))}
   end
 
+  def handle_call(:sync, _from, %{policy_store: nil} = state), do: {:reply, :ok, state}
+
+  def handle_call(:sync, _from, state) do
+    desired = loaded(state)
+    names = MapSet.new(desired, & &1.event_name)
+
+    state =
+      state.timers
+      |> Map.keys()
+      |> Enum.reject(&MapSet.member?(names, &1))
+      |> Enum.reduce(state, &disarm(&2, &1))
+
+    # Already armed is the same timer: a schedule's name is its time.
+    # Re-arming it would restart an interval's phase on every deploy.
+    fresh = Enum.reject(desired, &Map.has_key?(state.timers, &1.event_name))
+    {state, failures} = arm_all(fresh, state)
+    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
+    {:reply, reply, state}
+  end
+
   def handle_call(:schedules, _from, state) do
     {:reply, Enum.map(state.timers, fn {_name, {_ref, sched}} -> sched end), state}
+  end
+
+  defp loaded(%{policy_store: nil}), do: []
+
+  defp loaded(%{policy_store: store}) do
+    store
+    |> Anemos.Runtime.PolicyStore.all()
+    |> Enum.flat_map(& &1.schedules)
+    |> Enum.uniq_by(& &1.event_name)
   end
 
   defp arm_all(schedules, state) do
@@ -212,7 +254,16 @@ defmodule Anemos.Runtime.Scheduler do
          not Map.has_key?(state.timers, sched.event_name) do
       {:error, {:schedule_limit_exceeded, state.max_schedules}}
     else
-      start_timer(sched, state)
+      # Total, whatever the spec. The parser accepts `at 25:99`, and a
+      # spec that raises here would take the scheduler down every time it
+      # is armed — including from init/1, where it is armed on every
+      # restart until the runtime gives up (A-80).
+      try do
+        start_timer(sched, state)
+      rescue
+        _ in [ArgumentError, FunctionClauseError] ->
+          {:error, {:invalid_time_spec, sched.time_spec}}
+      end
     end
   end
 

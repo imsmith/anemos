@@ -90,8 +90,12 @@ defmodule Anemos.Runtime.Dispatcher do
   Declarations from different policies accumulate. A rule name that is
   already loaded is **replaced**, not appended — see the `{:load, _}`
   callback for why replacement rather than rejection.
+
+  A name held by a policy deployed under an identity is not replaced: the
+  load is refused whole, `{:refused, message}`.
   """
-  @spec load(pid() | atom(), Anemos.CompilationResult.t()) :: :ok | {:error, [term()]}
+  @spec load(pid() | atom(), Anemos.CompilationResult.t()) ::
+          :ok | {:error, [term()]} | {:refused, String.t()}
   def load(dispatcher, compiled) do
     GenServer.call(dispatcher, {:load, compiled})
   end
@@ -113,9 +117,6 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.call(dispatcher, {:unload, rule_names})
   end
 
-  @typedoc "What a deploy changed that the caller has to act on."
-  @type deploy_diff :: %{removed_schedules: [String.t()]}
-
   @doc """
   Deploys `compiled` as the policy `id`, over whatever was last deployed
   under that id.
@@ -125,13 +126,14 @@ defmodule Anemos.Runtime.Dispatcher do
   fingerprint is unchanged keeps its state; see the `{:deploy, ...}`
   callback.
 
-  Answers `{load_result, diff}`, where `load_result` is what `load/2` would
-  answer and `diff` names the schedules the caller must disarm — the
-  scheduler is not the dispatcher's to call. A policy that declares a name
-  another identified policy holds is not loaded at all: `{:refused, message}`.
+  Answers what `load/2` would. A policy that declares a name another policy
+  holds is not loaded at all: `{:refused, message}`.
+
+  Schedules are not touched: the scheduler is not the dispatcher's to call.
+  The caller follows with `Anemos.Runtime.Scheduler.sync/1`.
   """
   @spec deploy(pid() | atom(), String.t(), Anemos.CompilationResult.t(), map()) ::
-          {:ok | {:error, [term()]}, deploy_diff()} | {:refused, String.t()}
+          :ok | {:error, [term()]} | {:refused, String.t()}
   def deploy(dispatcher, id, compiled, fingerprints) when is_binary(id) do
     GenServer.call(dispatcher, {:deploy, id, compiled, fingerprints})
   end
@@ -139,7 +141,7 @@ defmodule Anemos.Runtime.Dispatcher do
   @doc """
   Removes the policy `id` and everything it declared.
   """
-  @spec undeploy(pid() | atom(), String.t()) :: {:ok, deploy_diff()} | {:error, :not_loaded}
+  @spec undeploy(pid() | atom(), String.t()) :: :ok | {:error, :not_loaded}
   def undeploy(dispatcher, id) when is_binary(id) do
     GenServer.call(dispatcher, {:undeploy, id})
   end
@@ -245,11 +247,6 @@ defmodule Anemos.Runtime.Dispatcher do
         st
       end)
 
-    # State belongs to a loaded rule. If the policy store came back empty,
-    # what the table remembers is about rules that are no longer here.
-    loaded = Enum.map(state.rules, & &1.name)
-    state = %{state | rule_bindings: Map.take(state.rule_bindings, loaded)}
-
     {:ok, state |> rearm_dwell_timers() |> persist()}
   end
 
@@ -309,25 +306,12 @@ defmodule Anemos.Runtime.Dispatcher do
   @impl true
   def handle_call({:load, compiled}, _from, state) do
     state = refresh_stores(state)
+    named = Enum.filter(PolicyStore.entries(state.policy_store), &is_binary(&1.id))
 
-    # Record before applying: the policy store is the source of truth, and a
-    # crash midway through apply_compiled/2 must still leave the policy
-    # recoverable on restart.
-    :ok = PolicyStore.put(state.policy_store, compiled)
-
-    # A condition loaded again is a new condition and reads false. Its
-    # remembered value belongs to the one it replaces.
-    forget_conditions(state, names(compiled, :conditions))
-
-    {state, failures} = apply_compiled(compiled, state)
-    state = persist(state)
-
-    # Same convention as Scheduler.schedule/2: :ok means every declaration
-    # in this result is live, {:error, failures} means the policy loaded but
-    # the listed declarations are inert. Previously these were Logger
-    # warnings and nothing else, so the caller could not tell.
-    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
-    {:reply, reply, state}
+    case conflicts(nil, compiled, named) do
+      [] -> do_load(compiled, state)
+      conflicts -> {:reply, {:refused, Enum.join(conflicts, "; ")}, state}
+    end
   end
 
   # A deploy is a load that knows what it replaces. Everything the previous
@@ -348,7 +332,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case conflicts(id, compiled, others) do
       [] ->
-        {state, diff} = retire(state, old, compiled, others)
+        state = retire(state, old, compiled)
 
         # Recorded before applying, as in {:load, _}.
         :ok = PolicyStore.put(state.policy_store, id, compiled, fingerprints)
@@ -361,9 +345,8 @@ defmodule Anemos.Runtime.Dispatcher do
         )
 
         {state, failures} = apply_compiled(compiled, state, prior)
-        state = persist(state)
         reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
-        {:reply, {reply, diff}, state}
+        {:reply, reply, persist(state)}
 
       conflicts ->
         {:reply, {:refused, Enum.join(conflicts, "; ")}, state}
@@ -373,17 +356,15 @@ defmodule Anemos.Runtime.Dispatcher do
   @impl true
   def handle_call({:undeploy, id}, _from, state) do
     state = refresh_stores(state)
-    entries = PolicyStore.entries(state.policy_store)
 
-    case Enum.find(entries, &(&1.id == id)) do
+    case Enum.find(PolicyStore.entries(state.policy_store), &(&1.id == id)) do
       nil ->
         {:reply, {:error, :not_loaded}, state}
 
       old ->
         :ok = PolicyStore.delete(state.policy_store, id)
-        others = Enum.reject(entries, &(&1.id == id))
-        {state, diff} = retire(state, old, %Anemos.CompilationResult{}, others)
-        {:reply, {:ok, diff}, state |> refresh_stores() |> persist()}
+        state = retire(state, old, %Anemos.CompilationResult{})
+        {:reply, :ok, state |> refresh_stores() |> persist()}
     end
   end
 
@@ -565,6 +546,27 @@ defmodule Anemos.Runtime.Dispatcher do
     {:reply, :ok, state}
   end
 
+  defp do_load(compiled, state) do
+    # Record before applying: the policy store is the source of truth, and a
+    # crash midway through apply_compiled/2 must still leave the policy
+    # recoverable on restart.
+    :ok = PolicyStore.put(state.policy_store, compiled)
+
+    # A condition loaded again is a new condition and reads false. Its
+    # remembered value belongs to the one it replaces.
+    forget_conditions(state, names(compiled, :conditions))
+
+    {state, failures} = apply_compiled(compiled, state)
+    state = persist(state)
+
+    # Same convention as Scheduler.schedule/2: :ok means every declaration
+    # in this result is live, {:error, failures} means the policy loaded but
+    # the listed declarations are inert. Previously these were Logger
+    # warnings and nothing else, so the caller could not tell.
+    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
+    {:reply, reply, state}
+  end
+
   @trace_limit 200
 
   defp step(state, rule, event_name, outcome) do
@@ -593,11 +595,15 @@ defmodule Anemos.Runtime.Dispatcher do
     %{state | steps: []}
   end
 
-  defp trace_result({:ok, %{type: :log, value: value}}), do: %{type: :log, value: log_text(value)}
+  defp trace_result({:ok, %{type: :log, value: value}}) when is_binary(value),
+    do: %{type: :log, value: value}
+
   defp trace_result({:ok, %{type: type}}), do: %{type: type}
   defp trace_result({:ok, _other}), do: %{type: :value}
   defp trace_result({:error, %{code: code}}), do: %{type: :error, reason: code}
   defp trace_result({:error, reason}), do: %{type: :error, reason: reason_tag(reason)}
+  # A host verb can answer anything at all.
+  defp trace_result(_other), do: %{type: :value}
 
   # The bindings are written out whole at the end of every callback that can
   # change them, never midway: a dispatch that crashes leaves the table as
@@ -643,19 +649,34 @@ defmodule Anemos.Runtime.Dispatcher do
     %{state | rule_bindings: rule_bindings}
   end
 
-  # Rule, condition and capability names are global in a runtime. A policy
-  # that declares one another *identified* policy holds is refused whole:
-  # replacing it would silently stop part of an unrelated policy (A-61), and
-  # here, unlike in an anonymous load, both parties have names to report.
+  # Rule, condition, capability and global data block names are global in a
+  # runtime, and a policy deployed under an identity owns the ones it
+  # declares. A load that declares a name some *other* policy holds is
+  # refused whole when either side has an identity: replacing it would
+  # silently stop part of an unrelated policy (A-61), and tearing the
+  # policy down later would take the other's declaration with it.
+  #
+  # `id` is nil for an anonymous load, which is then checked only against
+  # the identified policies passed as `others`. Two anonymous loads keep
+  # last-writer-wins: neither has a name to be refused in favour of.
   defp conflicts(id, compiled, others) do
-    for %{id: other, compiled: theirs} when is_binary(other) <- others,
-        {kind, field} <- [rule: :rules, condition: :conditions, capability: :capabilities],
-        name <- names(compiled, field),
-        name in names(theirs, field) do
-      "policy #{inspect(id)} declares #{kind} #{inspect(name)}, which policy " <>
-        "#{inspect(other)} already declares"
+    kinds = [
+      {"rule", &names(&1, :rules)},
+      {"condition", &names(&1, :conditions)},
+      {"capability", &names(&1, :capabilities)},
+      {"data block", fn c -> c |> data_keys() |> Enum.map(&elem(&1, 0)) end}
+    ]
+
+    for %{id: other, compiled: theirs} <- others,
+        {kind, names_of} <- kinds,
+        name <- names_of.(compiled),
+        name in names_of.(theirs) do
+      "#{who(id)} declares #{kind} #{inspect(name)}, which #{who(other)} already declares"
     end
   end
+
+  defp who(nil), do: "a load that names no policy"
+  defp who(id), do: "policy #{inspect(id)}"
 
   # The policy a name belongs to: the last one loaded that declares it, which
   # is the one whose definition is running.
@@ -689,12 +710,12 @@ defmodule Anemos.Runtime.Dispatcher do
   defp own_rules(nil), do: MapSet.new()
   defp own_rules(%{compiled: compiled}), do: MapSet.new(compiled.rules, & &1.name)
 
-  # Tears down what `old` declared and `new` does not. `others` are the
-  # policies that stay loaded: a schedule's name is its time, so two policies
-  # can share one timer and it must outlive either of them alone.
-  defp retire(state, nil, _new, _others), do: {state, %{removed_schedules: []}}
+  # Tears down what `old` declared and `new` does not. Safe to do by name:
+  # conflicts/3 has already established that no other policy holds any of
+  # them.
+  defp retire(state, nil, _new), do: state
 
-  defp retire(state, %{compiled: old}, new, others) do
+  defp retire(state, %{compiled: old}, new) do
     gone_rules = MapSet.new(names(old, :rules) -- names(new, :rules))
 
     rules = Enum.reject(state.rules, &MapSet.member?(gone_rules, &1.name))
@@ -719,17 +740,15 @@ defmodule Anemos.Runtime.Dispatcher do
         unsubscribe(st, key)
       end)
 
-    still_declared =
-      for %{compiled: c} <- others, s <- c.schedules, into: MapSet.new(), do: s.event_name
-
-    removed_schedules =
-      (Enum.map(old.schedules, & &1.event_name) -- Enum.map(new.schedules, & &1.event_name))
-      |> Enum.uniq()
-      |> Enum.reject(&MapSet.member?(still_declared, &1))
-
-    state = %{state | condition_contexts: Map.drop(state.condition_contexts, gone_conditions)}
-    {state, %{removed_schedules: removed_schedules}}
+    %{state | condition_contexts: Map.drop(state.condition_contexts, gone_conditions)}
   end
+
+  # A block with a feed is only "already there" if the feed is. One whose
+  # subscription failed last time has to be tried again.
+  defp live_data?(state, %{dynamic: {{:subscribe, _protocol, _uri}, _}} = data),
+    do: Map.has_key?(state.subscriptions, {data.name, data.scope || :global})
+
+  defp live_data?(_state, _data), do: true
 
   defp unsubscribe(state, key) do
     case Map.pop(state.subscriptions, key) do
@@ -748,7 +767,7 @@ defmodule Anemos.Runtime.Dispatcher do
   # one.
   #
   # `prior` is what a deploy knows about the version it replaces:
-  # `unchanged`, the `{:rule | :condition, name}` it found identical to what
+  # `unchanged`, the `{:rule | :condition | :data, name}` it found identical to what
   # is already running, and `own`, the rule names that version declared.
   # Both are empty for a plain load and for the init/1 replay, where every
   # server must be installed afresh.
@@ -801,7 +820,13 @@ defmodule Anemos.Runtime.Dispatcher do
     # memberof() against it answers false, forever. That is a load failure
     # the author has to hear about, not a log line.
     {state, failures} =
-      Enum.reduce(Map.get(compiled, :data_blocks, []), {state, []}, fn data, {state, failures} ->
+      compiled
+      |> Map.get(:data_blocks, [])
+      # An unchanged block is already registered, with whatever its feed has
+      # delivered since. Registering it again would empty it until the feed
+      # next spoke.
+      |> Enum.reject(&(MapSet.member?(unchanged, {:data, &1.name}) and live_data?(state, &1)))
+      |> Enum.reduce({state, []}, fn data, {state, failures} ->
         if data.dataset do
           DataStore.register(state.data_store, data.name, data.scope || :global, data.dataset,
             source: data.source
@@ -1022,6 +1047,19 @@ defmodule Anemos.Runtime.Dispatcher do
           if rule do
             started = System.monotonic_time(:microsecond)
             state = step(state, rule, event_name, :dwell_fired)
+
+            # The timer is spent the moment it fires, and that is written
+            # down before the body runs. A body that crashes the dispatcher
+            # would otherwise leave an armed entry with a deadline in the
+            # past, which the restart fires at once, which crashes it again.
+            spent =
+              Map.put(rule_state, dwell_key, %{
+                state: :listening,
+                timer_ref: nil,
+                last_context: nil
+              })
+
+            state = persist(put_in(state.rule_bindings[rule_name], spent))
             {results, st_after_run} = dispatch_immediate(rule, event_name, context, [], state, 0)
             st_after_run = record_trace(st_after_run, event_name, context, results, [], started)
 

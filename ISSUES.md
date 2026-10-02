@@ -32,7 +32,7 @@ than removed.
 | A-14 | MEDIUM | Unbounded timers permit resource exhaustion | **Fixed** — verified, suite green |
 | A-15 | MEDIUM | Duplicate `load/2` doubles execution; no unload | **Fixed** — replace-by-name + `unload/2`; orphaning half was already fixed by A-01 |
 | A-61 | HIGH | `at` rule names carry no rule identity — silent cross-policy replacement | **Fixed** — rule name carries identity; event name carries time + recurrence |
-| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | **Fixed for named policies** — a collision between two is refused; a policy redeployed over itself no longer logs. Anonymous loads unchanged |
+| A-64 | LOW | "redefining rule(s)" log cannot distinguish redefinition from name collision | **Fixed for named policies** — a name held by a named policy is refused to every other load; a policy redeployed over itself no longer logs. Two anonymous loads unchanged |
 | A-65 | HIGH | `Parser.parse/1` raised instead of returning `{:error, _}` on truncated input | **Fixed** |
 | A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Fixed** — req 0.7.2, validated by `comn`'s own suite; override removed. 17 advisories → 2, no HIGH |
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
@@ -95,6 +95,8 @@ than removed.
 | A-77 | MEDIUM | A dispatcher restart left every `at` schedule disarmed | **Fixed** — the scheduler arms from `PolicyStore` when it starts |
 | A-78 | LOW | A live `data` subscription is duplicated by a dispatcher restart | Open |
 | A-79 | LOW | Runtime state does not survive the node | Open — by decision, see entry |
+| A-80 | HIGH | An `at` time that does not exist crashed the scheduler, and with A-77 crash-looped the runtime | **Fixed** — arming is total; the declaration is reported inert |
+| A-81 | MEDIUM | `unload/2` is not gated by the load authority | Open |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -2914,6 +2916,11 @@ scheduler now arms every loaded schedule when it starts.
 An interval's phase restarts with the scheduler, and a natural-language date is
 resolved again relative to the restart. Neither is addressed.
 
+A one-shot `at 08:00` that has already fired is armed again by a scheduler
+restart, because nothing records that it fired. Before this fix it was never
+armed again at all; which of the two is right depends on what a bare `at
+08:00` means across a restart, and that is not decided.
+
 ---
 
 ## A-78 — A live `data` subscription is duplicated by a dispatcher restart
@@ -2929,6 +2936,9 @@ restart, not wrong data. The references are not in `StateTable` because a
 `reference()` from a handler may not mean anything to a handler that has also
 restarted.
 
+Related: the `SubscribableRegistry` is not in `StateTable`, so a store
+supervisor restart loses the host's `register_subscribable/3` calls.
+
 ---
 
 ## A-79 — Runtime state does not survive the node
@@ -2942,3 +2952,41 @@ through `Anemos.Runtime.Watcher` comes back from the directory; state does not.
 Writing it to disk needs two decisions that were not made here: the storage
 (the house rule is SQLite, which is a new dependency for this library), and
 what to do with an `Anemos.Secret` held in a `set` binding.
+
+---
+
+## A-80 — An `at` time that does not exist crashed the scheduler
+
+**Filed:** 2026-10-02 · **Severity:** HIGH · found in review of the A-77 fix · **Fixed**
+
+The parser accepts `at 25:99` and `at DATE_2026.02.31`. `start_timer/2` built
+the time with `Time.new!` / `Date.new!` and raised. On its own that was one
+scheduler crash per load. With A-77's re-arm on start it became a crash on
+every restart, until the supervisor gave up and the runtime — every policy in
+it — went down. One policy file could do that.
+
+Arming is now total: a spec that cannot be turned into a time is an inert
+declaration, `{:schedule, name, {:invalid_time_spec, spec}}`, reported through
+`{:partial, _}` like an interval below the floor. The parser still accepts the
+text; rejecting it there is the better fix and belongs with A-44.
+
+The same replay hazard existed for a dwell timer: a `when ... for` body that
+crashed the dispatcher left an armed entry whose deadline had passed, which
+the restart fired at once. The timer is now marked spent, durably, before its
+body runs.
+
+---
+
+## A-81 — `unload/2` is not gated by the load authority
+
+**Filed:** 2026-10-02 · **Severity:** MEDIUM · found in review
+
+`load/3` goes through `LoadAuthority.gate/3`. `unload/2` asks nobody: whoever
+can call it can remove any policy by name. `LoadRequest` now carries the
+`policy` a load would deploy as, so an authority can stop tenant A deploying
+over tenant B, but it is never consulted about removal.
+
+Not fixed here because the behaviour is not obvious. Under
+`LoadAuthority.Signed` with `unsigned_policy: :strict`, an unload has no
+signature to present; refusing it means a signed policy can never be removed,
+and permitting it means removal is the one unauthenticated operation.

@@ -67,7 +67,7 @@ Given the previous version `old` and the new version `new` of one policy:
 | rule | removed, with its `set` bindings, dwell timers and rule-scoped data | definition swapped, **state kept** | replaced, state reset | added |
 | condition | server stopped | **server and state kept** | server replaced, reads `false` | started |
 | capability | server stopped | replaced (stateless) | replaced | started |
-| global `data` block | deregistered, subscription cancelled | re-registered | re-registered | registered |
+| global `data` block | deregistered, subscription cancelled | **left alone, feed and contents kept** | re-registered | registered |
 | schedule (`at`) | disarmed, unless another loaded policy declares the same time | timer left running | n/a (the name is the time) | armed |
 
 "Text unchanged" means the declaration's AST is equal once source positions
@@ -80,13 +80,19 @@ half-replaced policy.
 
 ### §3 — Name conflicts between policies
 
-Rule, condition and capability names are global in a runtime. A deploy that
-declares a name owned by a *different identified* policy is refused with
-`{:error, message}` naming both policies, and nothing is loaded. Silent
+Rule, condition, capability and global data block names are global in a
+runtime, and a named policy owns the ones it declares. A load that declares a
+name some other policy holds is refused with `{:error, message}` naming both,
+and nothing is loaded, whenever either side is a named policy. Silent
 cross-policy replacement was A-61's failure and is A-64's open complaint; with
 identities it can be refused instead of logged.
 
-Anonymous loads keep last-writer-wins, as today.
+Two anonymous loads keep last-writer-wins, as today.
+
+*Amended after review.* The first version refused only between two named
+policies. That let an anonymous load and a named policy share a name, and
+tearing the named one down then removed the other's declaration from the
+running system while leaving it in the policy record.
 
 ### §4 — Watching a directory
 
@@ -119,12 +125,20 @@ every policy file each interval; an inotify source belongs to the substrate
 2. **State survives an unchanged declaration, and only that.** A changed rule
    body did not produce the old bindings; the existing reasoning in
    `merge_rules/2` stands for changed text.
-3. **Conflicts are refused only between identified policies.**
+3. **A name is refused when either holder is a named policy.** (Amended; see §3.)
 4. **A redeployed policy moves to the end of the load order**, matching what
    the live rule list already does on replacement.
 5. **Polling, not inotify.**
 6. **Schedules already armed are not re-armed on deploy**, so an interval's
    phase survives a reload. Anonymous loads re-arm, as today.
+7. **The scheduler reconciles itself** (`Scheduler.sync/1`) against the policy
+   record after a deploy or unload, instead of being told what to arm and
+   disarm. Two deploys finishing together cannot then disarm each other's
+   time. (Added after review.)
+8. **A file that did not fully load is retried every pass**, and reported
+   only when the outcome changes. (Added after review.)
+9. **An unchanged `data` block is left alone**, feed and contents included.
+   (Amended; the table in §2 said "re-registered".)
 
 ## Not in this spec
 

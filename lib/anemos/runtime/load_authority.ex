@@ -14,14 +14,15 @@ defmodule Anemos.Runtime.LoadRequest do
   """
 
   @enforce_keys [:runtime, :source, :byte_size, :authorization, :signers]
-  defstruct [:runtime, :source, :byte_size, :authorization, :signers]
+  defstruct [:runtime, :source, :byte_size, :authorization, :signers, :policy]
 
   @type t :: %__MODULE__{
           runtime: atom(),
           source: String.t(),
           byte_size: non_neg_integer(),
           authorization: term(),
-          signers: [atom() | String.t()]
+          signers: [atom() | String.t()],
+          policy: String.t() | nil
         }
 end
 
@@ -276,7 +277,11 @@ defmodule Anemos.Runtime.LoadAuthority do
       source: source,
       byte_size: byte_size(source),
       authorization: Keyword.get(opts, :authorization),
-      signers: signers(ast)
+      signers: signers(ast),
+      # The name the source would be deployed under, or nil. Deploying as
+      # "tenant-b/x.rule" replaces tenant B's policy, so an authority that
+      # separates tenants has to be able to see it.
+      policy: Keyword.get(opts, :policy)
     }
 
     case authorize(request) do

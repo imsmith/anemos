@@ -17,9 +17,9 @@ defmodule Anemos.Runtime.DeployTest do
     @behaviour Anemos.Subscribable
 
     @impl true
-    def subscribe(_protocol, uri, _callback) do
+    def subscribe(_protocol, uri, callback) do
       ref = make_ref()
-      send(:deploy_test_feed, {:subscribed, uri, ref})
+      send(:deploy_test_feed, {:subscribed, uri, ref, callback})
       {:ok, ref}
     end
 
@@ -178,14 +178,48 @@ defmodule Anemos.Runtime.DeployTest do
       """
 
       deploy!(rt, "p", source)
-      assert_receive {:subscribed, "feed://x", first}
+      assert_receive {:subscribed, "feed://x", first, _}
 
-      deploy!(rt, "p", source)
+      deploy!(rt, "p", String.replace(source, "feed://x", "feed://y"))
       assert_receive {:unsubscribed, ^first}
-      assert_receive {:subscribed, "feed://x", second}
+      assert_receive {:subscribed, "feed://y", second, _}
 
       :ok = Runtime.unload(rt, "p")
       assert_receive {:unsubscribed, ^second}
+    end
+
+    test "an unchanged subscribed block keeps its feed and what the feed delivered",
+         %{rt: rt, dispatcher: d} do
+      Process.register(self(), :deploy_test_feed)
+      :ok = Dispatcher.register_subscribable(d, "feed", Feed)
+
+      source = """
+      data live {
+        dynamic {
+          subscribe feed "feed://x"
+        }
+      }
+      """
+
+      deploy!(rt, "p", source)
+      assert_receive {:subscribed, "feed://x", _ref, deliver}
+      deliver.(["alice"])
+      assert Dispatcher.data_member?(d, "live", "alice")
+
+      deploy!(rt, "p", source <> ~s|rule other { when EV { log "x" } }|)
+
+      refute_receive {:unsubscribed, _}
+      refute_receive {:subscribed, _, _, _}
+      assert Dispatcher.data_member?(d, "live", "alice")
+    end
+
+    test "a data block another policy declares is refused", %{rt: rt, dispatcher: d} do
+      deploy!(rt, "p", "data users { alice }")
+
+      assert {:error, message} = Runtime.load(rt, "data users { bob }", policy: "q")
+      assert message =~ ~s|data block "users"|
+
+      assert Dispatcher.data_member?(d, "users", "alice")
     end
   end
 
@@ -208,6 +242,31 @@ defmodule Anemos.Runtime.DeployTest do
       :ok = Runtime.unload(rt, "p")
 
       assert [_] = armed(s)
+    end
+
+    test "a time one policy drops as another picks it up ends up armed", %{rt: rt, scheduler: s} do
+      deploy!(rt, "p", ~s|rule r { at 08:00 { log "t" } }|)
+
+      # Interleaved as two concurrent callers could be: q is recorded while
+      # p's timer is still armed, then p's drop is processed.
+      d = :"#{rt}.dispatcher"
+      {:ok, ast} = Anemos.Parser.parse(~s|rule q { at 08:00 { log "t" } }|)
+      {:ok, compiled} = Anemos.Compiler.compile(ast)
+      :ok = Dispatcher.deploy(d, "q", compiled, %{})
+      deploy!(rt, "p", ~s|rule r { when EV { log "r" } }|)
+
+      assert [_] = armed(s)
+    end
+
+    test "a time that does not exist is an inert declaration, not a crash",
+         %{rt: rt, scheduler: s} do
+      scheduler = Process.whereis(s)
+
+      assert {:partial, [{:schedule, _, _}]} =
+               Runtime.load(rt, ~s|rule r { at 25:99 { log "t" } }|, policy: "p")
+
+      assert Process.whereis(s) == scheduler
+      assert armed(s) == []
     end
 
     test "a schedule that is already armed keeps its timer", %{rt: rt, scheduler: s} do
@@ -247,7 +306,23 @@ defmodule Anemos.Runtime.DeployTest do
       assert Enum.map(Runtime.policies(rt), & &1.id) == ["p"]
     end
 
-    test "a source that does not compile leaves the deployed version running", %{rt: rt} do
+    test "a named policy and an anonymous load cannot hold the same name, either way round",
+         %{rt: rt} do
+      :ok = Runtime.load(rt, ~s|rule anon { when EV { log "anon" } }|)
+      deploy!(rt, "p", ~s|rule named { when EV { log "named" } }|)
+
+      assert {:error, taken} =
+               Runtime.load(rt, ~s|rule anon { when EV { log "stolen" } }|, policy: "q")
+
+      assert taken =~ ~s|rule "anon"|
+
+      assert {:error, taken} = Runtime.load(rt, ~s|rule named { when EV { log "stolen" } }|)
+      assert taken =~ ~s|"p"|
+
+      assert Enum.sort(logs(rt, "EV")) == ["anon", "named"]
+    end
+
+    test "a source that does not parse leaves the deployed version running", %{rt: rt} do
       deploy!(rt, "p", ~s|rule a { when EV { log "a" } }|)
 
       assert {:error, _} = Runtime.load(rt, "rule a { when", policy: "p")

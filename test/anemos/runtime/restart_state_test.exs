@@ -77,6 +77,41 @@ defmodule Anemos.Runtime.RestartStateTest do
     assert length(String.split(late, "dwelt")) == 2, "expected the dwell body to run exactly once"
   end
 
+  test "a dwell body that crashes the dispatcher runs once, not on every restart", %{rt: rt} do
+    defmodule Boom do
+      @moduledoc false
+      @behaviour Anemos.Runtime.Module
+
+      @impl true
+      def handle_verb(_verb, _args, _context) do
+        send(:restart_state_boom, :ran)
+        raise "boom"
+      end
+    end
+
+    Process.register(self(), :restart_state_boom)
+    :ok = Runtime.register(rt, "BOOM", Boom)
+    :ok = Runtime.load(rt, ~s|rule r { when GO for 50ms { [BOOM::go] } }|)
+
+    capture_log(fn ->
+      Runtime.dispatch(rt, "GO")
+      assert_receive :ran, 1_000
+      refute_receive :ran, 300
+    end)
+
+    assert is_pid(Process.whereis(:"#{rt}.supervisor"))
+    assert {:ok, _} = Runtime.dispatch(rt, "OTHER")
+  end
+
+  test "an at block the scheduler cannot arm does not stop it restarting", %{rt: rt} do
+    Runtime.load(rt, ~s|rule r { at 25:99 { log "t" } }
+rule ok { at 08:00 { log "t" } }|)
+
+    capture_log(fn -> restart(:"#{rt}.scheduler") end)
+
+    assert [%{event_name: _}] = Scheduler.schedules(:"#{rt}.scheduler")
+  end
+
   test "A-42: a true condition is still true after a dispatcher restart, and does not re-fire",
        %{rt: rt} do
     :ok =

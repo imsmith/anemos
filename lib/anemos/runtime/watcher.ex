@@ -14,9 +14,15 @@ defmodule Anemos.Runtime.Watcher do
 
   ## A file that does not load
 
-  The version already running keeps running. The failure is logged once for
-  that content and held for `status/1`; the next save tries again. A file
-  caught half-written is this case, and corrects itself on the next pass.
+  The version already running keeps running. The failure is logged once and
+  held for `status/1`. It is tried again on every pass, because what stopped
+  it may not be in the file: a rule name still held by a file that is about
+  to lose it, a feed handler the host has not registered yet. A file caught
+  half-written is this case too, and corrects itself on the next pass.
+
+  ## A directory that is not there
+
+  Nothing is unloaded. A missing directory is not an empty one.
 
   ## Signatures
 
@@ -39,6 +45,8 @@ defmodule Anemos.Runtime.Watcher do
 
   require Logger
 
+  alias Anemos.Runtime.StateTable
+
   @type status :: :ok | {:partial, [Anemos.Runtime.load_failure()]} | {:error, term()}
 
   @doc "Starts a watcher. See the moduledoc for options."
@@ -57,15 +65,24 @@ defmodule Anemos.Runtime.Watcher do
 
   @impl true
   def init(opts) do
+    runtime = Keyword.fetch!(opts, :runtime)
+    dir = Keyword.fetch!(opts, :dir)
+    table = StateTable.name_for(runtime)
+
     state = %{
-      runtime: Keyword.fetch!(opts, :runtime),
-      dir: Keyword.fetch!(opts, :dir),
+      runtime: runtime,
+      dir: dir,
       interval: Keyword.get(opts, :interval_ms, 1_000),
+      table: if(:ets.whereis(table) == :undefined, do: nil, else: table),
+      missing?: false,
       # policy id => {content digest, status}
       seen: %{}
     }
 
-    {:ok, state, {:continue, :scan}}
+    # What a previous watcher of this directory deployed is still deployed —
+    # the policy store outlives us both. Starting from nothing would forget
+    # a file that was deleted while no watcher was running.
+    {:ok, %{state | seen: StateTable.get(state.table, {:watcher, dir}, %{})}, {:continue, :scan}}
   end
 
   @impl true
@@ -88,36 +105,77 @@ defmodule Anemos.Runtime.Watcher do
     state
   end
 
+  # A directory that is not there is not an empty directory. Unmounted,
+  # renamed mid-deploy, or not created yet: none of them means "unload
+  # everything", which is what an empty listing would be taken for.
+  defp pass(state) do
+    cond do
+      File.dir?(state.dir) ->
+        scan_dir(%{state | missing?: false})
+
+      state.missing? ->
+        state
+
+      true ->
+        Logger.warning(
+          "[anemos] watched path #{state.dir} is not a directory; leaving what is deployed alone"
+        )
+
+        %{state | missing?: true}
+    end
+  end
+
   # ponytail: reads every policy file each pass. Fine for a directory of
   # policies; swap the poll for an inotify source when the count makes it not.
-  defp pass(state) do
+  defp scan_dir(state) do
     present =
       state.dir
       |> Path.join("**/*.rule")
       |> Path.wildcard()
       |> Map.new(&{Path.relative_to(&1, state.dir), &1})
 
-    seen =
-      Enum.reduce(present, state.seen, fn {id, path}, seen ->
-        with {:ok, source} <- File.read(path),
-             signature = read_signature(path),
-             digest = :crypto.hash(:sha256, [source, 0, signature || ""]),
-             false <- match?({^digest, _}, Map.get(seen, id)) do
-          Map.put(seen, id, {digest, deploy(state.runtime, id, source, signature)})
-        else
-          # Unchanged, or gone between the listing and the read.
-          _ -> seen
-        end
-      end)
-
-    {kept, gone} = Map.split(seen, Map.keys(present))
+    # Unloads first. A renamed file, or a rule moved to another file, is a
+    # deploy of a name the old policy still holds until it is gone.
+    {kept, gone} = Map.split(state.seen, Map.keys(present))
 
     Enum.each(gone, fn {id, _} ->
       Logger.info("[anemos] policy #{id} removed, unloading")
       _ = Anemos.Runtime.unload(state.runtime, id)
     end)
 
-    %{state | seen: kept}
+    seen =
+      Enum.reduce(present, kept, fn {id, path}, seen ->
+        case File.read(path) do
+          {:ok, source} ->
+            signature = read_signature(path)
+            digest = :crypto.hash(:sha256, [source, 0, signature || ""])
+            Map.put(seen, id, visit(state.runtime, id, source, signature, digest, seen[id]))
+
+          # Gone between the listing and the read; the next pass unloads it.
+          {:error, _} ->
+            seen
+        end
+      end)
+
+    :ok = StateTable.put(state.table, {:watcher, state.dir}, seen)
+    %{state | seen: seen}
+  end
+
+  # Deployed and unchanged: nothing to do.
+  defp visit(_runtime, _id, _source, _signature, digest, {digest, :ok} = entry)
+       when is_binary(digest),
+       do: entry
+
+  # Everything else is deployed: a new or changed file, and also an
+  # unchanged one that did not fully load last time. What stopped it may
+  # have been outside the file — a name another policy held, a feed handler
+  # not registered yet — so it is tried again each pass, and reported only
+  # when the outcome changes.
+  defp visit(runtime, id, source, signature, digest, previous) do
+    opts = [policy: id] ++ if(signature, do: [authorization: %{signature: signature}], else: [])
+    entry = {digest, Anemos.Runtime.load(runtime, source, opts)}
+    if entry != previous, do: report(id, elem(entry, 1))
+    entry
   end
 
   defp read_signature(path) do
@@ -127,30 +185,17 @@ defmodule Anemos.Runtime.Watcher do
     end
   end
 
-  defp deploy(runtime, id, source, signature) do
-    opts = [policy: id] ++ if(signature, do: [authorization: %{signature: signature}], else: [])
+  defp report(id, :ok), do: Logger.info("[anemos] policy #{id} deployed")
 
-    case Anemos.Runtime.load(runtime, source, opts) do
-      :ok ->
-        Logger.info("[anemos] policy #{id} deployed")
-        :ok
+  defp report(id, {:partial, failures}) do
+    Logger.warning("[anemos] policy #{id} deployed with #{length(failures)} inert declaration(s)")
+  end
 
-      {:partial, failures} = partial ->
-        Logger.warning(
-          "[anemos] policy #{id} deployed with #{length(failures)} inert declaration(s)"
-        )
-
-        partial
-
-      {:error, reason} = error ->
-        # A parse message names a line; a refusal is an ErrorStruct whose
-        # message names the authority. Neither carries the source.
-        Logger.error(
-          "[anemos] policy #{id} not deployed, previous version kept: #{describe(reason)}"
-        )
-
-        error
-    end
+  # A parse message names a line and may quote the token it stopped at; a
+  # refusal names the authority or the policy that holds the name. This is
+  # the author's own text going to the author's own log.
+  defp report(id, {:error, reason}) do
+    Logger.error("[anemos] policy #{id} not deployed, previous version kept: #{describe(reason)}")
   end
 
   defp describe(reason) when is_binary(reason), do: reason

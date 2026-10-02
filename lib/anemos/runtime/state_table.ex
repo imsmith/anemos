@@ -54,11 +54,16 @@ defmodule Anemos.Runtime.StateTable do
   def recent(nil, _kind, _limit), do: []
 
   def recent(table, kind, limit) do
-    newest = get(table, {kind, :seq}, 0)
+    # A runtime that is not running has no table, and nothing to report.
+    if :ets.whereis(table) == :undefined do
+      []
+    else
+      newest = get(table, {kind, :seq}, 0)
 
-    for n <- newest..max(newest - limit + 1, 1)//-1,
-        [{_key, entry}] <- [:ets.lookup(table, {kind, n})],
-        do: entry
+      for n <- newest..max(newest - limit + 1, 1)//-1,
+          [{_key, entry}] <- [:ets.lookup(table, {kind, n})],
+          do: entry
+    end
   end
 
   @spec put(t(), term(), term()) :: :ok

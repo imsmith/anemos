@@ -379,12 +379,16 @@ defmodule Anemos.Runtime do
       # Map shorthand
       Anemos.Runtime.dispatch(:anemos, %{name: "MOTION", context: "garage", payload: %{}})
 
+  Options: `:timeout`, how long to wait for the rules to run (default
+  5000 ms). A context map's `:correlation_id` is carried into the ambient
+  `Comn` context the rules run under, so what they emit shares it.
   """
-  @spec dispatch(atom(), String.t() | Anemos.Event.t(), map()) :: {:ok, list()}
-  def dispatch(name, event_name, context \\ %{})
+  @spec dispatch(atom(), String.t() | Anemos.Event.t(), map(), keyword()) :: {:ok, list()}
+  def dispatch(name, event_name, context \\ %{}, opts \\ [])
 
-  def dispatch(name, event_name, context) when is_binary(event_name) do
-    raw_results = Dispatcher.dispatch(dispatcher_name(name), event_name, context)
+  def dispatch(name, event_name, context, opts) when is_binary(event_name) do
+    timeout = Keyword.get(opts, :timeout, 5_000)
+    raw_results = Dispatcher.dispatch(dispatcher_name(name), event_name, context, timeout)
 
     results =
       Enum.flat_map(raw_results, fn
@@ -395,13 +399,13 @@ defmodule Anemos.Runtime do
     {:ok, results}
   end
 
-  def dispatch(name, event, _context) do
+  def dispatch(name, event, _context, opts) do
     event_name = Anemos.Event.name(event)
     event_context = Anemos.Event.context(event)
     event_payload = Anemos.Event.payload(event)
 
     context = %{context_path: event_context, context_data: event_payload}
-    dispatch(name, event_name, context)
+    dispatch(name, event_name, context, opts)
   end
 
   @doc """

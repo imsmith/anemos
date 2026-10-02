@@ -81,9 +81,9 @@ defmodule Anemos.Runtime.Dispatcher do
 
   Returns a list of `{:ok, operation}` or `{:error, reason}` tuples.
   """
-  @spec dispatch(pid() | atom(), String.t(), map()) :: list()
-  def dispatch(dispatcher, event_name, context \\ %{}) do
-    GenServer.call(dispatcher, {:dispatch, event_name, context})
+  @spec dispatch(pid() | atom(), String.t(), map(), timeout()) :: list()
+  def dispatch(dispatcher, event_name, context \\ %{}, timeout \\ 5_000) do
+    GenServer.call(dispatcher, {:dispatch, event_name, context}, timeout)
   end
 
   @doc """
@@ -263,7 +263,7 @@ defmodule Anemos.Runtime.Dispatcher do
     started = System.monotonic_time(:microsecond)
     state = refresh_stores(state)
     context = with_runtime(context, state)
-    comn_ctx = build_comn_context(event_name, context)
+    comn_ctx = build_comn_context(event_name, context, state.runtime)
 
     {{results, became_true}, state} =
       Comn.Contexts.with_context(comn_ctx, fn ->
@@ -1118,14 +1118,17 @@ defmodule Anemos.Runtime.Dispatcher do
     {:noreply, state}
   end
 
-  defp build_comn_context(event_name, context) do
+  # The ambient context every rule body, verb and connector runs under. It
+  # names the runtime so that what they emit can be told apart from what
+  # another runtime emits.
+  defp build_comn_context(event_name, context, runtime) do
     fields = [
       request_id: Map.get(context, :request_id, generate_request_id()),
       parent_event_id: event_name,
       correlation_id: Map.get(context, :correlation_id),
       trace_id: Map.get(context, :trace_id),
       actor: Map.get(context, :actor),
-      metadata: %{context_path: Map.get(context, :context_path)}
+      metadata: %{context_path: Map.get(context, :context_path), runtime: runtime}
     ]
 
     Comn.Contexts.ContextStruct.new(fields)

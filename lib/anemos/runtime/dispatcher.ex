@@ -29,8 +29,8 @@ defmodule Anemos.Runtime.Dispatcher do
     DataStore,
     ModuleRegistry,
     PolicyStore,
-    StoreSupervisor,
     StateTable,
+    StoreSupervisor,
     SubscribableRegistry,
     TripleStore
   }
@@ -151,6 +151,16 @@ defmodule Anemos.Runtime.Dispatcher do
   @spec policies(pid() | atom()) :: [map()]
   def policies(dispatcher), do: GenServer.call(dispatcher, :policies)
 
+  @doc "See `Anemos.Runtime.describe/1`. Everything but schedules and modules."
+  @spec describe(pid() | atom()) :: map()
+  def describe(dispatcher), do: GenServer.call(dispatcher, :describe)
+
+  @doc "See `Anemos.Runtime.explain/3`."
+  @spec explain(pid() | atom(), String.t(), map()) :: map()
+  def explain(dispatcher, event_name, context \\ %{}) do
+    GenServer.call(dispatcher, {:explain, event_name, context})
+  end
+
   @doc """
   Returns the names of the rules currently loaded, without duplicates.
 
@@ -210,7 +220,10 @@ defmodule Anemos.Runtime.Dispatcher do
       rule_bindings: StateTable.get(state_table, :rule_bindings, %{}),
       # {data block name, scope} => {handler, ref} for live `subscribe`
       # feeds, so the feed can be cancelled when its block goes.
-      subscriptions: %{}
+      subscriptions: %{},
+      # What the dispatch in progress has reached so far, newest first.
+      # Becomes the `steps` of its trace entry.
+      steps: []
     }
 
     policy_store = state.policy_store
@@ -247,10 +260,11 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def handle_call({:dispatch, event_name, context}, _from, state) do
+    started = System.monotonic_time(:microsecond)
     state = refresh_stores(state)
     comn_ctx = build_comn_context(event_name, context)
 
-    {results, state} =
+    {{results, became_true}, state} =
       Comn.Contexts.with_context(comn_ctx, fn ->
         # Route event to all condition servers (async cast). A condition
         # evaluates expressions the same way a rule does, so it is given the
@@ -284,9 +298,11 @@ defmodule Anemos.Runtime.Dispatcher do
             {acc ++ res, st}
           end)
 
-        {results ++ condition_results, state}
+        became_true = for {:transition, name} <- condition_messages, do: name
+        {{results ++ condition_results, became_true}, state}
       end)
 
+    state = record_trace(state, event_name, context, results, became_true, started)
     {:reply, results, persist(state)}
   end
 
@@ -372,6 +388,112 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   @impl true
+  def handle_call(:describe, _from, state) do
+    state = refresh_stores(state)
+    entries = PolicyStore.entries(state.policy_store)
+
+    rules =
+      state.rules
+      |> Enum.group_by(& &1.name)
+      |> Enum.map(fn {name, parts} ->
+        {dwell, bindings} =
+          state.rule_bindings
+          |> Map.get(name, %{})
+          |> Enum.split_with(&match?({{:dwell, _}, _}, &1))
+
+        %{
+          name: name,
+          policy: owner(entries, :rules, name),
+          events: parts |> Enum.flat_map(& &1.subscriptions) |> Enum.uniq(),
+          context: get_in(hd(parts), [Access.key(:meta), :context_path]),
+          dwell_ms: Enum.find_value(parts, & &1.dwell_duration_ms),
+          bindings:
+            Map.new(bindings, fn
+              {{:set, variable}, value} -> {variable, value}
+              other -> other
+            end),
+          dwell: for({{:dwell, event}, %{state: s}} <- dwell, do: %{event: event, state: s})
+        }
+      end)
+      |> Enum.sort_by(& &1.name)
+
+    conditions =
+      for %{compiled: c} <- entries,
+          condition <- c.conditions,
+          %{pid: pid} <- [Map.get(state.condition_servers, condition.name)],
+          uniq: true do
+        %{
+          name: condition.name,
+          policy: owner(entries, :conditions, condition.name),
+          events: condition.subscriptions,
+          context: condition.context,
+          value: ConditionServer.get_state(pid)
+        }
+      end
+
+    capabilities =
+      for %{compiled: c} <- entries,
+          capability <- c.capabilities,
+          Map.has_key?(state.capability_servers, capability.name),
+          uniq: true do
+        %{
+          name: capability.name,
+          policy: owner(entries, :capabilities, capability.name),
+          context: capability.context
+        }
+      end
+
+    data_blocks =
+      for %{id: id, compiled: c} <- entries, data <- c.data_blocks, uniq: true do
+        %{name: data.name, policy: id, scope: data.scope || :global}
+      end
+
+    reply = %{
+      rules: rules,
+      conditions: Enum.sort_by(conditions, & &1.name),
+      capabilities: Enum.sort_by(capabilities, & &1.name),
+      data_blocks: Enum.sort_by(data_blocks, & &1.name)
+    }
+
+    {:reply, reply, state}
+  end
+
+  # Static on purpose. Running the handlers to see what they would produce
+  # is not a dry run: a verb in expression position is called when the
+  # expression is evaluated.
+  @impl true
+  def handle_call({:explain, event_name, context}, _from, state) do
+    entries = PolicyStore.entries(state.policy_store)
+    event_context = Map.get(context, :context_path)
+
+    rules =
+      for rule <- Map.get(state.index, event_name, []) do
+        outcome =
+          cond do
+            not context_matches?(rule, event_context) -> :context_mismatch
+            ms = rule.dwell_duration_ms -> {:dwell, ms}
+            true -> :fires
+          end
+
+        %{
+          rule: rule.name,
+          policy: owner(entries, :rules, rule.name),
+          context: get_in(rule, [Access.key(:meta), :context_path]),
+          outcome: outcome
+        }
+      end
+
+    conditions =
+      for %{compiled: c} <- entries,
+          condition <- c.conditions,
+          event_name in condition.subscriptions,
+          uniq: true,
+          do: condition.name
+
+    {:reply, %{rules: rules, conditions: Enum.sort(conditions)}, state}
+  end
+
+  @impl true
   def handle_call(:policies, _from, state) do
     policies =
       for %{id: id, compiled: c} <- PolicyStore.entries(state.policy_store) do
@@ -443,6 +565,40 @@ defmodule Anemos.Runtime.Dispatcher do
     {:reply, :ok, state}
   end
 
+  @trace_limit 200
+
+  defp step(state, rule, event_name, outcome) do
+    %{state | steps: [%{rule: rule.name, event: event_name, outcome: outcome} | state.steps]}
+  end
+
+  # One entry per dispatch, kept where a dispatcher crash cannot take it.
+  #
+  # Kinds, not payloads: a result is recorded as its operation type. The one
+  # value kept is a `log`'s text, which the author already chose to write to
+  # the log. An error is its code or its tag, for the reason reason_tag/1
+  # gives — what a host verb says about its failure is not ours to copy
+  # around.
+  defp record_trace(state, event_name, context, results, became_true, started) do
+    entry = %{
+      at: DateTime.utc_now(),
+      event: event_name,
+      context_path: Map.get(context, :context_path),
+      steps: Enum.reverse(state.steps),
+      conditions: became_true,
+      results: Enum.map(results, &trace_result/1),
+      duration_us: System.monotonic_time(:microsecond) - started
+    }
+
+    :ok = StateTable.push(state.state_table, :trace, entry, @trace_limit)
+    %{state | steps: []}
+  end
+
+  defp trace_result({:ok, %{type: :log, value: value}}), do: %{type: :log, value: log_text(value)}
+  defp trace_result({:ok, %{type: type}}), do: %{type: type}
+  defp trace_result({:ok, _other}), do: %{type: :value}
+  defp trace_result({:error, %{code: code}}), do: %{type: :error, reason: code}
+  defp trace_result({:error, reason}), do: %{type: :error, reason: reason_tag(reason)}
+
   # The bindings are written out whole at the end of every callback that can
   # change them, never midway: a dispatch that crashes leaves the table as
   # the last completed callback left it.
@@ -498,6 +654,18 @@ defmodule Anemos.Runtime.Dispatcher do
         name in names(theirs, field) do
       "policy #{inspect(id)} declares #{kind} #{inspect(name)}, which policy " <>
         "#{inspect(other)} already declares"
+    end
+  end
+
+  # The policy a name belongs to: the last one loaded that declares it, which
+  # is the one whose definition is running.
+  defp owner(entries, field, name) do
+    entries
+    |> Enum.reverse()
+    |> Enum.find_value(fn %{id: id, compiled: c} -> if name in names(c, field), do: {id} end)
+    |> case do
+      {id} -> id
+      nil -> nil
     end
   end
 
@@ -852,7 +1020,10 @@ defmodule Anemos.Runtime.Dispatcher do
 
         new_state =
           if rule do
-            {_results, st_after_run} = dispatch_immediate(rule, event_name, context, [], state, 0)
+            started = System.monotonic_time(:microsecond)
+            state = step(state, rule, event_name, :dwell_fired)
+            {results, st_after_run} = dispatch_immediate(rule, event_name, context, [], state, 0)
+            st_after_run = record_trace(st_after_run, event_name, context, results, [], started)
 
             # dispatch_immediate writes handler persistent bindings back to
             # rule_bindings[rule_name], which may wipe dwell entries for other
@@ -986,16 +1157,18 @@ defmodule Anemos.Runtime.Dispatcher do
   defp dispatch_rules(pairs, _label, context, state, depth) do
     event_context = Map.get(context, :context_path)
 
-    pairs
-    |> Enum.filter(fn {rule, _event_name} -> context_matches?(rule, event_context) end)
-    |> Enum.reduce({[], state}, fn {rule, event_name}, {results_acc, st} ->
-      case Map.get(rule, :dwell_duration_ms) do
-        nil ->
-          dispatch_immediate(rule, event_name, context, results_acc, st, depth)
+    Enum.reduce(pairs, {[], state}, fn {rule, event_name}, {results_acc, st} ->
+      cond do
+        not context_matches?(rule, event_context) ->
+          {results_acc, step(st, rule, event_name, :context_mismatch)}
 
-        ms when is_integer(ms) ->
-          new_st = handle_dwell_event(rule, event_name, context, ms, st)
-          {results_acc, new_st}
+        ms = Map.get(rule, :dwell_duration_ms) ->
+          st = step(st, rule, event_name, :dwell)
+          {results_acc, handle_dwell_event(rule, event_name, context, ms, st)}
+
+        true ->
+          st = step(st, rule, event_name, :fired)
+          dispatch_immediate(rule, event_name, context, results_acc, st, depth)
       end
     end)
   end

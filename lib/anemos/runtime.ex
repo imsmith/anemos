@@ -392,6 +392,68 @@ defmodule Anemos.Runtime do
     Dispatcher.condition_state(dispatcher_name(name), condition_name)
   end
 
+  @doc """
+  Everything the runtime holds, as it stands now.
+
+  `%{policies, rules, conditions, capabilities, data_blocks, schedules,
+  modules}`. Each rule carries the policy that declared it, the events it
+  listens for, its context, its `set` bindings and the state of its dwell
+  timers; each condition its current value.
+
+  Bindings are returned as they are. An `Anemos.Secret` stays wrapped.
+  """
+  @spec describe(atom()) :: map()
+  def describe(name) do
+    schedules =
+      for s <- Scheduler.schedules(scheduler_name(name)) do
+        %{event: s.event_name, time_spec: s.time_spec, recurrence: s.recurrence}
+      end
+
+    dispatcher_name(name)
+    |> Dispatcher.describe()
+    |> Map.merge(%{
+      policies: policies(name),
+      schedules: Enum.sort_by(schedules, & &1.event),
+      modules: ModuleRegistry.names(registry_name(name))
+    })
+  end
+
+  @doc """
+  What dispatching `event_name` would do, without doing it.
+
+  `%{rules: [...], conditions: [...]}`. Each rule that listens for the event
+  is listed with the policy that declared it and an `outcome`: `:fires`,
+  `{:dwell, ms}` for a `when ... for` rule that would arm or hold its timer,
+  or `:context_mismatch` when its `context` does not admit `context`'s
+  `:context_path`. `conditions` names the conditions that would evaluate.
+
+  Nothing is evaluated: a guard, an `if`, or a verb called in an expression
+  can still change what a rule that `:fires` goes on to do.
+  """
+  @spec explain(atom(), String.t(), map()) :: %{rules: [map()], conditions: [String.t()]}
+  def explain(name, event_name, context \\ %{}) when is_binary(event_name) do
+    Dispatcher.explain(dispatcher_name(name), event_name, context)
+  end
+
+  @doc """
+  The most recent dispatches, newest first.
+
+  Each is `%{at, event, context_path, steps, conditions, results,
+  duration_us}`. `steps` is every rule the event reached, in order, with
+  what happened — `:fired`, `:dwell`, `:dwell_fired` or `:context_mismatch`
+  — including rules reached through `nextevent`, `nextrule` and `emit ...
+  as`. `conditions` names the conditions that became true. `results` gives
+  the kind of each operation; a `log` carries its text, since that was
+  written to the log anyway, and nothing else carries a value.
+
+  The last #{200} are kept, and they outlive a dispatcher crash — which is
+  when they are wanted.
+  """
+  @spec trace(atom(), pos_integer()) :: [map()]
+  def trace(name, limit \\ 50) when is_integer(limit) and limit > 0 do
+    StateTable.recent(StateTable.name_for(name), :trace, limit)
+  end
+
   # --- Supervisor callbacks ---
 
   @impl true
@@ -479,6 +541,9 @@ defmodule Anemos.Runtime do
         :load,
         :unload,
         :policies,
+        :describe,
+        :explain,
+        :trace,
         :register,
         :dispatch,
         :connect,

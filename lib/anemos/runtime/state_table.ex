@@ -29,7 +29,37 @@ defmodule Anemos.Runtime.StateTable do
 
   @doc "Creates the table. Call from the process that should own it."
   @spec new(atom()) :: :ets.table()
-  def new(runtime), do: :ets.new(:"#{runtime}.state", [:set, :public])
+  def new(runtime), do: :ets.new(name_for(runtime), [:set, :public, :named_table])
+
+  @doc "The table of the runtime `runtime`."
+  @spec name_for(atom()) :: atom()
+  def name_for(runtime), do: :"#{runtime}.state"
+
+  @doc """
+  Appends `entry` to the bounded log `kind`, dropping the oldest once there
+  are more than `limit`.
+  """
+  @spec push(t(), atom(), term(), pos_integer()) :: :ok
+  def push(nil, _kind, _entry, _limit), do: :ok
+
+  def push(table, kind, entry, limit) do
+    n = :ets.update_counter(table, {kind, :seq}, 1, {{kind, :seq}, 0})
+    true = :ets.insert(table, {{kind, n}, entry})
+    true = :ets.delete(table, {kind, n - limit})
+    :ok
+  end
+
+  @doc "The newest `limit` entries of the log `kind`, newest first."
+  @spec recent(t(), atom(), pos_integer()) :: [term()]
+  def recent(nil, _kind, _limit), do: []
+
+  def recent(table, kind, limit) do
+    newest = get(table, {kind, :seq}, 0)
+
+    for n <- newest..max(newest - limit + 1, 1)//-1,
+        [{_key, entry}] <- [:ets.lookup(table, {kind, n})],
+        do: entry
+  end
 
   @spec put(t(), term(), term()) :: :ok
   def put(nil, _key, _value), do: :ok

@@ -47,6 +47,8 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 - `PolicyStore` — loaded policy survives a dispatcher crash
 - Hot reload — `load/3` with `policy: id` deploys a policy over itself; `unload/2`,
   `policies/1`; `Anemos.Runtime.Watcher` keeps a directory of `.rule` files deployed
+- Introspection from the host — `describe/1` (everything loaded, with its state),
+  `explain/3` (what an event would do), `trace/2` (what the last 200 dispatches did)
 - `StateTable` — `set` bindings, dwell timers, condition values, module registrations,
   context data and the policy record survive the restart of any process in the runtime
 - Bounded event recursion, ceiling 10,000
@@ -91,7 +93,9 @@ has repeatedly been mistaken for "it works".
 
 No lexer or parser support. Verified by attempting to parse each one.
 
-- Introspection verbs — `show`, `list`, `graph`, `trace`, `explain`, `exists`, `infer`
+- Introspection verbs *in the language* — `show`, `list`, `graph`, `trace`, `explain`,
+  `exists`, `infer`. They are console commands and there is no console. The runtime side
+  exists: `Anemos.Runtime.describe/1`, `explain/3` and `trace/2`
 - `it` / `on` / `as` blocks — modal refs, invocation refs, group specs. `AST.It`, `AST.On`
   and `AST.Flow` exist as structs the parser never constructs
 - `flow` declarations

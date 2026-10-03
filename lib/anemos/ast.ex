@@ -181,6 +181,19 @@ defmodule Anemos.AST do
     defstruct [:expression, :line]
   end
 
+  defmodule Introspect do
+    @moduledoc """
+    An introspection statement — `show`, `list`, `graph`, `trace`,
+    `explain`, `exists`, `infer`, `assert` — or `exists` in expression
+    position. The subject is a bare `{:name, "NAME"}`, a `{:catalogue,
+    :rules | :conditions | :modules | :events | :policies | :schedules}`, or
+    `{:expr, expression}`.
+    """
+    @enforce_keys []
+    @type t :: %__MODULE__{verb: atom(), subject: term(), line: non_neg_integer() | nil}
+    defstruct [:verb, :subject, :line]
+  end
+
   defmodule BinaryOp do
     @moduledoc "A binary operator expression."
     @enforce_keys []

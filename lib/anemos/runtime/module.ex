@@ -41,7 +41,45 @@ defmodule Anemos.Runtime.Module do
   @doc "Returns the argument schema for `verb`, or `nil` to leave it unvalidated."
   @callback arg_schema(verb :: String.t()) :: Anemos.Runtime.ArgSchema.t()
 
-  @optional_callbacks arg_schema: 1
+  @doc """
+  What a policy learns from `show NAME`, `explain NAME` and `list NAME`:
+  `%{look: String.t(), recon: map(), choices: map()}`, Comn's three
+  questions. For a module bound under several names — a bridge that serves
+  every discovered tool — this answers per name, which Comn's own
+  nullary callbacks cannot.
+  """
+  @callback describe(name :: String.t()) :: %{look: String.t(), recon: map(), choices: map()}
+
+  @optional_callbacks arg_schema: 1, describe: 1
+
+  @doc """
+  A module's card for the name it is bound under: `describe/1` if it has
+  one, else its `Comn` callbacks, else what the runtime knows — the name,
+  the Elixir module, and the verbs declared with `use Anemos.Module`.
+  """
+  @spec card(module(), String.t()) :: %{look: String.t(), recon: map(), choices: map()}
+  def card(module, name) do
+    cond do
+      function_exported?(module, :describe, 1) ->
+        module.describe(name)
+
+      function_exported?(module, :look, 0) and function_exported?(module, :recon, 0) and
+          function_exported?(module, :choices, 0) ->
+        %{look: module.look(), recon: module.recon(), choices: module.choices()}
+
+      true ->
+        verbs =
+          if function_exported?(module, :__anemos_verbs__, 0),
+            do: module.__anemos_verbs__(),
+            else: :any
+
+        %{
+          look: "#{name} — #{inspect(module)}",
+          recon: %{type: :implementation, module: module, verbs: verbs},
+          choices: %{verbs: verbs}
+        }
+    end
+  end
 
   @doc """
   Returns `module`'s schema for `verb`, or `nil` when it declares none.

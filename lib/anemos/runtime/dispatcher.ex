@@ -27,6 +27,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
   alias Anemos.Runtime.{
     DataStore,
+    Introspection,
     ModuleRegistry,
     PolicyStore,
     StateTable,
@@ -601,6 +602,15 @@ defmodule Anemos.Runtime.Dispatcher do
     :ok = StateTable.push(state.state_table, :trace, entry, @trace_limit)
     %{state | steps: []}
   end
+
+  # An introspection statement is the author asking to see something; the
+  # trace is where it is seen.
+  defp trace_result({:ok, %{type: type, text: text, value: value}})
+       when type in [:show, :list, :graph, :trace, :explain, :exists, :infer],
+       do: %{type: type, subject: text, value: value}
+
+  defp trace_result({:ok, %{type: :assert, text: text, held: held}}),
+    do: %{type: :assert, subject: text, held: held}
 
   defp trace_result({:ok, %{type: :log, value: value}}) when is_binary(value),
     do: %{type: :log, value: value}
@@ -1501,6 +1511,15 @@ defmodule Anemos.Runtime.Dispatcher do
   # makes it ordinary, since a verb may now return a map into a binding.
   # `to_string/1` is still tried first, and only first, because that is the
   # branch `Anemos.Secret` redaction rides on.
+  # Introspection statements answer from here, where what they ask about
+  # lives. `assert` was decided in the handler and only passes through.
+  defp execute_op(%{type: type} = op, _context, state, _depth)
+       when type in [:show, :list, :graph, :trace, :explain, :exists, :infer] do
+    {{:ok, Introspection.answer(op, state)}, state}
+  end
+
+  defp execute_op(%{type: :assert} = op, _context, state, _depth), do: {{:ok, op}, state}
+
   defp execute_op(%{type: :log, value: value} = op, _context, state, _depth) do
     Logger.info("[anemos] #{log_text(value)}")
     {{:ok, op}, state}

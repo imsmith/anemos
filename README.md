@@ -481,6 +481,31 @@ let [:p001 -> :worksOn -> :proj1]
 Facts accumulate in a triple store within the runtime. Query variables
 bind to matched values.
 
+### Introspection
+
+Comn's three questions, as statements — `show` is look, `explain` is
+recon, `list` is choices — asked of a module, an event, a catalogue
+(`rules`, `conditions`, `modules`, `events`, `policies`, `schedules`) or a
+value. Every answer is in the dispatch results and the trace, with its
+value.
+
+```
+show DEVICE            ; what is it
+explain DEVICE         ; what can it do
+list DEVICE            ; what are my options
+list rules
+explain SENSOR_MOTION  ; who listens for it
+show ?payload
+infer ?payload         ; its kind: string, number, list, map, secret, nothing
+graph :host            ; the triples it is in
+trace ?payload         ; its value, kept in the trace
+exists ?maybe          ; also a value: if exists ?maybe { ... }
+assert ?count > 0      ; or the rule stops here, and the results say so
+```
+
+A module answers through `Comn` (`look/0`, `recon/0`, `choices/0`) or,
+for one bound under several names, `Anemos.Runtime.Module.describe/1`.
+
 ### Expressions
 
 Full operator precedence (14 levels, matching the language spec):

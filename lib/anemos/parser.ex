@@ -1,4 +1,14 @@
 defmodule Anemos.Parser do
+  @introspection ~w(show list graph trace explain exists infer assert)a
+  @catalogues %{
+    "rules" => :rules,
+    "conditions" => :conditions,
+    "modules" => :modules,
+    "events" => :events,
+    "policies" => :policies,
+    "schedules" => :schedules
+  }
+
   @moduledoc """
   Recursive descent parser for the Anemos DSL.
 
@@ -692,6 +702,9 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :data} | rest]), do: parse_inline_data(rest)
   defp parse_statement([{:keyword, _, :query} | rest]), do: parse_inline_query(rest)
 
+  defp parse_statement([{:keyword, meta, verb} | rest]) when verb in @introspection,
+    do: parse_introspect(verb, meta[:line], rest)
+
   defp parse_statement([{type, meta, _} | _]) do
     {:error, "Unexpected token #{type} on line #{meta[:line]}, expected statement"}
   end
@@ -855,6 +868,38 @@ defmodule Anemos.Parser do
   end
 
   # --- Log ---
+
+  # --- Introspection ---
+  #
+  # `show NAME` asks about a module or an event; `list rules` about a
+  # catalogue; anything else is an expression and the subject is its value.
+  # `assert` always takes an expression: asserting a name would assert a
+  # string.
+  defp parse_introspect(verb, line, [{:module_id, _, name} | rest]) when verb != :assert do
+    {:ok, %AST.Introspect{verb: verb, subject: {:name, name}, line: line}, rest}
+  end
+
+  # A bare name would be a string, and a string always holds.
+  defp parse_introspect(:assert, line, [{:module_id, _, name} | _]) do
+    {:error,
+     "assert takes an expression on line #{line}; to assert that #{name} is bound, " <>
+       "write assert exists #{name}"}
+  end
+
+  defp parse_introspect(verb, line, [{:identifier, _, word} | rest])
+       when verb != :assert and is_map_key(@catalogues, word) do
+    {:ok, %AST.Introspect{verb: verb, subject: {:catalogue, @catalogues[word]}, line: line}, rest}
+  end
+
+  defp parse_introspect(verb, line, tokens) do
+    case parse_expression(tokens) do
+      {:ok, expr, rest} ->
+        {:ok, %AST.Introspect{verb: verb, subject: {:expr, expr}, line: line}, rest}
+
+      {:error, _} = err ->
+        err
+    end
+  end
 
   defp parse_log(tokens) do
     line = tokens_line(tokens)
@@ -1656,6 +1701,22 @@ defmodule Anemos.Parser do
 
   defp parse_atom_expression([{:module_id, meta, name} | rest]) do
     {:ok, %AST.Literal{type: :identifier, value: name, line: meta[:line]}, rest}
+  end
+
+  # `exists X` as a value: a bound variable, or a bound module. One operand,
+  # so `exists ?x == true` reads as `(exists ?x) == true`.
+  defp parse_atom_expression([{:keyword, meta, :exists}, {:module_id, _, name} | rest]) do
+    {:ok, %AST.Introspect{verb: :exists, subject: {:name, name}, line: meta[:line]}, rest}
+  end
+
+  defp parse_atom_expression([{:keyword, meta, :exists} | rest]) do
+    case parse_atom_expression(rest) do
+      {:ok, expr, rest} ->
+        {:ok, %AST.Introspect{verb: :exists, subject: {:expr, expr}, line: meta[:line]}, rest}
+
+      {:error, _} = err ->
+        err
+    end
   end
 
   # --- Built-in pipeline functions ---

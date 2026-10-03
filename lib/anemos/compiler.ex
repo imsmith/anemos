@@ -1039,6 +1039,34 @@ defmodule Anemos.Compiler do
     {[op], bindings}
   end
 
+  # Introspection. `assert` is decided here: the value is at hand, and a
+  # failed assertion stops the rule like `done` — carrying the operation
+  # out with it, so the results say which assertion and what it saw. The
+  # others carry their subject to the dispatcher, which holds what they ask
+  # about (modules, listeners, triples) and fills in `value`.
+  defp eval_statement(%AST.Introspect{verb: :assert, subject: {:expr, expr}}, context, bindings) do
+    value = resolve_expr(expr, context, bindings)
+
+    op = %{
+      type: :assert,
+      subject: {:value, value},
+      text: subject_text({:expr, expr}),
+      held: truthy?(value)
+    }
+
+    if truthy?(value), do: {[op], bindings}, else: throw({:anemos_done, [op], bindings})
+  end
+
+  defp eval_statement(%AST.Introspect{verb: verb, subject: subject}, context, bindings) do
+    resolved =
+      case subject do
+        {:expr, expr} -> {:value, resolve_expr(expr, context, bindings)}
+        other -> other
+      end
+
+    {[%{type: verb, subject: resolved, text: subject_text(subject)}], bindings}
+  end
+
   defp eval_statement(%AST.Log{expression: expr}, context, bindings) do
     value = resolve_expr(expr, context, bindings)
     {[%{type: :log, value: value}], bindings}
@@ -1203,6 +1231,23 @@ defmodule Anemos.Compiler do
 
   # --- Expression resolution ---
 
+  defp subject_text({:name, name}), do: name
+  defp subject_text({:catalogue, catalogue}), do: Atom.to_string(catalogue)
+  defp subject_text({:expr, %AST.VarRef{sigil: sigil, name: name}}), do: sigil <> name
+  defp subject_text({:expr, %AST.Literal{value: value}}), do: inspect(value)
+  defp subject_text({:expr, %AST.Command{module: m, verb: v}}), do: "[#{m}::#{v}]"
+
+  defp subject_text({:expr, %AST.BinaryOp{op: op, left: l, right: r}}),
+    do: "#{subject_text({:expr, l})} #{op} #{subject_text({:expr, r})}"
+
+  defp subject_text({:expr, %AST.UnaryOp{op: op, operand: operand}}),
+    do: "#{op} #{subject_text({:expr, operand})}"
+
+  defp subject_text({:expr, %AST.Introspect{verb: verb, subject: subject}}),
+    do: "#{verb} #{subject_text(subject)}"
+
+  defp subject_text({:expr, _}), do: "expression"
+
   defp resolve_expr(%AST.Literal{value: value}, _context, _bindings), do: value
 
   # ? — resolve from context data (external, from the event context map)
@@ -1218,6 +1263,19 @@ defmodule Anemos.Compiler do
   # $ — resolve from set bindings (mutable/persistent)
   defp resolve_expr(%AST.VarRef{sigil: "$", name: name}, _context, bindings) do
     Map.get(bindings, {:set, name})
+  end
+
+  # `exists` as a value. A module is looked up in the registry the closure
+  # was handed; a variable exists when it is bound to something.
+  defp resolve_expr(%AST.Introspect{verb: :exists, subject: {:name, name}}, context, _bindings) do
+    case Map.get(context, :registry) do
+      nil -> false
+      registry -> Anemos.Runtime.ModuleRegistry.registered?(registry, name)
+    end
+  end
+
+  defp resolve_expr(%AST.Introspect{verb: :exists, subject: {:expr, expr}}, context, bindings) do
+    resolve_expr(expr, context, bindings) != nil
   end
 
   # A-56. Value position: dispatch now, and the return value *is* the value.

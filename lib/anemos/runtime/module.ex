@@ -56,28 +56,92 @@ defmodule Anemos.Runtime.Module do
   A module's card for the name it is bound under: `describe/1` if it has
   one, else its `Comn` callbacks, else what the runtime knows — the name,
   the Elixir module, and the verbs declared with `use Anemos.Module`.
+
+  The module's own code runs in a process of its own with a deadline
+  (1000 ms): it is host code, called from inside the dispatcher on a
+  policy's say-so, and a card that raises, blocks or comes back in the
+  wrong shape is a card the runtime did not get, not a dead dispatcher.
   """
+  @card_timeout_ms 1_000
+
   @spec card(module(), String.t()) :: %{look: String.t(), recon: map(), choices: map()}
   def card(module, name) do
-    cond do
-      function_exported?(module, :describe, 1) ->
-        module.describe(name)
+    asked =
+      cond do
+        function_exported?(module, :describe, 1) ->
+          isolated(fn -> module.describe(name) end)
 
-      function_exported?(module, :look, 0) and function_exported?(module, :recon, 0) and
-          function_exported?(module, :choices, 0) ->
-        %{look: module.look(), recon: module.recon(), choices: module.choices()}
+        function_exported?(module, :look, 0) and function_exported?(module, :recon, 0) and
+            function_exported?(module, :choices, 0) ->
+          isolated(fn ->
+            %{look: module.look(), recon: module.recon(), choices: module.choices()}
+          end)
 
-      true ->
-        verbs =
-          if function_exported?(module, :__anemos_verbs__, 0),
-            do: module.__anemos_verbs__(),
-            else: :any
+        true ->
+          :none
+      end
 
-        %{
-          look: "#{name} — #{inspect(module)}",
-          recon: %{type: :implementation, module: module, verbs: verbs},
-          choices: %{verbs: verbs}
-        }
+    case asked do
+      {:ok, %{look: look, recon: recon, choices: choices}}
+      when is_binary(look) and is_map(recon) and is_map(choices) ->
+        %{look: look, recon: recon, choices: choices}
+
+      {:ok, _other_shape} ->
+        default_card(module, name, "did not answer in the expected shape")
+
+      {:error, reason} ->
+        default_card(module, name, reason)
+
+      :none ->
+        default_card(module, name, nil)
+    end
+  end
+
+  defp default_card(module, name, trouble) do
+    verbs =
+      if function_exported?(module, :__anemos_verbs__, 0),
+        do: module.__anemos_verbs__(),
+        else: :any
+
+    look = "#{name} — #{inspect(module)}" <> if(trouble, do: " (#{trouble})", else: "")
+
+    %{
+      look: look,
+      recon: %{type: :implementation, module: module, verbs: verbs},
+      choices: %{verbs: verbs}
+    }
+  end
+
+  defp isolated(fun) do
+    parent = self()
+    tag = make_ref()
+
+    {pid, monitor} =
+      spawn_monitor(fn ->
+        result =
+          try do
+            {:ok, fun.()}
+          rescue
+            exception -> {:error, "raised #{inspect(exception.__struct__)}"}
+          catch
+            kind, _ -> {:error, "#{kind} while answering"}
+          end
+
+        send(parent, {tag, result})
+      end)
+
+    receive do
+      {^tag, result} ->
+        Process.demonitor(monitor, [:flush])
+        result
+
+      {:DOWN, ^monitor, :process, ^pid, _reason} ->
+        {:error, "died while answering"}
+    after
+      @card_timeout_ms ->
+        Process.exit(pid, :kill)
+        Process.demonitor(monitor, [:flush])
+        {:error, "did not answer within #{@card_timeout_ms} ms"}
     end
   end
 

@@ -61,6 +61,27 @@ many names — the substrate bridge — implements the optional
 neither gets a card from what the runtime knows: its name, its Elixir
 module, and the verbs it declared with `use Anemos.Module`.
 
+## What the review added
+
+- **A policy sees itself, and the modules.** Rules, conditions, schedules,
+  policies and listeners are answered within the asking rule's own policy;
+  another tenant's names, context paths and condition states were being
+  listed. The runtime-wide view stays the host's (`describe/1`). Anonymous
+  loads see each other.
+- **A module's card is asked for in a process of its own, with a one
+  second deadline, and checked for shape.** `describe/1` or a Comn
+  callback that raises, blocks or answers nonsense gives a default card
+  that says so, not a dead dispatcher — which, with `list modules` fanning
+  out to every module and the supervisor's restart budget, was one bad
+  module from taking the runtime down.
+- **Trace values go through `Anemos.Redact.for_trace/1`:** Secrets
+  replaced, strings, lists, maps and nesting bounded. The table is public
+  and the ring is long; a `trace` of a payload was both a disclosure and a
+  memory multiplier.
+- `infer`/`explain` of a map with any key shape; `assert NAME` is a parse
+  error pointing at `assert exists NAME`; compound assertions are named in
+  the trace.
+
 ## Rulings
 
 1. **Statements, not a console.** The console is a view over the trace,

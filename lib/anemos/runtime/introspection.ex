@@ -11,6 +11,16 @@ defmodule Anemos.Runtime.Introspection do
 
   Every answer is the operation with `value` filled in, and for a name,
   `found`: `:module`, `:event` or `nil`.
+
+  ## A policy sees itself, and the modules
+
+  Rules, conditions, schedules, policies and listeners are answered
+  within the asking rule's own policy: what it declared, and who among
+  its own rules listens. Another policy's names, contexts and condition
+  states are that policy's; the runtime-wide view belongs to the host
+  (`Anemos.Runtime.describe/1`). Modules are the affordances every policy
+  may ask about. A rule loaded with no policy name sees the other
+  anonymous loads, which share its standing.
   """
 
   alias Anemos.Runtime.{ConditionServer, Module, ModuleRegistry, PolicyStore, TripleStore}
@@ -21,9 +31,49 @@ defmodule Anemos.Runtime.Introspection do
   @spec statements() :: [atom()]
   def statements, do: @statements
 
-  @doc "The operation, answered."
-  @spec answer(map(), map()) :: map()
-  def answer(%{subject: {:name, name}} = op, state) do
+  @doc "The operation, answered for the rule named in `context[:_rule_source]`."
+  @spec answer(map(), map(), map()) :: map()
+  def answer(op, context, state) do
+    rule_name =
+      case Map.get(context, :_rule_source) do
+        {rule, _context_path} -> rule
+        _ -> nil
+      end
+
+    answer(op, own(rule_name, state))
+  end
+
+  # The asking rule's policy: the entry declaring it, else the anonymous
+  # entries if it was loaded without a name.
+  defp own(rule_name, state) do
+    entries = PolicyStore.entries(state.policy_store)
+
+    mine =
+      case Enum.find(Enum.reverse(entries), fn %{compiled: c} ->
+             rule_name in Enum.map(c.rules, & &1.name)
+           end) do
+        %{id: id} when is_binary(id) -> Enum.filter(entries, &(&1.id == id))
+        _ -> Enum.filter(entries, &is_nil(&1.id))
+      end
+
+    rule_names = MapSet.new(for %{compiled: c} <- mine, r <- c.rules, do: r.name)
+
+    index =
+      state.index
+      |> Map.new(fn {e, rs} -> {e, Enum.filter(rs, &MapSet.member?(rule_names, &1.name))} end)
+      |> Map.reject(fn {_e, rs} -> rs == [] end)
+
+    %{
+      entries: mine,
+      rules: Enum.filter(state.rules, &MapSet.member?(rule_names, &1.name)),
+      index: index,
+      registry: state.registry,
+      condition_servers: state.condition_servers,
+      triple_store: state.triple_store
+    }
+  end
+
+  defp answer(%{subject: {:name, name}} = op, state) do
     case ModuleRegistry.lookup(state.registry, name) do
       {:ok, module} ->
         op |> Map.put(:found, :module) |> Map.put(:value, module_answer(op.type, name, module))
@@ -42,11 +92,11 @@ defmodule Anemos.Runtime.Introspection do
     end
   end
 
-  def answer(%{subject: {:catalogue, catalogue}} = op, state) do
+  defp answer(%{subject: {:catalogue, catalogue}} = op, state) do
     Map.put(op, :value, catalogue_answer(op.type, catalogue, state))
   end
 
-  def answer(%{subject: {:value, value}} = op, state) do
+  defp answer(%{subject: {:value, value}} = op, state) do
     Map.put(op, :value, value_answer(op.type, value, state))
   end
 
@@ -108,7 +158,7 @@ defmodule Anemos.Runtime.Introspection do
   defp count(list, noun), do: "#{length(list)} #{noun}s"
 
   defp listening_conditions(event_name, state) do
-    for %{compiled: c} <- PolicyStore.entries(state.policy_store),
+    for %{compiled: c} <- state.entries,
         condition <- c.conditions,
         event_name in condition.subscriptions,
         uniq: true,
@@ -126,7 +176,7 @@ defmodule Anemos.Runtime.Introspection do
         names
 
       :show ->
-        "#{count(names, Atom.to_string(catalogue) |> String.trim_trailing("s"))}: #{Enum.join(names, ", ")}"
+        "#{count(names, singular(catalogue))}: #{Enum.join(names, ", ")}"
 
       :trace ->
         names
@@ -145,6 +195,9 @@ defmodule Anemos.Runtime.Introspection do
     end
   end
 
+  defp singular(:policies), do: "policy"
+  defp singular(catalogue), do: catalogue |> Atom.to_string() |> String.trim_trailing("s")
+
   defp catalogue_entries(:rules, state) do
     state.rules
     |> Enum.group_by(& &1.name)
@@ -159,7 +212,9 @@ defmodule Anemos.Runtime.Introspection do
   end
 
   defp catalogue_entries(:conditions, state) do
-    for {name, %{pid: pid}} <- Enum.sort(state.condition_servers) do
+    mine = for %{compiled: c} <- state.entries, condition <- c.conditions, do: condition.name
+
+    for {name, %{pid: pid}} <- Enum.sort(state.condition_servers), name in mine do
       %{name: name, value: ConditionServer.get_state(pid)}
     end
   end
@@ -178,13 +233,13 @@ defmodule Anemos.Runtime.Introspection do
   end
 
   defp catalogue_entries(:policies, state) do
-    for %{id: id, compiled: c} <- PolicyStore.entries(state.policy_store) do
+    for %{id: id, compiled: c} <- state.entries do
       %{name: id || "(anonymous)", rules: c.rules |> Enum.map(& &1.name) |> Enum.uniq()}
     end
   end
 
   defp catalogue_entries(:schedules, state) do
-    for %{compiled: c} <- PolicyStore.entries(state.policy_store),
+    for %{compiled: c} <- state.entries,
         schedule <- c.schedules,
         uniq: true do
       %{name: schedule.event_name, time_spec: schedule.time_spec, recurrence: schedule.recurrence}
@@ -212,10 +267,16 @@ defmodule Anemos.Runtime.Introspection do
   defp kind(value) when is_number(value), do: %{kind: :number}
   defp kind(value) when is_list(value), do: %{kind: :list, length: length(value)}
 
+  defp kind(%_{} = struct), do: %{kind: :struct, struct: inspect(struct.__struct__)}
+
   defp kind(value) when is_map(value),
-    do: %{kind: :map, keys: value |> Map.keys() |> Enum.map(&to_string/1)}
+    do: %{kind: :map, keys: value |> Map.keys() |> Enum.map(&key_text/1)}
 
   defp kind(_other), do: %{kind: :other}
+
+  defp key_text(key) when is_binary(key), do: key
+  defp key_text(key) when is_atom(key), do: Atom.to_string(key)
+  defp key_text(key), do: inspect(key)
 
   defp elements(nil), do: []
   defp elements(list) when is_list(list), do: list

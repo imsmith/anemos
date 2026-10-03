@@ -879,6 +879,13 @@ defmodule Anemos.Parser do
     {:ok, %AST.Introspect{verb: verb, subject: {:name, name}, line: line}, rest}
   end
 
+  # A bare name would be a string, and a string always holds.
+  defp parse_introspect(:assert, line, [{:module_id, _, name} | _]) do
+    {:error,
+     "assert takes an expression on line #{line}; to assert that #{name} is bound, " <>
+       "write assert exists #{name}"}
+  end
+
   defp parse_introspect(verb, line, [{:identifier, _, word} | rest])
        when verb != :assert and is_map_key(@catalogues, word) do
     {:ok, %AST.Introspect{verb: verb, subject: {:catalogue, @catalogues[word]}, line: line}, rest}

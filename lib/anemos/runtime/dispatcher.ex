@@ -583,9 +583,10 @@ defmodule Anemos.Runtime.Dispatcher do
 
   # One entry per dispatch, kept where a dispatcher crash cannot take it.
   #
-  # Kinds, not payloads: a result is recorded as its operation type. The one
-  # value kept is a `log`'s text, which the author already chose to write to
-  # the log. An error is its code or its tag, for the reason reason_tag/1
+  # Kinds, not payloads: a result is recorded as its operation type. The
+  # values kept are a `log`'s text, which the author already chose to write
+  # to the log, and an introspection statement's answer, redacted and
+  # bounded by `Anemos.Redact.for_trace/1`. An error is its code or its tag, for the reason reason_tag/1
   # gives — what a host verb says about its failure is not ours to copy
   # around.
   defp record_trace(state, event_name, context, results, became_true, started) do
@@ -604,10 +605,11 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   # An introspection statement is the author asking to see something; the
-  # trace is where it is seen.
+  # trace is where it is seen — redacted and bounded, because the table is
+  # public and the ring is long.
   defp trace_result({:ok, %{type: type, text: text, value: value}})
        when type in [:show, :list, :graph, :trace, :explain, :exists, :infer],
-       do: %{type: type, subject: text, value: value}
+       do: %{type: type, subject: text, value: Anemos.Redact.for_trace(value)}
 
   defp trace_result({:ok, %{type: :assert, text: text, held: held}}),
     do: %{type: :assert, subject: text, held: held}
@@ -1513,9 +1515,9 @@ defmodule Anemos.Runtime.Dispatcher do
   # branch `Anemos.Secret` redaction rides on.
   # Introspection statements answer from here, where what they ask about
   # lives. `assert` was decided in the handler and only passes through.
-  defp execute_op(%{type: type} = op, _context, state, _depth)
+  defp execute_op(%{type: type} = op, context, state, _depth)
        when type in [:show, :list, :graph, :trace, :explain, :exists, :infer] do
-    {{:ok, Introspection.answer(op, state)}, state}
+    {{:ok, Introspection.answer(op, context, state)}, state}
   end
 
   defp execute_op(%{type: :assert} = op, _context, state, _depth), do: {{:ok, op}, state}

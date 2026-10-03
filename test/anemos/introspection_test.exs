@@ -113,7 +113,8 @@ defmodule Anemos.IntrospectionTest do
   end
 
   describe "a catalogue" do
-    test "rules, modules, events, policies, conditions", %{rt: rt} do
+    test "rules, modules, events, policies, conditions — within the asking policy", %{rt: rt} do
+      # Another policy's condition: an anonymous rule does not see it.
       :ok = Runtime.load(rt, ~s|condition hot { when TEMP { log 1 } }|, policy: "p")
 
       assert [
@@ -123,8 +124,8 @@ defmodule Anemos.IntrospectionTest do
                  type: :explain,
                  value: [%{name: "EV", rules: ["r"]}]
                },
-               %{type: :list, value: ["p", "(anonymous)"]},
-               %{type: :explain, value: [%{name: "hot", value: false}]}
+               %{type: :list, value: ["(anonymous)"]},
+               %{type: :explain, value: []}
              ] =
                run(
                  rt,
@@ -209,5 +210,144 @@ defmodule Anemos.IntrospectionTest do
              }
            ] =
              Runtime.trace(rt, 1)
+  end
+end
+
+defmodule Anemos.IntrospectionGuardsTest do
+  @moduledoc "What the review found: untrusted cards, other tenants, secrets in the trace."
+  use ExUnit.Case, async: false
+
+  alias Anemos.Runtime
+
+  defmodule Raiser do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+    @impl true
+    def handle_verb(_, _, _), do: {:ok, nil}
+    @impl true
+    def describe(_name), do: raise("s3cret in the message")
+  end
+
+  defmodule Sleeper do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+    @impl true
+    def handle_verb(_, _, _), do: {:ok, nil}
+    @impl true
+    def describe(_name), do: Process.sleep(:infinity)
+  end
+
+  defmodule Misshapen do
+    @moduledoc false
+    @behaviour Anemos.Runtime.Module
+    @impl true
+    def handle_verb(_, _, _), do: {:ok, nil}
+    @impl true
+    def describe(_name), do: :not_a_map
+  end
+
+  setup context do
+    rt = :"ig_#{:erlang.phash2(context.test)}"
+    start_supervised!({Runtime, name: rt})
+    %{rt: rt}
+  end
+
+  defp run(rt, body, facts \\ %{}, opts \\ []) do
+    :ok = Runtime.load(rt, "rule r { when EV {\n#{body}\n} }", opts)
+    {:ok, results} = Runtime.dispatch(rt, "EV", %{context_data: facts})
+    results
+  end
+
+  test "a card that raises, blocks or misshapes is a default card, not a dead dispatcher", %{
+    rt: rt
+  } do
+    :ok = Runtime.register(rt, "RAISER", Raiser)
+    :ok = Runtime.register(rt, "SLEEPER", Sleeper)
+    :ok = Runtime.register(rt, "MISSHAPEN", Misshapen)
+    dispatcher = Process.whereis(:"#{rt}.dispatcher")
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert [%{value: raiser}, %{value: sleeper}, %{value: misshapen}, %{value: modules}] =
+                 run(rt, "show RAISER\n show SLEEPER\n show MISSHAPEN\n list modules")
+
+        assert raiser =~ "raised ArgumentError" or raiser =~ "raised RuntimeError"
+        refute raiser =~ "s3cret"
+        assert sleeper =~ "did not answer within"
+        assert misshapen =~ "expected shape"
+        assert "RAISER" in modules
+      end)
+
+    refute log =~ "s3cret"
+    assert Process.whereis(:"#{rt}.dispatcher") == dispatcher
+  end
+
+  test "a policy sees its own declarations, not another policy's", %{rt: rt} do
+    :ok =
+      Runtime.load(
+        rt,
+        ~s|rule secret-rule { context "tenant-a" { when A_EVENT { log 1 } } }\ncondition a-cond { when A_EVENT { log 1 } }|,
+        policy: "tenant-a/secret.rule"
+      )
+
+    results =
+      run(
+        rt,
+        "list rules\n list policies\n list conditions\n explain A_EVENT\n list events\n exists A_EVENT",
+        %{},
+        policy: "tenant-b/probe.rule"
+      )
+
+    assert [
+             %{type: :list, value: ["r"]},
+             %{type: :list, value: ["tenant-b/probe.rule"]},
+             %{type: :list, value: []},
+             %{type: :explain, found: nil},
+             %{type: :list, value: ["EV"]},
+             %{type: :exists, value: false}
+           ] = results
+
+    refute inspect(results) =~ "tenant-a"
+  end
+
+  test "an anonymous rule sees the other anonymous loads", %{rt: rt} do
+    :ok = Runtime.load(rt, ~s|rule anon { when X { log 1 } }|)
+    :ok = Runtime.load(rt, ~s|rule named { when X { log 1 } }|, policy: "p")
+
+    assert [%{value: ["anon", "r"]}] = run(rt, "list rules")
+  end
+
+  test "the trace keeps introspection answers redacted and bounded", %{rt: rt} do
+    big = Enum.to_list(1..10_000)
+
+    facts = %{
+      "s" => Anemos.Secret.new("hunter2", label: "k"),
+      "big" => big,
+      "nest" => %{"s" => Anemos.Secret.new("hunter2")}
+    }
+
+    run(rt, "show ?s\n trace ?big\n show ?nest", facts)
+    [%{results: results}] = Runtime.trace(rt, 1)
+
+    refute :erlang.term_to_binary(results) =~ "hunter2"
+    assert [%{value: "[REDACTED]"}, %{value: traced}, %{value: %{"s" => "[REDACTED]"}}] = results
+    assert length(traced) == 51
+  end
+
+  test "infer and explain take a map with any keys", %{rt: rt} do
+    assert [%{value: %{kind: :map, keys: keys}}] =
+             run(rt, "infer ?m", %{"m" => %{{1, 2} => 3, :a => 1}})
+
+    assert Enum.sort(keys) == ["a", "{1, 2}"]
+  end
+
+  test "assert of a bare name is a parse error that says what to write", %{rt: rt} do
+    assert {:error, message} = Runtime.load(rt, "rule r { when EV { assert DEVICE } }")
+    assert message =~ "assert exists DEVICE"
+  end
+
+  test "a compound assertion is named in the trace", %{rt: rt} do
+    run(rt, "assert ?n > 1", %{"n" => 2})
+    assert [%{results: [%{type: :assert, subject: "?n > 1", held: true}]}] = Runtime.trace(rt, 1)
   end
 end

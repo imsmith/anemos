@@ -1236,6 +1236,16 @@ defmodule Anemos.Compiler do
   defp subject_text({:expr, %AST.VarRef{sigil: sigil, name: name}}), do: sigil <> name
   defp subject_text({:expr, %AST.Literal{value: value}}), do: inspect(value)
   defp subject_text({:expr, %AST.Command{module: m, verb: v}}), do: "[#{m}::#{v}]"
+
+  defp subject_text({:expr, %AST.BinaryOp{op: op, left: l, right: r}}),
+    do: "#{subject_text({:expr, l})} #{op} #{subject_text({:expr, r})}"
+
+  defp subject_text({:expr, %AST.UnaryOp{op: op, operand: operand}}),
+    do: "#{op} #{subject_text({:expr, operand})}"
+
+  defp subject_text({:expr, %AST.Introspect{verb: verb, subject: subject}}),
+    do: "#{verb} #{subject_text(subject)}"
+
   defp subject_text({:expr, _}), do: "expression"
 
   defp resolve_expr(%AST.Literal{value: value}, _context, _bindings), do: value

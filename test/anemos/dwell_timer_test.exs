@@ -2,7 +2,7 @@ defmodule Anemos.DwellTimerTest do
   @moduledoc false
   use ExUnit.Case, async: false
 
-  alias Anemos.{Parser, Compiler}
+  alias Anemos.{Compiler, Parser}
   alias Anemos.Runtime.{Dispatcher, ModuleRegistry}
 
   defp setup_runtime(source) do

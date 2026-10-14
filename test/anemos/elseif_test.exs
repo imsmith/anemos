@@ -2,7 +2,7 @@ defmodule Anemos.ElseifTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
-  alias Anemos.{Parser, Compiler, AST}
+  alias Anemos.{AST, Compiler, Parser}
 
   # --- Parser tests ---
 

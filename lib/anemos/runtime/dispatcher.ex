@@ -790,9 +790,9 @@ defmodule Anemos.Runtime.Dispatcher do
   # is already running, and `own`, the rule names that version declared.
   # Both are empty for a plain load and for the init/1 replay, where every
   # server must be installed afresh.
-  @no_prior %{unchanged: MapSet.new(), own: MapSet.new()}
+  defp no_prior, do: %{unchanged: MapSet.new(), own: MapSet.new()}
 
-  defp apply_compiled(compiled, state, %{unchanged: unchanged} = prior \\ @no_prior) do
+  defp apply_compiled(compiled, state, %{unchanged: unchanged} = prior \\ no_prior()) do
     dispatcher_pid = self()
 
     # Condition and capability servers are (re)started under the store
@@ -903,7 +903,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
     # A policy deployed over itself redefines its own rules by design; what
     # is worth a line is a rule taken from somewhere else.
-    taken = Enum.reject(replaced, &MapSet.member?(own, &1))
+    taken = Enum.reject(replaced, &Enum.member?(own, &1))
 
     if taken != [] do
       Logger.info(

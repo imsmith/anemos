@@ -211,5 +211,4 @@ defmodule Anemos.Runtime.Watcher do
 
   defp describe(reason) when is_binary(reason), do: reason
   defp describe(%{message: message}) when is_binary(message), do: message
-  defp describe(reason), do: Anemos.Redact.summarize(reason)
 end

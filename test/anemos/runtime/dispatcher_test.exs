@@ -2,8 +2,8 @@ defmodule Anemos.Runtime.DispatcherTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
+  alias Anemos.{Compiler, Parser}
   alias Anemos.Runtime.{Dispatcher, ModuleRegistry}
-  alias Anemos.{Parser, Compiler}
 
   doctest Anemos.Runtime.ModuleRegistry
 

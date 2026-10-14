@@ -37,8 +37,8 @@ than removed.
 | A-66 | HIGH | `req` has a published decompression-bomb DoS advisory, reached via `comn` | **Fixed** — req 0.7.2, validated by `comn`'s own suite; override removed. 17 advisories → 2, no HIGH |
 | A-67 | MEDIUM | Four `@spec`s in `rule_supervisor.ex` name a type that does not exist | **Fixed** — 2676230 |
 | A-68 | MEDIUM | A secret-redaction assertion passes vacuously | **Fixed** — 2676230, split out with explicit metadata capture |
-| A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open |
-| A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | Open |
+| A-69 | LOW | `compile_*` at `compiler.ex:949` has cyclomatic complexity 34 | Open — `eval_condition` (complexity 32) is the same class; suppressed inline so `mix check` gates on everything else |
+| A-70 | LOW | `config/config.exs` has no `import_config`, so `dev.exs`/`test.exs` never load | **Fixed** — `import_config "#{config_env()}.exs"`; both env files were empty so behaviour is unchanged |
 | A-71 | LOW | `parse_declaration([])` is genuinely unreachable — delete or keep? | **Fixed** — deleted, after proving it unreachable; last Dialyzer finding in `parser.ex` |
 | A-74 | HIGH | Eight more parser functions crash on truncated input | **Fixed** — `[]` clauses added; `parse_destination/1` made total; 5,955-input sweep is a regression test |
 | A-75 | MEDIUM | Parser totality is untested against *malformed* input — only against truncated | **Fixed** — mutation fuzzer added; it found 4 more crashes, all fixed |

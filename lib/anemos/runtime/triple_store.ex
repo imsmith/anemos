@@ -147,9 +147,8 @@ defmodule Anemos.Runtime.TripleStore do
 
   defp bind_triple({s, p, o}, {sp, pp, op}) do
     with {:ok, b1} <- bind_element(s, sp, %{}),
-         {:ok, b2} <- bind_element(p, pp, b1),
-         {:ok, b3} <- bind_element(o, op, b2) do
-      {:ok, b3}
+         {:ok, b2} <- bind_element(p, pp, b1) do
+      bind_element(o, op, b2)
     end
   end
 

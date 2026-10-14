@@ -129,9 +129,8 @@ defmodule Anemos.Runtime.TrustStore do
   """
   @spec key(atom(), atom() | String.t()) :: {:ok, Key.t()} | :error
   def key(runtime, signer) do
-    with {:ok, %{keyring: keyring}} <- fetch(runtime) do
-      Map.fetch(keyring, to_string(signer))
-    else
+    case fetch(runtime) do
+      {:ok, %{keyring: keyring}} -> Map.fetch(keyring, to_string(signer))
       {:error, :no_trust_store} -> :error
     end
   end

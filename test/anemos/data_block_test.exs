@@ -32,7 +32,7 @@ defmodule Anemos.DataBlockTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
-  alias Anemos.{Parser, Compiler}
+  alias Anemos.{Compiler, Parser}
   alias Anemos.Runtime.{Dispatcher, ModuleRegistry, SubscribableRegistry}
 
   test "memberof() checks membership in data block" do

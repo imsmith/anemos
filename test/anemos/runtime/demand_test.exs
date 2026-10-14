@@ -2,7 +2,7 @@ defmodule Anemos.Runtime.DemandTest do
   use ExUnit.Case, async: true
   @moduledoc false
 
-  alias Anemos.Runtime.{Demand, CapabilityServer}
+  alias Anemos.Runtime.{CapabilityServer, Demand}
   alias Comn.Errors.ErrorStruct
 
   doctest Anemos.Runtime.Demand

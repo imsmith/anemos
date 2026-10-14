@@ -2,9 +2,10 @@ defmodule Anemos.NLDTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
-  alias Anemos.Runtime.NLD
-  alias Anemos.{Parser, Compiler}
   alias Anemos.AST
+  alias Anemos.Compiler
+  alias Anemos.Parser
+  alias Anemos.Runtime.NLD
 
   doctest Anemos.Runtime.NLD
 

@@ -25,7 +25,7 @@ defmodule Anemos.DataModel do
   `{:error, :not_supported}`.
   """
 
-  @doc "Returns the keyword string identifying this data format (e.g., `\"edn\"`, `\"xml\"`)."
+  @doc ~S|Returns the keyword string identifying this data format (e.g., `"edn"`, `"xml"`).|
   @callback keyword() :: String.t()
 
   @doc "Parses a raw string body into an internal representation. Returns `{:ok, parsed}` or `{:error, :parse_failed}`."

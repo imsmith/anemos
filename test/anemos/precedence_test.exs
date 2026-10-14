@@ -2,7 +2,7 @@ defmodule Anemos.PrecedenceTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
-  alias Anemos.{Parser, Compiler}
+  alias Anemos.{Compiler, Parser}
 
   # Helper: parse a rule with an expression, compile, evaluate
   defp eval_expr(expr_str) do

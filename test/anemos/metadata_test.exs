@@ -2,8 +2,8 @@ defmodule Anemos.MetadataTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
-  alias Anemos.{Parser, Compiler}
   alias Anemos.AST
+  alias Anemos.{Compiler, Parser}
 
   test "parses version metadata" do
     input = """

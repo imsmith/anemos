@@ -340,40 +340,38 @@ defmodule Anemos.Compiler do
   """
   @spec compile(AST.Program.t()) :: {:ok, Anemos.CompilationResult.t()} | {:error, String.t()}
   def compile(%AST.Program{declarations: declarations}) do
-    try do
-      result =
-        Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
-          case compile_declaration(decl) do
-            {:rule, rules, schedules, inline_data, inline_queries} ->
-              %{
-                acc
-                | rules: acc.rules ++ rules,
-                  schedules: acc.schedules ++ schedules,
-                  data_blocks: acc.data_blocks ++ inline_data,
-                  query_blocks: acc.query_blocks ++ inline_queries
-              }
-
-            {:condition, cond, schedules} ->
-              %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
-
-            {:capability, cap} ->
-              %{acc | capabilities: acc.capabilities ++ [cap]}
-
-            {:data, compiled_data} ->
-              %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
-
-            {:query, compiled_query} ->
-              %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
-
-            :skip ->
+    result =
+      Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->
+        case compile_declaration(decl) do
+          {:rule, rules, schedules, inline_data, inline_queries} ->
+            %{
               acc
-          end
-        end)
+              | rules: acc.rules ++ rules,
+                schedules: acc.schedules ++ schedules,
+                data_blocks: acc.data_blocks ++ inline_data,
+                query_blocks: acc.query_blocks ++ inline_queries
+            }
 
-      {:ok, result}
-    catch
-      {:compile_error, msg} -> {:error, msg}
-    end
+          {:condition, cond, schedules} ->
+            %{acc | conditions: acc.conditions ++ [cond], schedules: acc.schedules ++ schedules}
+
+          {:capability, cap} ->
+            %{acc | capabilities: acc.capabilities ++ [cap]}
+
+          {:data, compiled_data} ->
+            %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
+
+          {:query, compiled_query} ->
+            %{acc | query_blocks: acc.query_blocks ++ [compiled_query]}
+
+          :skip ->
+            acc
+        end
+      end)
+
+    {:ok, result}
+  catch
+    {:compile_error, msg} -> {:error, msg}
   end
 
   # --- Declaration dispatch ---
@@ -1330,7 +1328,6 @@ defmodule Anemos.Compiler do
     case Anemos.Runtime.Dispatcher.invoke_verb(registry, mod, verb, args, handler_context) do
       {:ok, value} -> value
       {:error, error} -> throw({:anemos_verb_error, error})
-      other -> other
     end
   end
 
@@ -1376,6 +1373,8 @@ defmodule Anemos.Compiler do
     |> combine_or()
   end
 
+  # Tracked as A-69.
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp eval_condition(%AST.BinaryOp{op: op, left: left, right: right}, context, bindings) do
     l = resolve_expr(left, context, bindings)
     r = resolve_expr(right, context, bindings)

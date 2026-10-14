@@ -2,7 +2,7 @@ defmodule Anemos.TripleTest do
   @moduledoc false
   use ExUnit.Case
 
-  alias Anemos.{Parser, Compiler}
+  alias Anemos.{Compiler, Parser}
 
   doctest Anemos.Runtime.TripleStore
   alias Anemos.AST

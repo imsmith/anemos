@@ -2,7 +2,7 @@ defmodule Anemos.QueryBlockTest do
   @moduledoc false
   use ExUnit.Case, async: true
 
-  alias Anemos.{Parser, Compiler}
+  alias Anemos.{Compiler, Parser}
 
   test "parses and compiles a query block" do
     input = """

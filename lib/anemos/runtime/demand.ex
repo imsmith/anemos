@@ -112,7 +112,12 @@ defmodule Anemos.Runtime.Demand do
   end
 
   defp handle_failure(demand, reason, rest, registry, context, results, deferred_error) do
-    error = {:error, {:demand_failed, demand.capability, reason}}
+    error =
+      {:error,
+       Comn.Errors.Registry.error!("anemos.runtime/demand_failed",
+         field: demand.capability,
+         message: "demand for #{demand.capability} was not met: #{failure_text(reason)}"
+       )}
 
     case demand.flag do
       :requisite -> error
@@ -121,4 +126,7 @@ defmodule Anemos.Runtime.Demand do
       :sufficient -> eval_stack(rest, registry, context, results, deferred_error)
     end
   end
+
+  defp failure_text(%Comn.Errors.ErrorStruct{message: message}), do: message
+  defp failure_text(reason), do: Anemos.Redact.summarize(reason)
 end

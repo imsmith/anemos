@@ -22,7 +22,8 @@ defmodule Anemos.ComnDiscoveryTest do
     end
 
     test "act with unknown action returns error" do
-      assert {:error, :unknown_action} = Anemos.Runtime.act(%{action: :nope})
+      assert {:error, %{code: "anemos.runtime/unknown_action"}} =
+               Anemos.Runtime.act(%{action: :nope})
     end
   end
 
@@ -39,7 +40,8 @@ defmodule Anemos.ComnDiscoveryTest do
     end
 
     test "act with unknown action returns error" do
-      assert {:error, :unknown_action} = Anemos.Runtime.Dispatcher.act(%{action: :nope})
+      assert {:error, %{code: "anemos.runtime/unknown_action"}} =
+               Anemos.Runtime.Dispatcher.act(%{action: :nope})
     end
   end
 
@@ -53,7 +55,8 @@ defmodule Anemos.ComnDiscoveryTest do
     end
 
     test "act with unknown action returns error" do
-      assert {:error, :unknown_action} = Anemos.Runtime.ModuleRegistry.act(%{action: :nope})
+      assert {:error, %{code: "anemos.runtime/unknown_action"}} =
+               Anemos.Runtime.ModuleRegistry.act(%{action: :nope})
     end
   end
 
@@ -85,7 +88,8 @@ defmodule Anemos.ComnDiscoveryTest do
     end
 
     test "act with unknown action returns error" do
-      assert {:error, :unknown_action} = Anemos.Runtime.Modules.Device.act(%{action: :nope})
+      assert {:error, %{code: "anemos.runtime/unknown_action"}} =
+               Anemos.Runtime.Modules.Device.act(%{action: :nope})
     end
   end
 

@@ -34,7 +34,7 @@ defmodule Anemos.ParserTruncationTest do
 
   for {keyword, source} <- @truncated do
     test "source truncated after `#{keyword}` returns an error rather than raising" do
-      assert {:error, message} = Parser.parse(unquote(source))
+      assert {:error, %{message: message}} = Parser.parse(unquote(source))
       assert is_binary(message)
       refute message == ""
     end
@@ -71,7 +71,7 @@ defmodule Anemos.ParserTruncationTest do
 
   for {position, source} <- @unguarded do
     test "source truncated after #{position} returns an error rather than raising" do
-      assert {:error, message} = Parser.parse(unquote(source))
+      assert {:error, %{message: message}} = Parser.parse(unquote(source))
       assert is_binary(message)
       refute message == ""
     end

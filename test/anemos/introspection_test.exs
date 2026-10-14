@@ -342,7 +342,9 @@ defmodule Anemos.IntrospectionGuardsTest do
   end
 
   test "assert of a bare name is a parse error that says what to write", %{rt: rt} do
-    assert {:error, message} = Runtime.load(rt, "rule r { when EV { assert DEVICE } }")
+    assert {:error, %{message: message}} =
+             Runtime.load(rt, "rule r { when EV { assert DEVICE } }")
+
     assert message =~ "assert exists DEVICE"
   end
 

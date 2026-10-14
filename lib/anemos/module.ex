@@ -119,7 +119,7 @@ defmodule Anemos.Module do
       @impl Comn
       def act(%{verb: verb, args: args, context: ctx}), do: handle_verb(verb, args, ctx)
       def act(%{verb: verb, args: args}), do: handle_verb(verb, args, %{})
-      def act(_input), do: {:error, :unknown_action}
+      def act(_input), do: {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_action")}
     end
   end
 end

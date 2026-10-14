@@ -34,7 +34,9 @@ defmodule Anemos.Runtime.DemandTest do
     pid = start_capability("key", {:error, :denied})
     registry = %{"key" => pid}
     demands = [%{capability: "key", flag: :requisite}]
-    assert {:error, {:demand_failed, "key", :denied}} = Demand.evaluate(demands, registry, %{})
+
+    assert {:error, %{code: "anemos.runtime/demand_failed", field: "key"}} =
+             Demand.evaluate(demands, registry, %{})
   end
 
   test "missing capability — requisite fails" do
@@ -108,7 +110,7 @@ defmodule Anemos.Runtime.DemandTest do
       %{capability: "other-key", flag: :requisite}
     ]
 
-    assert {:error, {:demand_failed, "req-key", :denied}} =
+    assert {:error, %{code: "anemos.runtime/demand_failed", field: "req-key"}} =
              Demand.evaluate(demands, registry, %{})
   end
 

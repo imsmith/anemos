@@ -116,7 +116,7 @@ defmodule Anemos.ParserTest do
 
   test "returns error for bad syntax" do
     input = "rule { }"
-    assert {:error, message} = Parser.parse(input)
+    assert {:error, %{message: message}} = Parser.parse(input)
     assert is_binary(message)
   end
 
@@ -353,7 +353,7 @@ defmodule Anemos.ParserTest do
     }
     """
 
-    assert {:error, msg} = Parser.parse(input)
+    assert {:error, %{message: msg}} = Parser.parse(input)
     assert msg =~ "Expected command expression after emit"
   end
 
@@ -366,7 +366,7 @@ defmodule Anemos.ParserTest do
     }
     """
 
-    assert {:error, msg} = Parser.parse(input)
+    assert {:error, %{message: msg}} = Parser.parse(input)
     assert msg =~ "Expected capability name after 'demand'"
   end
 
@@ -377,7 +377,7 @@ defmodule Anemos.ParserTest do
     }
     """
 
-    assert {:error, msg} = Parser.parse(input)
+    assert {:error, %{message: msg}} = Parser.parse(input)
     assert msg =~ "Expected"
   end
 
@@ -387,7 +387,7 @@ defmodule Anemos.ParserTest do
     }
     """
 
-    assert {:error, msg} = Parser.parse(input)
+    assert {:error, %{message: msg}} = Parser.parse(input)
     assert is_binary(msg)
   end
 

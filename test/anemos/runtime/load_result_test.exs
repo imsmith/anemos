@@ -51,7 +51,7 @@ defmodule Anemos.Runtime.LoadResultTest do
              }
              """)
 
-    assert [{:schedule, event, {:date_in_past, {1999, 1, 1}}}] = failures
+    assert [%{code: "anemos.scheduler/date_in_past", field: event}] = failures
     assert event =~ "1999"
   end
 
@@ -73,7 +73,7 @@ defmodule Anemos.Runtime.LoadResultTest do
              }
              """)
 
-    assert [{:schedule, _, _}] = failures
+    assert [%{code: "anemos.scheduler/" <> _}] = failures
 
     # Partial must not mean nothing loaded.
     assert {:ok, [%{type: :log, value: "motion"}]} =
@@ -100,7 +100,7 @@ defmodule Anemos.Runtime.LoadResultTest do
              }
              """)
 
-    assert [{:data_block, "missing-handler", {:no_subscribable_handler, "unknown-proto"}}] =
+    assert [%{code: "anemos.data/no_subscribable_handler", field: "missing-handler"}] =
              failures
 
     # The rule alongside it still loaded.
@@ -125,8 +125,12 @@ defmodule Anemos.Runtime.LoadResultTest do
              }
              """)
 
-    assert Enum.any?(failures, &match?({:data_block, "missing-handler", _}, &1))
-    assert Enum.any?(failures, &match?({:schedule, _, _}, &1))
+    assert Enum.any?(
+             failures,
+             &match?(%{code: "anemos.data/" <> _, field: "missing-handler"}, &1)
+           )
+
+    assert Enum.any?(failures, &match?(%{code: "anemos.scheduler/" <> _}, &1))
   end
 
   # --- Total failure is still distinguishable from partial ---

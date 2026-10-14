@@ -122,6 +122,9 @@ defmodule Anemos.GuardTest do
       when EV unless $disabled {
         log "fired"
       }
+      when DISABLE {
+        set disabled = true
+      }
     }
     """
 
@@ -141,8 +144,11 @@ defmodule Anemos.GuardTest do
   test "until guard stops firing after expression becomes true" do
     input = """
     rule r {
-      when EV until $done {
+      when EV until $finished {
         log "fired"
+      }
+      when FINISH {
+        set finished = true
       }
     }
     """
@@ -151,13 +157,13 @@ defmodule Anemos.GuardTest do
     {:ok, compiled} = Anemos.Compiler.compile(ast)
     rule = hd(compiled.rules)
 
-    # First call: $done is nil/false -> fires
+    # First call: $finished is nil/false -> fires
     {:ok, ops1, persist1} = rule.handler.("EV", %{}, %{})
     assert [%{type: :log, value: "fired"}] = ops1
 
-    # Second call: $done becomes true -> guard trips, skips
+    # Second call: $finished becomes true -> guard trips, skips
     {:ok, ops2, persist2} =
-      rule.handler.("EV", %{}, Map.merge(persist1, %{{:set, "done"} => true}))
+      rule.handler.("EV", %{}, Map.merge(persist1, %{{:set, "finished"} => true}))
 
     assert ops2 == []
 
@@ -173,6 +179,9 @@ defmodule Anemos.GuardTest do
         if true unless $skip {
           log "guarded-if"
         }
+      }
+      when SKIP {
+        set skip = true
       }
     }
     """

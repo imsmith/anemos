@@ -108,13 +108,14 @@ defmodule Anemos.Runtime.Scheduler do
   Adds schedule specs to the running scheduler. Timers start immediately.
 
   Returns `:ok` when every spec was armed, or `{:error, failures}` where
-  `failures` is a list of `{event_name, reason}` for the specs that were not.
+  `failures` is a `Comn.Errors.ErrorStruct` for each spec that was not: its `code` is
+  `anemos.scheduler/<reason>` and its `field` the schedule's event name.
   Specs not named in `failures` were armed.
 
   A spec whose `event_name` is already armed replaces it — see the moduledoc.
   """
   @spec schedule(pid() | atom(), [Anemos.CompiledSchedule.t()]) ::
-          :ok | {:error, [{String.t(), failure_reason()}]}
+          :ok | {:error, [Comn.Errors.ErrorStruct.t()]}
   def schedule(server, schedules) do
     GenServer.call(server, {:schedule, schedules})
   end
@@ -145,7 +146,7 @@ defmodule Anemos.Runtime.Scheduler do
   Answers like `schedule/2`, with a failure for every loaded spec that could
   not be armed. A scheduler started without a `:policy_store` does nothing.
   """
-  @spec sync(pid() | atom()) :: :ok | {:error, [{String.t(), failure_reason()}]}
+  @spec sync(pid() | atom()) :: :ok | {:error, [Comn.Errors.ErrorStruct.t()]}
   def sync(server), do: GenServer.call(server, :sync)
 
   @doc "Forgets that the named schedules fired, so a one-shot among them can arm again."
@@ -197,8 +198,7 @@ defmodule Anemos.Runtime.Scheduler do
     # Asked for by name: a spent one-shot is being declared again.
     Enum.each(new_schedules, &StateTable.delete(state.state_table, {:fired, &1.event_name}))
     {state, failures} = arm_all(new_schedules, state)
-    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
-    {:reply, reply, state}
+    {:reply, reply(failures), state}
   end
 
   def handle_call({:unschedule, event_names}, _from, state) do
@@ -221,8 +221,7 @@ defmodule Anemos.Runtime.Scheduler do
     # Re-arming it would restart an interval's phase on every deploy.
     fresh = Enum.reject(desired, &Map.has_key?(state.timers, &1.event_name))
     {state, failures} = arm_all(fresh, state)
-    reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
-    {:reply, reply, state}
+    {:reply, reply(failures), state}
   end
 
   def handle_call({:forget, event_names}, _from, state) do
@@ -354,13 +353,28 @@ defmodule Anemos.Runtime.Scheduler do
     end
   end
 
+  defp reply([]), do: :ok
+  defp reply(failures), do: {:error, failures |> Enum.reverse() |> Enum.map(&failure/1)}
+
+  # A-22. The reason is built from the schedule's own text — a duration, a
+  # date, a recurrence — so it is the author's to read back in full.
+  defp failure({event_name, reason}) do
+    Comn.Errors.Registry.error!("anemos.scheduler/#{elem(reason, 0)}",
+      field: event_name,
+      message: "schedule #{event_name} not armed: #{inspect(reason)} — it will never fire"
+    )
+  end
+
   # Each clause returns {:ok, timer_ref} or {:error, failure_reason}. Nothing
   # here may return a bare nil: a nil stored in the timers map is a schedule
   # that will never fire, indistinguishable from one that will.
   defp start_timer(%{time_spec: {:interval, dur}, event_name: name, recurrence: :interval}, state) do
     case Duration.to_ms(dur) do
-      {:error, reason} ->
-        {:error, reason}
+      {:error, %{code: "anemos.duration/unknown_unit"}} ->
+        {:error, {:unknown_duration_unit, elem(dur, 1)}}
+
+      {:error, _not_a_duration} ->
+        {:error, {:invalid_duration, dur}}
 
       ms when ms < state.min_interval_ms ->
         {:error, {:interval_below_minimum, ms, state.min_interval_ms}}

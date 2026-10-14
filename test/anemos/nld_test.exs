@@ -78,7 +78,7 @@ defmodule Anemos.NLDTest do
   end
 
   test "unknown expression returns error" do
-    assert {:error, :unknown_expression} = NLD.resolve("gobbledygook")
+    assert {:error, %{code: "anemos.nld/unknown_expression"}} = NLD.resolve("gobbledygook")
   end
 
   # --- Lexer tests ---

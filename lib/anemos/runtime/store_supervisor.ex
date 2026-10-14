@@ -44,6 +44,7 @@ defmodule Anemos.Runtime.StoreSupervisor do
   alias Anemos.Runtime.{
     CapabilityServer,
     ConditionServer,
+    DataModelRegistry,
     DataStore,
     SubscribableRegistry,
     TripleStore
@@ -67,6 +68,10 @@ defmodule Anemos.Runtime.StoreSupervisor do
       Supervisor.child_spec({DataStore, []}, id: :data_store, restart: :permanent),
       Supervisor.child_spec({SubscribableRegistry, []},
         id: :subscribable_registry,
+        restart: :permanent
+      ),
+      Supervisor.child_spec({DataModelRegistry, []},
+        id: :data_model_registry,
         restart: :permanent
       )
     ]
@@ -103,6 +108,7 @@ defmodule Anemos.Runtime.StoreSupervisor do
       triple_store: nil,
       data_store: nil,
       subscribable_registry: nil,
+      data_model_registry: nil,
       conditions: %{},
       capabilities: %{}
     }
@@ -121,6 +127,9 @@ defmodule Anemos.Runtime.StoreSupervisor do
 
       {:subscribable_registry, pid, _t, _m}, acc ->
         %{acc | subscribable_registry: pid}
+
+      {:data_model_registry, pid, _t, _m}, acc ->
+        %{acc | data_model_registry: pid}
 
       {{:condition, name}, pid, _t, _m}, acc ->
         %{acc | conditions: Map.put(acc.conditions, name, pid)}

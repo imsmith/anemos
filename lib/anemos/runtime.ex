@@ -71,13 +71,12 @@ defmodule Anemos.Runtime do
   @typedoc """
   One declaration that loaded but will never do anything.
 
-  `{kind, name, reason}` — `kind` is `:schedule` or `:data_block`, `name`
-  identifies the declaration (the synthetic `AT_*` event name for a
-  schedule, the block name for a data block), and `reason` is the
-  originating module's own failure term.
+  A structured error. Its `code` says what kind of declaration and why —
+  `anemos.scheduler/<reason>` for a schedule, `anemos.data/<reason>` for a
+  data block — and its `field` names the declaration: the synthetic `AT_*`
+  event name for a schedule, the block name for a data block.
   """
-  @type load_failure ::
-          {:schedule | :data_block, String.t(), term()}
+  @type load_failure :: Comn.Errors.ErrorStruct.t()
 
   @doc """
   Loads a policy source string into the running interpreter. **Privileged.**
@@ -134,8 +133,9 @@ defmodule Anemos.Runtime do
 
     * `{:error, reason}` — nothing loaded. The source failed to parse or
       compile, or the load was refused. A refusal is a
-      `Comn.Errors.ErrorStruct` with code `anemos.runtime/load_denied`;
-      parse and compile failures keep their existing shape.
+      `Comn.Errors.ErrorStruct` with code `anemos.runtime/load_denied`; a
+      parse or compile failure is one with a code under `anemos.lexer/`,
+      `anemos.parser/` or `anemos.compiler/`.
 
   The distinction between the last two is the point. Arming a schedule and
   starting a data block subscription are per-declaration best-effort — an
@@ -154,7 +154,7 @@ defmodule Anemos.Runtime do
 
   """
   @spec load(atom(), String.t(), keyword()) ::
-          :ok | {:partial, [load_failure()]} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
+          :ok | {:partial, [load_failure()]} | {:error, Comn.Errors.ErrorStruct.t()}
   def load(name, source, opts \\ []) do
     # `LoadAuthority.gate/3` is the ceiling, the parse and the authority,
     # in that order and for the reasons documented there. Going through it
@@ -171,9 +171,18 @@ defmodule Anemos.Runtime do
 
   defp policy_id(opts) do
     case Keyword.fetch(opts, :policy) do
-      :error -> {:ok, nil}
-      {:ok, id} when is_binary(id) and id != "" -> {:ok, id}
-      {:ok, _other} -> {:error, "the :policy option must be a non-empty string"}
+      :error ->
+        {:ok, nil}
+
+      {:ok, id} when is_binary(id) and id != "" ->
+        {:ok, id}
+
+      {:ok, _other} ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.runtime/invalid_option",
+           field: "policy",
+           message: "the :policy option must be a non-empty string"
+         )}
     end
   end
 
@@ -234,20 +243,18 @@ defmodule Anemos.Runtime do
 
   defp install(name, nil, compiled, _fingerprints) do
     case Dispatcher.load(dispatcher_name(name), compiled) do
-      {:refused, message} ->
-        {:error, message}
+      {:refused, error} ->
+        {:error, error}
 
       result ->
         schedule_failures =
           if compiled.schedules == [] do
             []
           else
-            scheduler_name(name)
-            |> Scheduler.schedule(compiled.schedules)
-            |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
+            scheduler_name(name) |> Scheduler.schedule(compiled.schedules) |> failures_of()
           end
 
-        finish(failures_of(result, & &1) ++ schedule_failures)
+        finish(failures_of(result) ++ schedule_failures)
     end
   end
 
@@ -260,8 +267,8 @@ defmodule Anemos.Runtime do
       do: Scheduler.forget(scheduler, Enum.map(compiled.schedules, & &1.event_name))
 
     case Dispatcher.deploy(dispatcher_name(name), policy, compiled, fingerprints) do
-      {:refused, message} ->
-        {:error, message}
+      {:refused, error} ->
+        {:error, error}
 
       result ->
         # The scheduler reconciles against everything loaded, so its
@@ -272,10 +279,10 @@ defmodule Anemos.Runtime do
         schedule_failures =
           scheduler
           |> Scheduler.sync()
-          |> failures_of(fn {event_name, reason} -> {:schedule, event_name, reason} end)
-          |> Enum.filter(fn {:schedule, event_name, _} -> MapSet.member?(own, event_name) end)
+          |> failures_of()
+          |> Enum.filter(&MapSet.member?(own, &1.field))
 
-        finish(failures_of(result, & &1) ++ schedule_failures)
+        finish(failures_of(result) ++ schedule_failures)
     end
   end
 
@@ -292,7 +299,7 @@ defmodule Anemos.Runtime do
   `Anemos.Runtime.Modules.Policy` — where the authority that admitted the
   calling policy stands for the removal (A-81).
   """
-  @spec unload(atom(), String.t()) :: :ok | {:error, :not_loaded}
+  @spec unload(atom(), String.t()) :: :ok | {:error, Comn.Errors.ErrorStruct.t()}
   def unload(name, policy_id) when is_binary(policy_id) do
     schedules = for %{id: ^policy_id, schedules: s} <- policies(name), e <- s, do: e
 
@@ -312,12 +319,9 @@ defmodule Anemos.Runtime do
   def policies(name), do: Dispatcher.policies(dispatcher_name(name))
 
   # Both Dispatcher.load/2 and Scheduler.schedule/2 answer :ok or
-  # {:error, failures}; they differ only in the shape of a failure entry.
-  defp failures_of(:ok, _normalize), do: []
-
-  defp failures_of({:error, failures}, normalize) when is_list(failures) do
-    Enum.map(failures, normalize)
-  end
+  # {:error, failures}, each failure a structured error.
+  defp failures_of(:ok), do: []
+  defp failures_of({:error, failures}) when is_list(failures), do: failures
 
   @doc """
   Registers a module with the runtime.
@@ -343,6 +347,20 @@ defmodule Anemos.Runtime do
   @spec register(atom(), String.t(), module()) :: :ok
   def register(name, module_name, module) do
     ModuleRegistry.register(registry_name(name), module_name, module)
+  end
+
+  @doc """
+  Registers an `Anemos.DataModel` handler under the keyword it answers from
+  `keyword/0`. The keyword then names a format in a `data` block
+  (`data d { edn { ... } }`) and an engine in a `query` block.
+
+  Like a module, a handler is the host's to supply: the runtime ships none.
+  Register it before loading a policy that names it — a `data` block whose
+  format has no handler is a failure of that `load/3`.
+  """
+  @spec register_data_model(atom(), module()) :: :ok
+  def register_data_model(name, handler) when is_atom(handler) do
+    Dispatcher.register_data_model(dispatcher_name(name), handler)
   end
 
   @doc """
@@ -463,6 +481,8 @@ defmodule Anemos.Runtime do
   `%{rules: [...], conditions: [...]}`. Each rule that listens for the event
   is listed with the policy that declared it and an `outcome`: `:fires`,
   `{:dwell, ms}` for a `when ... for` rule that would arm or hold its timer,
+  `:not_true` for a compound `when (A AND B)` whose state the report would
+  leave false,
   or `:context_mismatch` when its `context` does not admit `context`'s
   `:context_path`. `conditions` names the conditions that would evaluate.
 
@@ -489,8 +509,8 @@ defmodule Anemos.Runtime do
 
   Each is `%{at, event, context_path, steps, conditions, results,
   duration_us}`. `steps` is every rule the event reached, in order, with
-  what happened — `:fired`, `:dwell`, `:dwell_fired` or `:context_mismatch`
-  — including rules reached through `nextevent`, `nextrule` and `emit ...
+  what happened — `:fired`, `:dwell`, `:dwell_fired`, `:not_true` or
+  `:context_mismatch` — including rules reached through `nextevent`, `nextrule` and `emit ...
   as`. `conditions` names the conditions that became true. `results` gives
   the kind of each operation; a `log` carries its text, since that was
   written to the log anyway, and nothing else carries a value.
@@ -635,7 +655,7 @@ defmodule Anemos.Runtime do
   # failed load as `{:ok, {:error, _}}`. Deleting the clause removes that
   # hazard rather than preserving it: there is no longer a second path whose
   # return convention can drift from `load/3`'s.)
-  def act(_input), do: {:error, :unknown_action}
+  def act(_input), do: {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_action")}
 
   # --- Name helpers ---
 

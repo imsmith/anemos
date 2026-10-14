@@ -13,7 +13,7 @@ defmodule Anemos.Runtime.ConditionServer do
 
   use GenServer
 
-  alias Anemos.Runtime.StateTable
+  alias Anemos.Runtime.{Report, StateTable}
 
   @doc """
   Starts a condition server.
@@ -80,7 +80,11 @@ defmodule Anemos.Runtime.ConditionServer do
     # false would make the next true evaluation a transition, and fire every
     # CONDITION_<name> rule a second time.
     value = StateTable.get(state.state_table, {:condition, state.name}, false)
-    {:ok, Map.put(state, :value, value)}
+
+    # A-47. The last report of each event heard, which a compound trigger is
+    # decided over. Kept across a restart for the same reason the value is.
+    reports = StateTable.get(state.state_table, {:condition_reports, state.name}, %{})
+    {:ok, state |> Map.put(:value, value) |> Map.put(:reports, reports)}
   end
 
   @impl true
@@ -89,7 +93,12 @@ defmodule Anemos.Runtime.ConditionServer do
   @impl true
   def handle_cast({:event, event_name, context}, state) do
     if MapSet.member?(state.subscriptions, event_name) do
-      new_value = state.evaluator.(event_name, context)
+      # The report is written down before anything is decided, so every
+      # operand's state is recorded whatever the others say.
+      reports = Map.put(state.reports, event_name, Report.truthy?(context))
+      :ok = StateTable.put(state.state_table, {:condition_reports, state.name}, reports)
+      state = %{state | reports: reports}
+      new_value = state.evaluator.(event_name, Map.put(context, :_reports, reports))
 
       case {state.value, new_value} do
         {false, true} ->

@@ -102,14 +102,16 @@ defmodule Anemos.Runtime.SchedulerTest do
                  }
                ])
 
-      assert [{"AT_INTERVAL_flood", {:interval_below_minimum, 1, 1_000}}] = failures
+      assert [%{code: "anemos.scheduler/interval_below_minimum", field: "AT_INTERVAL_flood"}] =
+               failures
+
       refute_receive {:dispatched, "AT_INTERVAL_flood"}, 100
     end
 
     test "the floor defaults to one second" do
       {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_floor_default)
 
-      assert {:error, [{_, {:interval_below_minimum, 999, 1_000}}]} =
+      assert {:error, [%{code: "anemos.scheduler/interval_below_minimum"}]} =
                Scheduler.schedule(pid, [
                  %Anemos.CompiledSchedule{
                    event_name: "AT_INTERVAL_999",
@@ -136,7 +138,7 @@ defmodule Anemos.Runtime.SchedulerTest do
       test_pid = self()
       {:ok, pid} = start_sched(:test_sched_partial, test_pid)
 
-      assert {:error, [{"AT_TOO_FAST", _}]} =
+      assert {:error, [%{field: "AT_TOO_FAST"}]} =
                Scheduler.schedule(pid, [
                  %Anemos.CompiledSchedule{
                    event_name: "AT_TOO_FAST",
@@ -172,8 +174,8 @@ defmodule Anemos.Runtime.SchedulerTest do
       assert {:error, failures} = Scheduler.schedule(pid, specs)
 
       assert [
-               {"AT_CAP_3", {:schedule_limit_exceeded, 2}},
-               {"AT_CAP_4", {:schedule_limit_exceeded, 2}}
+               %{code: "anemos.scheduler/schedule_limit_exceeded", field: "AT_CAP_3"},
+               %{code: "anemos.scheduler/schedule_limit_exceeded", field: "AT_CAP_4"}
              ] = failures
     end
 
@@ -191,7 +193,7 @@ defmodule Anemos.Runtime.SchedulerTest do
 
       assert :ok = Scheduler.schedule(pid, [spec.("AT_FIRST")])
 
-      assert {:error, [{"AT_SECOND", {:schedule_limit_exceeded, 1}}]} =
+      assert {:error, [%{code: "anemos.scheduler/schedule_limit_exceeded", field: "AT_SECOND"}]} =
                Scheduler.schedule(pid, [spec.("AT_SECOND")])
     end
   end
@@ -202,7 +204,7 @@ defmodule Anemos.Runtime.SchedulerTest do
     test "a past-dated schedule reports failure instead of :ok" do
       {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_past)
 
-      assert {:error, [{"AT_DATE_past", {:date_in_past, {1999, 1, 1}}}]} =
+      assert {:error, [%{code: "anemos.scheduler/date_in_past", field: "AT_DATE_past"}]} =
                Scheduler.schedule(pid, [
                  %Anemos.CompiledSchedule{
                    event_name: "AT_DATE_past",
@@ -215,7 +217,7 @@ defmodule Anemos.Runtime.SchedulerTest do
     test "an unresolvable NLD schedule reports failure instead of :ok" do
       {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_nld_bad)
 
-      assert {:error, [{"AT_NLD_gibberish", {:unresolvable_nld, "gibberish"}}]} =
+      assert {:error, [%{code: "anemos.scheduler/unresolvable_nld", field: "AT_NLD_gibberish"}]} =
                Scheduler.schedule(pid, [
                  %Anemos.CompiledSchedule{
                    event_name: "AT_NLD_gibberish",
@@ -228,7 +230,7 @@ defmodule Anemos.Runtime.SchedulerTest do
     test "a past-dated NLD schedule reports failure instead of :ok" do
       {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_nld_past)
 
-      assert {:error, [{"AT_NLD_yesterday", {:nld_in_past, "yesterday"}}]} =
+      assert {:error, [%{code: "anemos.scheduler/nld_in_past", field: "AT_NLD_yesterday"}]} =
                Scheduler.schedule(pid, [
                  %Anemos.CompiledSchedule{
                    event_name: "AT_NLD_yesterday",
@@ -259,7 +261,7 @@ defmodule Anemos.Runtime.SchedulerTest do
   test "an unrecognised duration unit does not take the scheduler down" do
     {:ok, pid} = Scheduler.start_link(runtime_name: :test_sched_bad_unit)
 
-    assert {:error, [{"AT_INTERVAL_bad", {:unknown_duration_unit, :fortnights}}]} =
+    assert {:error, [%{code: "anemos.scheduler/unknown_duration_unit", field: "AT_INTERVAL_bad"}]} =
              Scheduler.schedule(pid, [
                %Anemos.CompiledSchedule{
                  event_name: "AT_INTERVAL_bad",

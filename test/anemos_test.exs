@@ -117,7 +117,7 @@ defmodule AnemosTest do
     end
 
     test "INFRA::get_ip distinguishes the address family" do
-      source = ~S|rule r { when EV { [INFRA::get_ip "eth0" type:ipv6] } }|
+      source = ~S|rule r { when EV { [INFRA::get_ip eth0 ipv6] } }|
 
       assert {:ok, ["2001:db8::7"]} =
                Anemos.run(source,

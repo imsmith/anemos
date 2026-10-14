@@ -112,7 +112,7 @@ defmodule Anemos.AtomExhaustionTest do
       growth =
         atom_growth(fn ->
           for i <- 1..@n do
-            assert {:error, msg, _line, _col} = Lexer.tokenize("DAY_#{prefix}#{letters(i)}")
+            assert {:error, %{message: msg}} = Lexer.tokenize("DAY_#{prefix}#{letters(i)}")
             assert msg =~ "day"
           end
         end)

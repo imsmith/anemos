@@ -307,16 +307,18 @@ defmodule Anemos.Runtime.ArgValidationTest do
       assert {:ok, path} = PathGuard.confine("a/b.txt", tmp)
       assert path == Path.join(tmp, "a/b.txt")
 
-      assert {:error, :outside_root} = PathGuard.confine("../escape", tmp)
-      assert {:error, :outside_root} = PathGuard.confine("/etc/shadow", tmp)
-      assert {:error, :not_a_path} = PathGuard.confine(<<0>> <> "x", tmp)
+      assert {:error, %{code: "anemos.path/outside_root"}} = PathGuard.confine("../escape", tmp)
+      assert {:error, %{code: "anemos.path/outside_root"}} = PathGuard.confine("/etc/shadow", tmp)
+      assert {:error, %{code: "anemos.path/not_a_path"}} = PathGuard.confine(<<0>> <> "x", tmp)
     end
 
     @tag :tmp_dir
     test "a sibling directory sharing a string prefix does not count as confined", %{tmp_dir: tmp} do
       root = Path.join(tmp, "root")
       File.mkdir_p!(root)
-      assert {:error, :outside_root} = PathGuard.confine(Path.join(tmp, "rootless/x"), root)
+
+      assert {:error, %{code: "anemos.path/outside_root"}} =
+               PathGuard.confine(Path.join(tmp, "rootless/x"), root)
     end
   end
 

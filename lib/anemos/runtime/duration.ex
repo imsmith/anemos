@@ -42,8 +42,21 @@ defmodule Anemos.Runtime.Duration do
   def to_ms({amount, :hours}), do: amount * 3_600_000
   def to_ms({amount, :d}), do: amount * 86_400_000
   def to_ms({amount, :days}), do: amount * 86_400_000
-  def to_ms({_amount, unit}) when is_atom(unit), do: {:error, {:unknown_duration_unit, unit}}
-  def to_ms(other), do: {:error, {:invalid_duration, other}}
+
+  def to_ms({_amount, unit}) when is_atom(unit) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.duration/unknown_unit",
+       field: to_string(unit),
+       message: "unknown duration unit #{inspect(unit)}"
+     )}
+  end
+
+  def to_ms(other) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.duration/invalid",
+       message: "invalid duration #{inspect(other)}"
+     )}
+  end
 
   @doc """
   Converts a duration tuple to milliseconds, raising on anything unrecognised.
@@ -56,11 +69,8 @@ defmodule Anemos.Runtime.Duration do
   @spec to_ms!(term()) :: non_neg_integer()
   def to_ms!(duration) do
     case to_ms(duration) do
-      {:error, {:unknown_duration_unit, unit}} ->
-        raise ArgumentError, "unknown duration unit #{inspect(unit)}"
-
-      {:error, {:invalid_duration, term}} ->
-        raise ArgumentError, "invalid duration #{inspect(term)}"
+      {:error, %Comn.Errors.ErrorStruct{message: message}} ->
+        raise ArgumentError, message
 
       ms ->
         ms

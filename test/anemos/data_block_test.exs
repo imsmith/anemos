@@ -267,8 +267,7 @@ defmodule Anemos.DataBlockTest do
 
     # Should not crash even though no handler is registered, but the block
     # is inert and load/2 must say so rather than reporting :ok.
-    assert {:error,
-            [{:data_block, "missing-handler", {:no_subscribable_handler, "unknown-proto"}}]} =
+    assert {:error, [%{code: "anemos.data/no_subscribable_handler", field: "missing-handler"}]} =
              Dispatcher.load(dispatcher, compiled)
 
     # Data block exists but is empty

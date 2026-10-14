@@ -169,7 +169,7 @@ defmodule Anemos.Runtime.DispatcherDisclosureTest do
       assert log =~ "feed"
     end
 
-    test "the structured failure returned to the caller keeps the reason" do
+    test "the structured failure returned to the caller names the failure, not its values" do
       {:ok, registry} = ModuleRegistry.start_link([])
       {:ok, sub_registry} = SubscribableRegistry.start_link()
       :ok = SubscribableRegistry.register(sub_registry, "leaky", LeakySubscribable)
@@ -191,10 +191,12 @@ defmodule Anemos.Runtime.DispatcherDisclosureTest do
         )
 
       capture_log(fn ->
-        assert {:error, [{:data_block, "feed", {:subscribe_failed, reason}}]} =
+        assert {:error, [%Comn.Errors.ErrorStruct{} = failure]} =
                  Dispatcher.load(dispatcher, compiled)
 
-        assert reason == {:auth_failed, "hunter2-secret"}
+        assert %{code: "anemos.data/subscribe_failed", field: "feed"} = failure
+        assert failure.message =~ ":auth_failed"
+        refute inspect(failure) =~ "hunter2-secret"
       end)
     end
   end

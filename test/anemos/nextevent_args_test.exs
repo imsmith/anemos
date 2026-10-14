@@ -97,7 +97,7 @@ defmodule Anemos.NextEventArgsTest do
   end
 
   test "a with block missing its value is a positioned parse error" do
-    assert {:error, message} =
+    assert {:error, %{message: message}} =
              Anemos.Parser.parse("""
              rule r {
                when EV {

@@ -29,11 +29,11 @@ defmodule Anemos.Runtime.DurationTest do
   end
 
   test "unknown unit returns an error tuple rather than raising" do
-    assert {:error, {:unknown_duration_unit, :fortnights}} = Duration.to_ms({2, :fortnights})
+    assert {:error, %{code: "anemos.duration/unknown_unit"}} = Duration.to_ms({2, :fortnights})
   end
 
   test "malformed duration returns an error tuple rather than raising" do
-    assert {:error, {:invalid_duration, "5 minutes"}} = Duration.to_ms("5 minutes")
+    assert {:error, %{code: "anemos.duration/invalid"}} = Duration.to_ms("5 minutes")
   end
 
   test "to_ms!/1 returns the integer for known units" do

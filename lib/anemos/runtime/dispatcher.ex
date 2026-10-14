@@ -26,10 +26,12 @@ defmodule Anemos.Runtime.Dispatcher do
   @behaviour Comn
 
   alias Anemos.Runtime.{
+    DataModelRegistry,
     DataStore,
     Introspection,
     ModuleRegistry,
     PolicyStore,
+    Report,
     StateTable,
     StoreSupervisor,
     SubscribableRegistry,
@@ -95,10 +97,10 @@ defmodule Anemos.Runtime.Dispatcher do
   callback for why replacement rather than rejection.
 
   A name held by a policy deployed under an identity is not replaced: the
-  load is refused whole, `{:refused, message}`.
+  load is refused whole, `{:refused, error}`.
   """
   @spec load(pid() | atom(), Anemos.CompilationResult.t()) ::
-          :ok | {:error, [term()]} | {:refused, String.t()}
+          :ok | {:error, [Comn.Errors.ErrorStruct.t()]} | {:refused, Comn.Errors.ErrorStruct.t()}
   def load(dispatcher, compiled) do
     GenServer.call(dispatcher, {:load, compiled})
   end
@@ -130,13 +132,13 @@ defmodule Anemos.Runtime.Dispatcher do
   callback.
 
   Answers what `load/2` would. A policy that declares a name another policy
-  holds is not loaded at all: `{:refused, message}`.
+  holds is not loaded at all: `{:refused, error}`.
 
   Schedules are not touched: the scheduler is not the dispatcher's to call.
   The caller follows with `Anemos.Runtime.Scheduler.sync/1`.
   """
   @spec deploy(pid() | atom(), String.t(), Anemos.CompilationResult.t(), map()) ::
-          :ok | {:error, [term()]} | {:refused, String.t()}
+          :ok | {:error, [Comn.Errors.ErrorStruct.t()]} | {:refused, Comn.Errors.ErrorStruct.t()}
   def deploy(dispatcher, id, compiled, fingerprints) when is_binary(id) do
     GenServer.call(dispatcher, {:deploy, id, compiled, fingerprints})
   end
@@ -199,6 +201,16 @@ defmodule Anemos.Runtime.Dispatcher do
     GenServer.call(dispatcher, {:register_subscribable, protocol, handler_module})
   end
 
+  @doc """
+  Registers an `Anemos.DataModel` handler under the keyword it answers from
+  `keyword/0`. That keyword then names a format in a `data` block and an
+  engine in a `query` block.
+  """
+  @spec register_data_model(pid() | atom(), module()) :: :ok
+  def register_data_model(dispatcher, handler_module) do
+    GenServer.call(dispatcher, {:register_data_model, handler_module})
+  end
+
   # --- Server callbacks ---
 
   @impl true
@@ -219,6 +231,10 @@ defmodule Anemos.Runtime.Dispatcher do
       triple_store: nil,
       data_store: nil,
       subscribable_registry: nil,
+      data_model_registry: nil,
+      # {query name, :global | {:local, rule}} => compiled query, derived
+      # from the policy store at the head of every callback.
+      queries: %{},
       channel_connector: Anemos.Channel.Logger,
       state_table: state_table,
       # A-40. Whatever the previous dispatcher had accumulated, if there
@@ -315,7 +331,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case conflicts(nil, compiled, named) do
       [] -> do_load(compiled, state)
-      conflicts -> {:reply, {:refused, Enum.join(conflicts, "; ")}, state}
+      conflicts -> {:reply, {:refused, name_taken(conflicts)}, state}
     end
   end
 
@@ -354,7 +370,7 @@ defmodule Anemos.Runtime.Dispatcher do
         {:reply, reply, persist(state)}
 
       conflicts ->
-        {:reply, {:refused, Enum.join(conflicts, "; ")}, state}
+        {:reply, {:refused, name_taken(conflicts)}, state}
     end
   end
 
@@ -364,7 +380,13 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case Enum.find(PolicyStore.entries(state.policy_store), &(&1.id == id)) do
       nil ->
-        {:reply, {:error, :not_loaded}, state}
+        error =
+          Comn.Errors.Registry.error!("anemos.runtime/not_loaded",
+            field: id,
+            message: "no policy named '#{id}' is loaded"
+          )
+
+        {:reply, {:error, error}, state}
 
       old ->
         :ok = PolicyStore.delete(state.policy_store, id)
@@ -385,6 +407,7 @@ defmodule Anemos.Runtime.Dispatcher do
         {dwell, bindings} =
           state.rule_bindings
           |> Map.get(name, %{})
+          |> Enum.reject(&match?({{:compound, _}, _}, &1))
           |> Enum.split_with(&match?({{:dwell, _}, _}, &1))
 
         %{
@@ -456,9 +479,17 @@ defmodule Anemos.Runtime.Dispatcher do
       for rule <- Map.get(state.index, event_name, []) do
         outcome =
           cond do
-            not context_matches?(rule, event_context) -> :context_mismatch
-            ms = rule.dwell_duration_ms -> {:dwell, ms}
-            true -> :fires
+            not context_matches?(rule, event_context) ->
+              :context_mismatch
+
+            ms = rule.dwell_duration_ms ->
+              {:dwell, ms}
+
+            trigger = compound_trigger(rule, event_name) ->
+              explain_compound(rule, trigger, event_name, context, state)
+
+            true ->
+              :fires
           end
 
         %{
@@ -551,6 +582,12 @@ defmodule Anemos.Runtime.Dispatcher do
     {:reply, :ok, state}
   end
 
+  def handle_call({:register_data_model, handler_module}, _from, state) do
+    state = refresh_stores(state)
+    :ok = DataModelRegistry.register(state.data_model_registry, handler_module)
+    {:reply, :ok, state}
+  end
+
   defp do_load(compiled, state) do
     # Record before applying: the policy store is the source of truth, and a
     # crash midway through apply_compiled/2 must still leave the policy
@@ -636,7 +673,10 @@ defmodule Anemos.Runtime.Dispatcher do
   end
 
   defp forget_conditions(state, names) do
-    Enum.each(names, &StateTable.delete(state.state_table, {:condition, &1}))
+    Enum.each(names, fn name ->
+      StateTable.delete(state.state_table, {:condition, name})
+      StateTable.delete(state.state_table, {:condition_reports, name})
+    end)
   end
 
   # A-41. A timer armed by the previous dispatcher died with it, and nothing
@@ -852,9 +892,13 @@ defmodule Anemos.Runtime.Dispatcher do
           )
         end
 
-        case data.dynamic do
-          {{:subscribe, protocol, uri}, _periodic} ->
+        case data do
+          %{dynamic: {{:subscribe, protocol, uri}, _periodic}} ->
             subscribe_data_block(data, protocol, uri, state, failures)
+
+          %{format: format} when is_binary(format) ->
+            state = unsubscribe(state, {data.name, data.scope || :global})
+            {state, register_format_block(data, state) ++ failures}
 
           _ ->
             # Static now, whatever it was before.
@@ -973,6 +1017,123 @@ defmodule Anemos.Runtime.Dispatcher do
     state
   end
 
+  # A-34. `data name { <format> { ... } }`: the registered handler for the
+  # format parses the raw body, evaluates it, and — when the block carries a
+  # `transclude` — transduces it; what comes back is the dataset. A list
+  # becomes a set, as a simple list does. The transduced value is also
+  # registered under the clause's `as` name.
+  #
+  # A block that cannot be built is not registered at all, and anything
+  # registered under its name before is removed: `memberof` against it is
+  # then an `unknown_dataset` error rather than a quiet `false`. The failure
+  # goes back to whoever called `load/3`.
+  #
+  # The handler is host code fed policy text. Anything it raises is caught:
+  # the policy is already in the store, so a crash here would replay on
+  # every restart.
+  defp register_format_block(data, state) do
+    scope = data.scope || :global
+
+    with {:ok, handler} <- data_model(state, data.format),
+         {:ok, value, transcluded} <- build_dataset(handler, data, state) do
+      DataStore.register(state.data_store, data.name, scope, as_dataset(value),
+        source: data.source,
+        transcluded: transcluded
+      )
+
+      with {:transclude, _shape, _transducer, bind_as} <- data.transclude do
+        DataStore.register(state.data_store, bind_as, scope, as_dataset(transcluded),
+          source: data.source
+        )
+      end
+
+      []
+    else
+      {:error, reason} ->
+        DataStore.deregister(state.data_store, data.name, scope)
+
+        Logger.warning(
+          "data block '#{data.name}' (#{data.format}) not registered " <>
+            "(#{reason_tag(reason)}); the reason is on the failure returned by load/3"
+        )
+
+        [data_failure(data.name, reason)]
+    end
+  end
+
+  # A-22. A data block that loaded and is inert, as a structured error. A
+  # protocol or format keyword is the author's own text. What a host
+  # handler said about its failure is not — a feed was, by definition, in
+  # the middle of authenticating — so only its tag is carried (A-52).
+  defp data_failure(name, {tag, detail} = _reason) do
+    why =
+      case tag do
+        :no_subscribable_handler -> "protocol '#{detail}' has no registered handler"
+        :no_data_model -> "format '#{detail}' has no registered handler"
+        :subscribe_failed -> "its feed did not start (#{reason_tag(detail)})"
+        :data_model_failed -> "its format handler did not build it (#{reason_tag(detail)})"
+      end
+
+    Comn.Errors.Registry.error!("anemos.data/#{tag}",
+      field: name,
+      message: "data block '#{name}' is inert: #{why}"
+    )
+  end
+
+  defp name_taken(conflicts) do
+    Comn.Errors.Registry.error!("anemos.runtime/name_taken",
+      message: Enum.join(conflicts, "; ")
+    )
+  end
+
+  defp data_model(state, keyword) do
+    case DataModelRegistry.lookup(state.data_model_registry, keyword) do
+      {:ok, handler} -> {:ok, handler}
+      :error -> {:error, {:no_data_model, keyword}}
+    end
+  end
+
+  defp build_dataset(handler, data, state) do
+    with {:ok, parsed} <- handler.parse(data.raw),
+         {:ok, value} <- handler.eval(parsed, %{bindings: %{}, data_store: state.data_store}),
+         {:ok, transcluded} <- transclude(handler, value, data.transclude) do
+      {:ok, value, transcluded}
+    else
+      {:error, reason} -> {:error, {:data_model_failed, reason}}
+      _other -> {:error, {:data_model_failed, :bad_return}}
+    end
+  rescue
+    _ -> {:error, {:data_model_failed, :raised}}
+  end
+
+  defp transclude(_handler, _value, nil), do: {:ok, nil}
+
+  defp transclude(handler, value, {:transclude, shape, transducer, _bind_as}),
+    do: handler.transduce(value, shape, transducer)
+
+  defp as_dataset(list) when is_list(list), do: MapSet.new(list)
+  defp as_dataset(other), do: other
+
+  # Every query the loaded policies declare. Derived rather than kept, like
+  # the rest of this process's view of the policy store, so load, unload and
+  # redeploy need no bookkeeping of their own.
+  #
+  # ponytail: one Agent read per callback. Keep it in state, maintained by
+  # load and unload, if a runtime ever holds enough policy for that to show.
+  defp query_index(policy_store) do
+    for %{compiled: compiled} <- PolicyStore.entries(policy_store),
+        query <- Map.get(compiled, :query_blocks, []),
+        into: %{} do
+      scope =
+        case query.scope do
+          {:local, _rule} = local -> local
+          _ -> :global
+        end
+
+      {{query.name, scope}, query}
+    end
+  end
+
   defp subscribe_data_block(data, protocol, uri, state, failures) do
     case SubscribableRegistry.lookup(state.subscribable_registry, protocol) do
       {:ok, handler} ->
@@ -1006,7 +1167,11 @@ defmodule Anemos.Runtime.Dispatcher do
                 "never update; the reason is on the failure returned by load/2"
             )
 
-            {state, [{:data_block, data.name, {:subscribe_failed, reason}} | failures]}
+            # A-26. Left registered and empty, every memberof() against it
+            # answered false — an allow-list that denies nothing it should.
+            DataStore.deregister(state.data_store, data.name, scope)
+
+            {state, [data_failure(data.name, {:subscribe_failed, reason}) | failures]}
         end
 
       :error ->
@@ -1015,7 +1180,7 @@ defmodule Anemos.Runtime.Dispatcher do
             "handler — it will never update"
         )
 
-        {state, [{:data_block, data.name, {:no_subscribable_handler, protocol}} | failures]}
+        {state, [data_failure(data.name, {:no_subscribable_handler, protocol}) | failures]}
     end
   end
 
@@ -1046,6 +1211,8 @@ defmodule Anemos.Runtime.Dispatcher do
       | triple_store: snap.triple_store,
         data_store: snap.data_store,
         subscribable_registry: snap.subscribable_registry,
+        data_model_registry: snap.data_model_registry,
+        queries: query_index(state.policy_store),
         condition_servers: Map.new(snap.conditions, fn {name, pid} -> {name, %{pid: pid}} end),
         capability_servers: snap.capabilities
     }
@@ -1188,7 +1355,7 @@ defmodule Anemos.Runtime.Dispatcher do
     do: {:ok, dispatch(pid, event, ctx)}
 
   def act(%{action: :dispatch, pid: pid, event: event}), do: {:ok, dispatch(pid, event)}
-  def act(_input), do: {:error, :unknown_action}
+  def act(_input), do: {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_action")}
 
   # --- Private ---
 
@@ -1224,15 +1391,74 @@ defmodule Anemos.Runtime.Dispatcher do
         not context_matches?(rule, event_context) ->
           {results_acc, step(st, rule, event_name, :context_mismatch)}
 
+        trigger = compound_trigger(rule, event_name) ->
+          {value, st} = record_report(rule, trigger, event_name, context, st)
+          {_op, [first | _], _index} = trigger
+
+          cond do
+            # One dwell machine for the whole compound, keyed by its first
+            # operand and fed the compound state rather than the event's own.
+            ms = Map.get(rule, :dwell_duration_ms) ->
+              st = step(st, rule, event_name, :dwell)
+              {results_acc, handle_dwell_event(rule, first, context, ms, value, st)}
+
+            value ->
+              st = step(st, rule, event_name, :fired)
+              dispatch_immediate(rule, event_name, context, results_acc, st, depth)
+
+            true ->
+              {results_acc, step(st, rule, event_name, :not_true)}
+          end
+
         ms = Map.get(rule, :dwell_duration_ms) ->
           st = step(st, rule, event_name, :dwell)
-          {results_acc, handle_dwell_event(rule, event_name, context, ms, st)}
+          truthy? = Report.truthy?(context)
+          {results_acc, handle_dwell_event(rule, event_name, context, ms, truthy?, st)}
 
         true ->
           st = step(st, rule, event_name, :fired)
           dispatch_immediate(rule, event_name, context, results_acc, st, depth)
       end
     end)
+  end
+
+  # What record_report/5 would decide, without writing the report down.
+  defp explain_compound(rule, trigger, event_name, context, state) do
+    case record_report(rule, trigger, event_name, context, state) do
+      {true, _st} -> :fires
+      {false, _st} -> :not_true
+    end
+  end
+
+  # A rule reached by an event that is not one of its operands — `nextrule`,
+  # which selects by rule name — was invoked, not reported to, and runs as
+  # any other rule does.
+  defp compound_trigger(rule, event_name) do
+    case Map.get(rule, :trigger) do
+      {_op, events, _index} = trigger -> if event_name in events, do: trigger
+      nil -> nil
+    end
+  end
+
+  # A-47. `when (A AND B)` is a compound state over the last report of each
+  # operand — see `Anemos.Runtime.Report`. The report is written down first
+  # and the state decided second, so no operand's report is ever skipped
+  # because another had already settled the answer.
+  #
+  # `when` is "when the condition holds, do": every report of an operand is
+  # a check, and every check that finds the state true fires the body. It
+  # is not an edge — a state that stays true fires at each report.
+  #
+  # Kept in rule_bindings under `{:compound, index}`, the index being the
+  # `when` block's position in its rule, so it is persisted, purged and
+  # carried across a restart with the rest of the rule's state.
+  defp record_report(rule, {op, events, index}, event_name, context, st) do
+    key = {:compound, index}
+    rule_state = Map.get(st.rule_bindings, rule.name, %{})
+    reports = rule_state |> Map.get(key, %{}) |> Map.put(event_name, Report.truthy?(context))
+
+    st = put_in(st.rule_bindings[rule.name], Map.put(rule_state, key, reports))
+    {Report.value(op, events, reports), st}
   end
 
   # The condition-side counterpart of the `enriched_context` in
@@ -1270,11 +1496,12 @@ defmodule Anemos.Runtime.Dispatcher do
     #
     #   * `:data_store` + `:_rule_name` — memberof() with per-rule scope;
     #   * `:registry` — expression-position `[MODULE::verb]` calls (A-56);
+    #   * `:queries` + `:data_models` — `?name` naming a query (A-35);
     #   * `:_verb_context` — the context those calls hand to host code,
     #     built here by the same verb_context/2 run_ops/5 uses so the two
     #     positions present host code identical inputs.
     #
-    # The first three are evaluation authority and stop at the closure.
+    # All but the last are evaluation authority and stop at the closure.
     # `:_verb_context` is built from `context`, not from this map, which is
     # what keeps them out of `handle_verb/3` (A-11).
     enriched_context =
@@ -1282,11 +1509,21 @@ defmodule Anemos.Runtime.Dispatcher do
       |> Map.put(:data_store, st.data_store)
       |> Map.put(:_rule_name, rule.name)
       |> Map.put(:registry, st.registry)
+      |> Map.put(:queries, st.queries)
+      |> Map.put(:data_models, st.data_model_registry)
       |> Map.put(:_verb_context, verb_context(context, {rule.name, rule_context}))
 
     case safe_handle(rule, event_name, enriched_context, persistent) do
       {:ok, ops, new_persistent} ->
-        new_st = put_in(st.rule_bindings[rule.name], new_persistent)
+        # The handler answers only the `set` bindings. What the dispatcher
+        # itself keeps under the rule's name — dwell timers, compound
+        # reports — is not the handler's to drop (A-17).
+        kept =
+          Map.filter(persistent, fn {key, _} ->
+            match?({:dwell, _}, key) or match?({:compound, _}, key)
+          end)
+
+        new_st = put_in(st.rule_bindings[rule.name], Map.merge(new_persistent, kept))
 
         {results, new_st} = run_ops(ops, {rule.name, rule_context}, context, new_st, depth)
         {results_acc ++ results, new_st}
@@ -1621,13 +1858,26 @@ defmodule Anemos.Runtime.Dispatcher do
         {rule, nextrule_event_name(rule, target)}
       end
 
-    dispatch_rules(
-      pairs,
-      "nextrule:#{target}",
-      with_block_args(context, Map.get(op, :args)),
-      state,
-      depth + 1
-    )
+    # A rule name is a closed set at the moment of dispatch, unlike an event
+    # name, which anything may emit and nothing need hear. Naming a rule
+    # that is not loaded used to run nothing and report success.
+    if pairs == [] do
+      error =
+        Comn.Errors.Registry.error!("anemos.runtime/unknown_rule",
+          field: target,
+          message: "nextrule names '#{target}', and no rule of that name is loaded"
+        )
+
+      {{:error, error}, state}
+    else
+      dispatch_rules(
+        pairs,
+        "nextrule:#{target}",
+        with_block_args(context, Map.get(op, :args)),
+        state,
+        depth + 1
+      )
+    end
   end
 
   defp execute_op(%{type: :register_data, data: data}, context, state, _depth) do
@@ -1740,14 +1990,26 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case Anemos.Runtime.ArgSchema.validate(schema, args, verb) do
       {:ok, validated} ->
-        mod.handle_verb(verb, validated, context)
+        # A-22. What a host verb says about its failure is its own term.
+        # One that is already a structured error passes through; anything
+        # else becomes one, carrying the reason's tag and not its values.
+        case mod.handle_verb(verb, validated, context) do
+          {:error, %Comn.Errors.ErrorStruct{}} = error ->
+            error
 
-      {:error, message} ->
-        {:error,
-         Comn.Errors.Registry.error!("anemos.runtime/invalid_argument",
-           field: "#{mod_name}::#{verb}",
-           message: message
-         )}
+          {:error, reason} ->
+            {:error,
+             Comn.Errors.Registry.error!("anemos.runtime/verb_failed",
+               field: "#{mod_name}::#{verb}",
+               message: "#{mod_name}::#{verb} failed: #{reason_tag(reason)}"
+             )}
+
+          other ->
+            other
+        end
+
+      {:error, %Comn.Errors.ErrorStruct{} = error} ->
+        {:error, %{error | field: "#{mod_name}::#{verb}"}}
     end
   end
 
@@ -1798,8 +2060,7 @@ defmodule Anemos.Runtime.Dispatcher do
   #
   # See docs/superpowers/specs/2026-05-18-elseif-and-dwell-timer-design.md.
 
-  defp handle_dwell_event(rule, event_name, context, ms, st) do
-    truthy? = dwell_signal_truthy?(context)
+  defp handle_dwell_event(rule, event_name, context, ms, truthy?, st) do
     rule_state = Map.get(st.rule_bindings, rule.name, %{})
     dwell_key = {:dwell, event_name}
 
@@ -1834,20 +2095,6 @@ defmodule Anemos.Runtime.Dispatcher do
     new_rule_state = Map.put(rule_state, dwell_key, new_dwell)
     put_in(st.rule_bindings[rule.name], new_rule_state)
   end
-
-  defp dwell_signal_truthy?(context) do
-    payload = Map.get(context, :context_data) || %{}
-
-    cond do
-      Map.has_key?(payload, "state") -> truthy?(Map.get(payload, "state"))
-      Map.has_key?(payload, :state) -> truthy?(Map.get(payload, :state))
-      true -> true
-    end
-  end
-
-  defp truthy?(nil), do: false
-  defp truthy?(false), do: false
-  defp truthy?(_), do: true
 
   defp triple_query_pattern({:var, _} = var), do: var
   defp triple_query_pattern(literal), do: literal

@@ -26,7 +26,7 @@ defmodule Anemos.Runtime.PathGuard do
 
   ## It fails closed
 
-  An unconfigured root is `{:error, {:unknown_root, name}}`, not "no root
+  An unconfigured root is an `anemos.path/unknown_root` error, not "no root
   declared, therefore allow". A verb that asked for confinement and did not
   get it must not run — that is the whole point of asking.
 
@@ -61,17 +61,20 @@ defmodule Anemos.Runtime.PathGuard do
       iex> Anemos.Runtime.PathGuard.confine("notes/a.txt", "/srv/data")
       {:ok, "/srv/data/notes/a.txt"}
 
-      iex> Anemos.Runtime.PathGuard.confine("../../etc/shadow", "/srv/data")
-      {:error, :outside_root}
+      iex> {:error, error} = Anemos.Runtime.PathGuard.confine("../../etc/shadow", "/srv/data")
+      iex> error.code
+      "anemos.path/outside_root"
 
-      iex> Anemos.Runtime.PathGuard.confine("/etc/shadow", "/srv/data")
-      {:error, :outside_root}
+      iex> {:error, error} = Anemos.Runtime.PathGuard.confine("/etc/shadow", "/srv/data")
+      iex> error.code
+      "anemos.path/outside_root"
 
-      iex> Anemos.Runtime.PathGuard.confine("/srv/dataless/x", "/srv/data")
-      {:error, :outside_root}
+      iex> {:error, error} = Anemos.Runtime.PathGuard.confine("/srv/dataless/x", "/srv/data")
+      iex> error.code
+      "anemos.path/outside_root"
 
   """
-  @spec confine(term(), String.t()) :: {:ok, String.t()} | {:error, :outside_root | :not_a_path}
+  @spec confine(term(), String.t()) :: {:ok, String.t()} | {:error, Comn.Errors.ErrorStruct.t()}
   def confine(path, root) when is_binary(path) and is_binary(root) do
     if printable_path?(path) do
       expanded_root = Path.expand(root)
@@ -80,14 +83,22 @@ defmodule Anemos.Runtime.PathGuard do
       if expanded == expanded_root or String.starts_with?(expanded, expanded_root <> "/") do
         {:ok, expanded}
       else
-        {:error, :outside_root}
+        refused("outside_root")
       end
     else
-      {:error, :not_a_path}
+      refused("not_a_path")
     end
   end
 
-  def confine(_path, _root), do: {:error, :not_a_path}
+  def confine(_path, _root), do: refused("not_a_path")
+
+  # A-22. The code says which refusal; neither the path nor the root is
+  # repeated in the error, since both are the caller's own arguments.
+  defp refused("outside_root"),
+    do: {:error, Comn.Errors.Registry.error!("anemos.path/outside_root", field: "path")}
+
+  defp refused("not_a_path"),
+    do: {:error, Comn.Errors.Registry.error!("anemos.path/not_a_path", field: "path")}
 
   @doc """
   Same as `confine/2`, but names a root from `config :anemos, :path_roots`.
@@ -96,16 +107,24 @@ defmodule Anemos.Runtime.PathGuard do
 
   ## Examples
 
-      iex> Anemos.Runtime.PathGuard.confine_root("a.txt", :nowhere)
-      {:error, {:unknown_root, :nowhere}}
+      iex> {:error, error} = Anemos.Runtime.PathGuard.confine_root("a.txt", :nowhere)
+      iex> {error.code, error.field}
+      {"anemos.path/unknown_root", "nowhere"}
 
   """
   @spec confine_root(term(), atom()) ::
-          {:ok, String.t()} | {:error, :outside_root | :not_a_path | {:unknown_root, atom()}}
+          {:ok, String.t()} | {:error, Comn.Errors.ErrorStruct.t()}
   def confine_root(path, root_name) when is_atom(root_name) do
     case Map.get(roots(), root_name) do
-      root when is_binary(root) -> confine(path, root)
-      _ -> {:error, {:unknown_root, root_name}}
+      root when is_binary(root) ->
+        confine(path, root)
+
+      _ ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.path/unknown_root",
+           field: to_string(root_name),
+           message: "path root #{inspect(root_name)} is not configured"
+         )}
     end
   end
 

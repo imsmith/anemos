@@ -254,6 +254,17 @@ defmodule Anemos.Lexer do
     |> reduce({List, :to_string, []})
     |> tag(:module_id_raw)
     |> label("module ID")
+    # A-82. `::` written hard against a module name and followed by a
+    # lowercase letter is the verb separator, and is taken here so the IPv6
+    # rule never sees it: `[M::a]`, `[M::dead]` are verbs whose names happen
+    # to be hex. An address after a module-shaped word — `AAAA ::1` — is
+    # separated from it by a space and is untouched.
+    |> optional(
+      string("::")
+      |> replace(:"::")
+      |> lookahead(ascii_char([?a..?z]))
+      |> tag(:operator_raw)
+    )
 
   # Demand flags: --required, --optional, --sufficient, --requisite
   demand_flag =
@@ -405,7 +416,8 @@ defmodule Anemos.Lexer do
   @doc """
   Tokenize the given input string.
 
-  Returns `{:ok, tokens}` or `{:error, message, line, col}`.
+  Returns `{:ok, tokens}` or `{:error, %Comn.Errors.ErrorStruct{}}` with code
+  `anemos.lexer/invalid_token`, whose `field` is `"line:column"`.
 
   ## Examples
 
@@ -417,9 +429,11 @@ defmodule Anemos.Lexer do
       iex> Enum.map(tokens, &elem(&1, 0))
       [:keyword, :module_id, :keyword, :duration, :lbrace, :rbrace]
 
-      iex> {:error, _, _, _} = Anemos.Lexer.tokenize("@@@")
+      iex> {:error, error} = Anemos.Lexer.tokenize("@@@")
+      iex> error.code
+      "anemos.lexer/invalid_token"
   """
-  @spec tokenize(String.t()) :: {:ok, list()} | {:error, String.t(), pos_integer(), pos_integer()}
+  @spec tokenize(String.t()) :: {:ok, list()} | {:error, Comn.Errors.ErrorStruct.t()}
   def tokenize(input) do
     case raw_tokens(input) do
       {:ok, raw, "", _, _, _} ->
@@ -429,15 +443,23 @@ defmodule Anemos.Lexer do
         try do
           {:ok, postprocess(raw)}
         catch
-          {:lex_error, msg, line} -> {:error, msg, line, 1}
+          {:lex_error, msg, line} -> lex_error(msg, line, 1)
         end
 
       {:ok, _raw, rest, _context, {line, _}, col} ->
-        {:error, "Unexpected input: #{inspect(String.slice(rest, 0, 20))}", line, col}
+        lex_error("Unexpected input: #{inspect(String.slice(rest, 0, 20))}", line, col)
 
       {:error, reason, rest, _context, {line, _}, col} ->
-        {:error, "#{reason} near #{inspect(String.slice(rest, 0, 20))}", line, col}
+        lex_error("#{reason} near #{inspect(String.slice(rest, 0, 20))}", line, col)
     end
+  end
+
+  defp lex_error(message, line, col) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.lexer/invalid_token",
+       field: "#{line}:#{col}",
+       message: "Lexer error on line #{line}: #{message}"
+     )}
   end
 
   # --- Post-processing ---

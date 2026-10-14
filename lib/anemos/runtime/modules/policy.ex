@@ -21,9 +21,14 @@ defmodule Anemos.Runtime.Modules.Policy do
       {:ok, %{unload_requested: id}}
 
     [_id], _context ->
-      {:error, :not_in_a_runtime}
+      {:error,
+       Comn.Errors.Registry.error!("anemos.runtime/not_in_a_runtime", field: "POLICY::unload")}
 
     _args, _context ->
-      {:error, :unload_takes_one_policy_name}
+      {:error,
+       Comn.Errors.Registry.error!("anemos.runtime/invalid_argument",
+         field: "POLICY::unload",
+         message: "POLICY::unload takes one policy name"
+       )}
   end
 end

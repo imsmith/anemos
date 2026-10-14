@@ -60,8 +60,8 @@ defmodule Anemos.Runtime.LoadAuthorityTest do
 
   describe "the Comn action surface" do
     test ":load is not reachable through Anemos.Runtime.act/1" do
-      assert Anemos.Runtime.act(%{action: :load, name: :whatever, source: @policy}) ==
-               {:error, :unknown_action}
+      assert {:error, %{code: "anemos.runtime/unknown_action"}} =
+               Anemos.Runtime.act(%{action: :load, name: :whatever, source: @policy})
     end
 
     test "choices/0 no longer advertises load as an action" do
@@ -160,7 +160,7 @@ defmodule Anemos.Runtime.LoadAuthorityTest do
     test "a partial load is still {:partial, failures}" do
       start_supervised!({Anemos.Runtime, name: :la_partial})
 
-      assert {:partial, [{:data_block, "missing", {:no_subscribable_handler, "nope"}}]} =
+      assert {:partial, [%{code: "anemos.data/no_subscribable_handler", field: "missing"}]} =
                Anemos.Runtime.load(:la_partial, """
                data missing {
                  dynamic {

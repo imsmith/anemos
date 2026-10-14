@@ -1,6 +1,7 @@
 # Anemos — implementation status
 
 **Last verified:** 2026-08-07, against branch `hardening/supervision-and-trust-boundary`.
+Compound triggers, the binding check and "Known gaps" re-verified 2026-10-04.
 
 Every claim below was checked by running the code, not by reading it. Where a construct
 parses but does nothing at runtime, it is listed as **inert** rather than implemented —
@@ -17,8 +18,14 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 - Lexical structure — comments, strings, numbers, durations, sigils, identifiers, atoms
 - Boolean literals — `true` / `false` as real booleans
 - `rule`, `condition`, `capability`, `data`, `query` declarations
+- Format `data` blocks — `data d { <format> { ... } }`, with `transclude ... as name` — built
+  by the `Anemos.DataModel` handler the host registered for the format
+- `query` blocks — called from a rule by name, `?query-name`; `expect`ed bindings come from
+  the caller's scope; run by the handler registered for the engine. Not callable from a
+  condition or capability body
 - `signed_by` at source level — provenance on a file that declares no rule
-- `when` blocks, including compound events with `OR`
+- `when` blocks, including compound events — `AND` is a compound state over each operand's
+  last report; the block fires at every report at which that state is true
 - `when EV for <duration>` — dwell-timer state machine
 - `at` blocks — time literals, intervals, recurring schedules, natural-language dates
 - `if` / `elseif` / `else`
@@ -69,8 +76,6 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 
 | Feature | State |
 | --- | --- |
-| Compound `AND` events | Parses, but compiles identically to `OR` — fires on either event (A-47) |
-| Keyword arguments — `type:ipv4` | Parses; flattened to positional, structure discarded (A-57) |
 | `until` on conditions | Compiles as "false while guard holds"; cannot latch permanently (A-48) |
 | Message envelope | `source`, `timestamp`, `label`, `channel` populated; `signature` never set |
 | `data` blocks — dynamic | `subscribe` works; `periodic` is parsed and unimplemented |
@@ -80,16 +85,10 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 Accepted by the parser, produces nothing at runtime. Listed separately because "it parses"
 has repeatedly been mistaken for "it works".
 
-- **`data { <format> { ... } }` format blocks** — compile to `dataset: nil` and are dropped
-  by the dispatcher without a log line (A-34)
-- **`query` blocks** — compile to a handler that echoes its own inputs; nothing ever reads
-  `query_blocks` (A-35)
 - **`when ERROR { ... }`** — parses only because `ERROR` is an ordinary event name. Nothing
   in the runtime emits such an event, so the block never fires. This is not error handling
 - **`:{...}` interpolation in labels** — e.g. `as ddns.update.:{?fqdn}` renders literally,
   with no substitution and no error. Appears in the README and both examples
-- **`Anemos.DataModel` behaviour** — declared; `parse/1`, `eval/2`, `transduce/3` have no
-  callers
 
 ## Not implemented
 
@@ -108,15 +107,14 @@ No lexer or parser support. Verified by attempting to parse each one.
 
 Recorded so they are not mistaken for missing syntax:
 
-- No semantic validation pass between compile and load. Unknown modules, verbs,
-  capabilities and `nextrule` targets are all deferred to runtime (A-31, A-44)
-- Unbound variables resolve silently to `nil`; a typo produces a successful run with wrong
-  output (A-25)
-- No CI, no linting, no Dialyzer (A-27)
-- `{:comn, path: "../comn"}` is an unpublished sibling checkout, so the repository does not
-  build standalone (A-28)
-- Persistent `set` bindings, armed dwell timers and module registrations do not survive the
-  relevant restart (A-40, A-41, A-43)
+- References are validated at runtime, by decision: an unknown module, capability,
+  `nextrule` target, `memberof` dataset or query engine is a structured error where it is
+  reached, not at load. An unknown verb is the host module's to refuse (A-31, A-44)
+- A `@name` / `$name` that nothing binds is a compile error, but `$name` read before its
+  first `set`, a `?name` the environment did not supply, and a bare word where a variable
+  was meant still resolve silently (A-25)
+- No CI — there is no git remote. Credo, Dialyzer and `mix check` exist (A-27)
+- Runtime state survives the restart of any process in the runtime, not the node (A-79)
 
 ## Conventions
 

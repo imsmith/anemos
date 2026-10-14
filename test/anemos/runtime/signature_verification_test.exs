@@ -136,7 +136,7 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
 
       assert err.code == "anemos.runtime/load_denied"
 
-      assert {:error, {:bad_signature, "operator"}} =
+      assert {:error, %{code: "anemos.trust/bad_signature", field: "operator"}} =
                Signed.decide(
                  request(:sv_wrongkey, @signed_source, %{
                    signatures: %{"operator" => sign(@signed_source, attacker_private)}
@@ -156,7 +156,7 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
 
       assert err.code == "anemos.runtime/load_denied"
 
-      assert {:error, {:unknown_signer, "operator"}} =
+      assert {:error, %{code: "anemos.trust/unknown_signer", field: "operator"}} =
                Signed.decide(request(:sv_unknown, @signed_source, %{signatures: %{}}))
     end
 
@@ -168,14 +168,14 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
       assert {:error, err} = Anemos.Runtime.load(:sv_nosig, @signed_source)
       assert err.code == "anemos.runtime/load_denied"
 
-      assert {:error, {:missing_signature, "operator"}} =
+      assert {:error, %{code: "anemos.trust/missing_signature", field: "operator"}} =
                Signed.decide(request(:sv_nosig, @signed_source, nil))
     end
 
     test "a runtime with no trust store fails closed rather than open" do
       # `Signed` cannot verify what it has no keyring for. The only safe
       # answer is refusal; the tempting one is `:ok`.
-      assert {:error, {:no_trust_store, :sv_absent}} =
+      assert {:error, %{code: "anemos.trust/no_trust_store"}} =
                Signed.decide(request(:sv_absent, @signed_source, %{signatures: %{}}))
     end
   end
@@ -193,7 +193,7 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
 
       assert err.code == "anemos.runtime/load_denied"
 
-      assert {:error, {:unsupported_algorithm, "operator", :rsa_4096}} =
+      assert {:error, %{code: "anemos.trust/unsupported_algorithm", field: "operator"}} =
                Signed.decide(
                  request(:sv_rsa, @signed_source, %{
                    signatures: %{"operator" => :crypto.strong_rand_bytes(64)}
@@ -388,7 +388,7 @@ defmodule Anemos.Runtime.SignatureVerificationTest do
       {public, private} = :crypto.generate_key(:eddsa, :ed25519)
       start_supervised!({Anemos.Runtime, name: :sv_putpriv})
 
-      assert {:error, :private_key_material} =
+      assert {:error, %{code: "anemos.trust/private_key_material"}} =
                TrustStore.put_key(:sv_putpriv, "operator", %Key{
                  algorithm: :ed25519,
                  public: public,

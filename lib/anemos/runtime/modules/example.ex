@@ -166,24 +166,13 @@ defmodule Anemos.Runtime.Modules.Example do
       {:ok, %{module: "INFRA", verb: "ddns_update", args: args}}
     end)
 
-    # `[INFRA::get_ip "eth0" type:ipv4]` does NOT arrive as a keyword pair.
-    # The parser flattens `type:ipv4` into two positional arguments — the
-    # identifier "type" followed by the atom "ipv4" — so a handler cannot
-    # distinguish it from two positional strings. Reading the element after
-    # "type" is the only interpretation available; it is a workaround for
-    # that flattening, not the shape a keyword argument should have.
+    # `[INFRA::get_ip eth0 ipv4]` — the interface, then the address family.
+    # Arguments are positional; the language has no keyword arguments (A-57).
     defp get_ip(args, ctx) do
       interface = Enum.at(args, 0, "eth0")
-      type = keyword_after(args, "type", "ipv4")
+      type = Enum.at(args, 1, "ipv4")
 
       Example.datum(ctx, "ip_#{interface}_#{type}", nil)
-    end
-
-    defp keyword_after(args, key, default) do
-      case Enum.find_index(args, &(&1 == key)) do
-        nil -> default
-        index -> Enum.at(args, index + 1, default)
-      end
     end
   end
 
@@ -244,7 +233,7 @@ defmodule Anemos.Runtime.Modules.Example do
     @impl Comn
     def act(%{verb: verb, args: args, context: ctx}), do: handle_verb(verb, args, ctx)
     def act(%{verb: verb, args: args}), do: handle_verb(verb, args, %{})
-    def act(_input), do: {:error, :unknown_action}
+    def act(_input), do: {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_action")}
   end
 
   @doc """

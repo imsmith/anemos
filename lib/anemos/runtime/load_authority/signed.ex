@@ -146,8 +146,8 @@ defmodule Anemos.Runtime.LoadAuthority.Signed do
   @signature_bytes 64
 
   @typedoc """
-  Why a load was refused. Structured so tests and hosts can match on the
-  mode rather than parse a sentence.
+  Why a load was refused, inside this module. `decide/1` answers the same
+  thing as a structured error whose code ends in the tag.
   """
   @type refusal ::
           {:no_trust_store, atom()}
@@ -162,18 +162,35 @@ defmodule Anemos.Runtime.LoadAuthority.Signed do
   def authorize(%LoadRequest{} = request) do
     case decide(request) do
       :ok -> :ok
-      {:error, refusal} -> {:error, describe(refusal)}
+      {:error, %Comn.Errors.ErrorStruct{}} = refused -> refused
     end
   end
 
   @doc """
-  The verdict, before it is flattened into a message.
-
-  `authorize/1` is the behaviour callback and must answer in the shape the
-  behaviour declares; this is the same decision with the reason intact.
+  The verdict. A refusal is a structured error whose `code` is
+  `anemos.trust/<mode>` — the modes are `t:refusal/0`'s tags — and whose
+  `field` is the signer it concerns, where there is one.
   """
-  @spec decide(LoadRequest.t()) :: :ok | {:error, refusal()}
-  def decide(%LoadRequest{runtime: runtime, source: source, signers: signers} = request) do
+  @spec decide(LoadRequest.t()) :: :ok | {:error, Comn.Errors.ErrorStruct.t()}
+  def decide(%LoadRequest{} = request) do
+    case verdict(request) do
+      :ok ->
+        :ok
+
+      {:error, refusal} ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.trust/#{elem(refusal, 0)}",
+           field: signer_of(refusal),
+           message: describe(refusal)
+         )}
+    end
+  end
+
+  defp signer_of({_mode, name}) when is_binary(name), do: name
+  defp signer_of({_mode, name, _algorithm}) when is_binary(name), do: name
+  defp signer_of(_refusal), do: nil
+
+  defp verdict(%LoadRequest{runtime: runtime, source: source, signers: signers} = request) do
     # Normalised here rather than trusted from the seam. `signed_by
     # :operator` yields the *string* "operator" (the lexer's atom token
     # payload is a binary), but an authority that assumed either spelling
@@ -182,7 +199,7 @@ defmodule Anemos.Runtime.LoadAuthority.Signed do
     names = Enum.map(signers, &to_string/1)
 
     case TrustStore.fetch(runtime) do
-      {:error, :no_trust_store} ->
+      {:error, _no_trust_store} ->
         {:error, {:no_trust_store, runtime}}
 
       {:ok, trust} ->

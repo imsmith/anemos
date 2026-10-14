@@ -49,8 +49,8 @@ rule update-ddns {
     demand katachora-ddns-key
 
     let fqdn = ?fqdn
-    let ipv4 = [INFRA::get_ip "eth0" type:ipv4]
-    let ipv6 = [INFRA::get_ip "eth0" type:ipv6]
+    let ipv4 = [INFRA::get_ip eth0 ipv4]
+    let ipv6 = [INFRA::get_ip eth0 ipv6]
 
     ; @, not bare: `let` binds @-sigil variables, and a bare word lexes as
     ; an identifier literal. The original read `(:fqdn IN A ipv4)`, which

@@ -52,7 +52,7 @@ defmodule Anemos.QueryBlockTest do
     assert length(result.rules) == 1
   end
 
-  test "query block handler returns engine info" do
+  test "a query handler run with no engine registry answers an error" do
     input = """
     query city-lookup {
       expect :city
@@ -67,9 +67,10 @@ defmodule Anemos.QueryBlockTest do
     {:ok, result} = Compiler.compile(ast)
 
     assert [query] = result.query_blocks
-    {:ok, result} = query.handler.(%{city: "Paris"}, %{})
-    assert result.engine == "wikidata"
-    assert is_binary(result.body)
-    assert result.bindings == %{city: "Paris"}
+    assert query.engine == "wikidata"
+    assert is_binary(query.body)
+
+    assert {:error, %Comn.Errors.ErrorStruct{code: "anemos.runtime/unknown_data_model"}} =
+             query.handler.(%{"city" => "Paris"}, %{})
   end
 end

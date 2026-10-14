@@ -25,7 +25,8 @@ defmodule Anemos.Runtime.NLD do
       iex> dt.hour
       0
 
-      iex> {:error, :unknown_expression} = Anemos.Runtime.NLD.resolve("gobbledygook")
+      iex> {:error, %Comn.Errors.ErrorStruct{code: "anemos.nld/unknown_expression"}} =
+      ...>   Anemos.Runtime.NLD.resolve("gobbledygook")
 
   """
 
@@ -42,9 +43,9 @@ defmodule Anemos.Runtime.NLD do
   @doc """
   Resolves a natural language date expression to a `NaiveDateTime`.
 
-  Returns `{:ok, naive_datetime}` or `{:error, :unknown_expression}`.
+  Returns `{:ok, naive_datetime}` or an `anemos.nld/unknown_expression` error.
   """
-  @spec resolve(String.t()) :: {:ok, NaiveDateTime.t()} | {:error, :unknown_expression}
+  @spec resolve(String.t()) :: {:ok, NaiveDateTime.t()} | {:error, Comn.Errors.ErrorStruct.t()}
   def resolve(text) do
     now = NaiveDateTime.local_now()
     today = NaiveDateTime.to_date(now)
@@ -84,20 +85,28 @@ defmodule Anemos.Runtime.NLD do
             {:ok, NaiveDateTime.new!(Date.add(today, days), Time.new!(0, 0, 1))}
 
           :error ->
-            {:error, :unknown_expression}
+            unknown(text)
         end
 
       _ ->
-        {:error, :unknown_expression}
+        unknown(text)
     end
+  end
+
+  defp unknown(text) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.nld/unknown_expression",
+       field: text,
+       message: "'#{text}' is not a date expression the runtime resolves"
+     )}
   end
 
   @doc """
   Resolves a natural language date to milliseconds from now.
 
-  Returns `{:ok, milliseconds}` or `{:error, :unknown_expression}`.
+  Returns `{:ok, milliseconds}` or an `anemos.nld/unknown_expression` error.
   """
-  @spec resolve_ms(String.t()) :: {:ok, non_neg_integer()} | {:error, :unknown_expression}
+  @spec resolve_ms(String.t()) :: {:ok, non_neg_integer()} | {:error, Comn.Errors.ErrorStruct.t()}
   def resolve_ms(text) do
     case resolve(text) do
       {:ok, target} ->

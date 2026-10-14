@@ -185,7 +185,7 @@ defmodule Anemos.SourceMutator do
   its own.
 
   Returns `:ok` when the contract holds — `{:ok, %AST.Program{}}` or
-  `{:error, binary}` — and a description of the violation otherwise.
+  `{:error, %Comn.Errors.ErrorStruct{}}` — and a description of the violation otherwise.
   """
   @spec check(binary(), pos_integer()) :: :ok | tuple()
   def check(source, timeout_ms) do
@@ -265,7 +265,7 @@ defmodule Anemos.SourceMutator do
   defp verdict(source) do
     case Anemos.Parser.parse(source) do
       {:ok, %Anemos.AST.Program{}} -> :ok
-      {:error, message} when is_binary(message) -> :ok
+      {:error, %Comn.Errors.ErrorStruct{message: message}} when is_binary(message) -> :ok
       other -> {:bad_return, other |> inspect() |> String.slice(0, 160)}
     end
   end
@@ -273,8 +273,8 @@ defmodule Anemos.SourceMutator do
   defp where(source) do
     case Anemos.Parser.parse(source) do
       {:ok, %Anemos.AST.Program{}} -> :parsed
-      {:error, "Lexer error" <> _} -> :lexer_error
-      {:error, message} when is_binary(message) -> :parser_error
+      {:error, %Comn.Errors.ErrorStruct{code: "anemos.lexer/" <> _}} -> :lexer_error
+      {:error, %Comn.Errors.ErrorStruct{code: "anemos.parser/" <> _}} -> :parser_error
       other -> {:bad_return, other |> inspect() |> String.slice(0, 160)}
     end
   end

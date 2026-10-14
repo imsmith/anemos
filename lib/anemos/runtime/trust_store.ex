@@ -106,15 +106,15 @@ defmodule Anemos.Runtime.TrustStore do
   @doc """
   Returns the whole trust configuration for `runtime`.
 
-  `{:error, :no_trust_store}` when the runtime has none — which a caller
+  An `anemos.trust/no_trust_store` error when the runtime has none — which a caller
   on the load path must treat as a refusal, not as an absence of policy.
   """
   @spec fetch(atom()) ::
           {:ok, %{keyring: keyring(), unsigned_policy: unsigned_policy()}}
-          | {:error, :no_trust_store}
+          | {:error, Comn.Errors.ErrorStruct.t()}
   def fetch(runtime) do
     case Process.whereis(name_for(runtime)) do
-      nil -> {:error, :no_trust_store}
+      nil -> no_trust_store(runtime)
       pid -> {:ok, Agent.get(pid, & &1)}
     end
   end
@@ -131,7 +131,7 @@ defmodule Anemos.Runtime.TrustStore do
   def key(runtime, signer) do
     case fetch(runtime) do
       {:ok, %{keyring: keyring}} -> Map.fetch(keyring, to_string(signer))
-      {:error, :no_trust_store} -> :error
+      {:error, _no_trust_store} -> :error
     end
   end
 
@@ -150,7 +150,7 @@ defmodule Anemos.Runtime.TrustStore do
   def unsigned_policy(runtime) do
     case fetch(runtime) do
       {:ok, %{unsigned_policy: policy}} -> policy
-      {:error, :no_trust_store} -> @default_policy
+      {:error, _no_trust_store} -> @default_policy
     end
   end
 
@@ -158,20 +158,23 @@ defmodule Anemos.Runtime.TrustStore do
   Adds or replaces the public key trusted for `signer`. Supports rotation
   without restarting the runtime.
 
-  Answers `{:error, :private_key_material}` rather than raising, because
+  Answers an `anemos.trust/private_key_material` error rather than raising, because
   unlike `start_link/1` this runs against a live system and a rejected
   rotation should not take the runtime down with it. The old key stays in
   force, which is the fail-safe outcome.
   """
   @spec put_key(atom(), atom() | String.t(), Key.t()) ::
-          :ok | {:error, :private_key_material | :no_trust_store}
+          :ok | {:error, Comn.Errors.ErrorStruct.t()}
   def put_key(runtime, signer, %Key{} = key) do
     cond do
       not is_nil(key.private) ->
-        {:error, :private_key_material}
+        {:error,
+         Comn.Errors.Registry.error!("anemos.trust/private_key_material",
+           field: to_string(signer)
+         )}
 
       is_nil(Process.whereis(name_for(runtime))) ->
-        {:error, :no_trust_store}
+        no_trust_store(runtime)
 
       true ->
         Agent.update(name_for(runtime), fn state ->
@@ -183,11 +186,11 @@ defmodule Anemos.Runtime.TrustStore do
   @doc """
   Removes the key trusted for `signer`. Revocation.
   """
-  @spec delete_key(atom(), atom() | String.t()) :: :ok | {:error, :no_trust_store}
+  @spec delete_key(atom(), atom() | String.t()) :: :ok | {:error, Comn.Errors.ErrorStruct.t()}
   def delete_key(runtime, signer) do
     case Process.whereis(name_for(runtime)) do
       nil ->
-        {:error, :no_trust_store}
+        no_trust_store(runtime)
 
       pid ->
         Agent.update(pid, fn state ->
@@ -225,5 +228,12 @@ defmodule Anemos.Runtime.TrustStore do
   defp validate_policy!(other) do
     raise ArgumentError,
           ":unsigned_policy must be one of #{inspect(@policies)}, got: #{inspect(other)}"
+  end
+
+  defp no_trust_store(runtime) do
+    {:error,
+     Comn.Errors.Registry.error!("anemos.trust/no_trust_store",
+       message: "runtime #{inspect(runtime)} has no trust store"
+     )}
   end
 end

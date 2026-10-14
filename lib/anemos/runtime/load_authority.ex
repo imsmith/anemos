@@ -172,7 +172,7 @@ defmodule Anemos.Runtime.LoadAuthority do
   Enforces the ceiling. Runs before the source is parsed and regardless of
   the authority.
   """
-  @spec check_size(String.t()) :: :ok | {:error, String.t()}
+  @spec check_size(String.t()) :: :ok | {:error, Comn.Errors.ErrorStruct.t()}
   def check_size(source) when is_binary(source) do
     size = byte_size(source)
     limit = max_bytes()
@@ -180,7 +180,7 @@ defmodule Anemos.Runtime.LoadAuthority do
     if size <= limit do
       :ok
     else
-      {:error, "policy source is #{size} bytes, over the #{limit} byte ceiling"}
+      {:error, load_denied("policy source is #{size} bytes, over the #{limit} byte ceiling")}
     end
   end
 
@@ -255,19 +255,12 @@ defmodule Anemos.Runtime.LoadAuthority do
 
   """
   @spec gate(atom(), String.t(), keyword()) ::
-          {:ok, Anemos.AST.Program.t()} | {:error, Comn.Errors.ErrorStruct.t() | String.t()}
+          {:ok, Anemos.AST.Program.t()} | {:error, Comn.Errors.ErrorStruct.t()}
   def gate(runtime, source, opts \\ []) when is_binary(source) do
-    with :ok <- gate_size(source),
+    with :ok <- check_size(source),
          {:ok, ast} <- Anemos.Parser.parse(source),
          :ok <- gate_authority(runtime, source, ast, opts) do
       {:ok, ast}
-    end
-  end
-
-  defp gate_size(source) do
-    case check_size(source) do
-      :ok -> :ok
-      {:error, message} -> {:error, load_denied(message)}
     end
   end
 
@@ -300,10 +293,15 @@ defmodule Anemos.Runtime.LoadAuthority do
         {:error,
          load_denied(
            "the configured load authority #{inspect(configured())} " <>
-             "refused the load: #{inspect(reason)}"
+             "refused the load: #{refusal_text(reason)}"
          )}
     end
   end
+
+  # An authority may answer a structured error of its own, as
+  # `LoadAuthority.Signed` does; its message is the reason.
+  defp refusal_text(%Comn.Errors.ErrorStruct{message: message}), do: message
+  defp refusal_text(reason), do: inspect(reason)
 
   defp load_denied(message) do
     Comn.Errors.Registry.error!("anemos.runtime/load_denied", field: "source", message: message)

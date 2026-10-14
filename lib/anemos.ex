@@ -132,7 +132,7 @@ defmodule Anemos do
       iex> {:error, _} = Anemos.run("rule {", event: "EV")
   """
   @spec run(String.t(), keyword()) ::
-          {:ok, list()} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
+          {:ok, list()} | {:error, Comn.Errors.ErrorStruct.t()}
   def run(source, opts) do
     case run_report(source, opts) do
       {:ok, report} -> {:ok, report.operations}
@@ -156,7 +156,7 @@ defmodule Anemos do
       {0, 0}
   """
   @spec run_report(String.t(), keyword()) ::
-          {:ok, report()} | {:error, String.t() | Comn.Errors.ErrorStruct.t()}
+          {:ok, report()} | {:error, Comn.Errors.ErrorStruct.t()}
   def run_report(source, opts) do
     event = Keyword.fetch!(opts, :event)
     context = build_context(opts)

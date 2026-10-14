@@ -216,7 +216,7 @@ defmodule Anemos.Runtime.DeployTest do
     test "a data block another policy declares is refused", %{rt: rt, dispatcher: d} do
       deploy!(rt, "p", "data users { alice }")
 
-      assert {:error, message} = Runtime.load(rt, "data users { bob }", policy: "q")
+      assert {:error, %{message: message}} = Runtime.load(rt, "data users { bob }", policy: "q")
       assert message =~ ~s|data block "users"|
 
       assert Dispatcher.data_member?(d, "users", "alice")
@@ -262,7 +262,7 @@ defmodule Anemos.Runtime.DeployTest do
          %{rt: rt, scheduler: s} do
       scheduler = Process.whereis(s)
 
-      assert {:partial, [{:schedule, _, _}]} =
+      assert {:partial, [%{code: "anemos.scheduler/" <> _}]} =
                Runtime.load(rt, ~s|rule r { at 25:99 { log "t" } }|, policy: "p")
 
       assert Process.whereis(s) == scheduler
@@ -293,7 +293,7 @@ defmodule Anemos.Runtime.DeployTest do
     test "a name another policy declares is refused, and nothing loads", %{rt: rt} do
       deploy!(rt, "p", ~s|rule a { when EV { log "from p" } }|)
 
-      assert {:error, message} =
+      assert {:error, %{message: message}} =
                Runtime.load(
                  rt,
                  ~s|rule a { when EV { log "from q" } }\nrule z { when EV { log "z" } }|,
@@ -311,12 +311,14 @@ defmodule Anemos.Runtime.DeployTest do
       :ok = Runtime.load(rt, ~s|rule anon { when EV { log "anon" } }|)
       deploy!(rt, "p", ~s|rule named { when EV { log "named" } }|)
 
-      assert {:error, taken} =
+      assert {:error, %{message: taken}} =
                Runtime.load(rt, ~s|rule anon { when EV { log "stolen" } }|, policy: "q")
 
       assert taken =~ ~s|rule "anon"|
 
-      assert {:error, taken} = Runtime.load(rt, ~s|rule named { when EV { log "stolen" } }|)
+      assert {:error, %{message: taken}} =
+               Runtime.load(rt, ~s|rule named { when EV { log "stolen" } }|)
+
       assert taken =~ ~s|"p"|
 
       assert Enum.sort(logs(rt, "EV")) == ["anon", "named"]
@@ -343,7 +345,7 @@ defmodule Anemos.Runtime.DeployTest do
       snapshot = StoreSupervisor.snapshot(stores)
       assert snapshot.conditions == %{} and snapshot.capabilities == %{}
       assert Runtime.policies(rt) == []
-      assert Runtime.unload(rt, "p") == {:error, :not_loaded}
+      assert {:error, %{code: "anemos.runtime/not_loaded"}} = Runtime.unload(rt, "p")
     end
 
     test "policies lists what each policy declares", %{rt: rt} do
@@ -382,7 +384,9 @@ defmodule Anemos.Runtime.DeployTest do
     end
 
     test "a policy name must be a non-empty string", %{rt: rt} do
-      assert {:error, message} = Runtime.load(rt, "rule a { when EV { log 1 } }", policy: "")
+      assert {:error, %{message: message}} =
+               Runtime.load(rt, "rule a { when EV { log 1 } }", policy: "")
+
       assert message =~ "policy"
     end
   end

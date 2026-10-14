@@ -406,20 +406,61 @@ defmodule Anemos.CompilerTest do
     assert {:ok, %{rules: []}} = Compiler.compile(ast)
   end
 
-  test "unresolvable $nonexistent variable reference returns nil" do
-    input = """
-    rule varref-missing {
-      when TEST_EVENT {
-        log $nonexistent
-      }
-    }
-    """
+  describe "a variable nothing can bind is refused (A-25)" do
+    defp compile_error(source) do
+      {:ok, ast} = Parser.parse(source)
+      assert {:error, %{message: message}} = Compiler.compile(ast)
+      message
+    end
 
-    {:ok, ast} = Parser.parse(input)
-    {:ok, %{rules: [compiled]}} = Compiler.compile(ast)
+    test "$name with no `set name` in the rule" do
+      message = compile_error("rule r {\n when EV {\n log $nonexistent\n }\n}")
+      assert message =~ "rule 'r' line 3: $nonexistent is never bound"
+      assert message =~ "no `set nonexistent`"
+    end
 
-    {:ok, ops, _} = compiled.handler.("TEST_EVENT", %{}, %{})
-    assert [%{type: :log, value: nil}] = ops
+    test "@name with no `let name` in the rule" do
+      assert compile_error(~s|rule r { when EV { log @nosuchvar } }|) =~
+               "@nosuchvar is never bound"
+    end
+
+    test "the wrong sigil names the right one" do
+      assert compile_error("rule r { when EV {\n let a = 42\n log $a\n } }") =~
+               "$a is never bound; there is no `set a` in this rule — it is bound as @a"
+    end
+
+    test "a condition and a capability are checked too" do
+      assert compile_error(~s|condition c { when EV { log @x } }|) =~ "condition 'c'"
+      assert compile_error("capability k {\n on demand {\n log $x\n }\n}") =~ "capability 'k'"
+    end
+
+    test "a `set` anywhere in the rule binds, including in a sibling `when`" do
+      {:ok, ast} =
+        Parser.parse("rule r {\n when A { log $n }\n when B { set n = 1 }\n}")
+
+      assert {:ok, %{rules: [first, _]}} = Compiler.compile(ast)
+      # Read before the first `set` has run: not yet bound, still nil.
+      assert {:ok, [%{type: :log, value: nil}], _} = first.handler.("A", %{}, %{})
+    end
+
+    test "a loop variable and a `reduce` accumulator bind" do
+      {:ok, ast} =
+        Parser.parse("""
+        rule r {
+          when EV {
+            for x in ?xs { log @x }
+            let sum = ?xs |> reduce total 0 ?n ($total + ?n)
+          }
+        }
+        """)
+
+      assert {:ok, _} = Compiler.compile(ast)
+    end
+
+    test "`exists @x` asks, it does not read" do
+      {:ok, ast} = Parser.parse("rule r { when EV {\n if exists @x { log \"bound\" }\n } }")
+      assert {:ok, _} = Compiler.compile(ast)
+    end
   end
 
   test "multiple rules in program" do
@@ -975,7 +1016,7 @@ defmodule Anemos.CompilerTest do
     """
 
     {:ok, ast} = Parser.parse(input)
-    assert {:error, msg} = Compiler.compile(ast)
+    assert {:error, %{message: msg}} = Compiler.compile(ast)
     assert msg =~ "zero"
   end
 
@@ -1017,7 +1058,7 @@ defmodule Anemos.CompilerTest do
       ]
     }
 
-    assert {:error, message} = Compiler.compile(ast)
+    assert {:error, %{message: message}} = Compiler.compile(ast)
     assert message =~ "fortnights"
   end
 end

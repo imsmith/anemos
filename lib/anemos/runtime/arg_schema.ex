@@ -82,21 +82,38 @@ defmodule Anemos.Runtime.ArgSchema do
       iex> Anemos.Runtime.ArgSchema.validate([[type: :string]], ["ok"], "v")
       {:ok, ["ok"]}
 
-      iex> {:error, msg} = Anemos.Runtime.ArgSchema.validate([[type: :integer]], ["nope"], "v")
-      iex> msg
-      "verb 'v' argument 1: expected integer, got binary(4 bytes)"
+      iex> {:error, error} = Anemos.Runtime.ArgSchema.validate([[type: :integer]], ["nope"], "v")
+      iex> {error.code, error.message}
+      {"anemos.runtime/invalid_argument", "verb 'v' argument 1: expected integer, got binary(4 bytes)"}
 
   """
-  @spec validate(t(), list(), String.t()) :: {:ok, list()} | {:error, String.t()}
+  @spec validate(t(), list(), String.t()) ::
+          {:ok, list()} | {:error, Comn.Errors.ErrorStruct.t()}
   def validate(nil, args, _verb), do: {:ok, args}
 
-  def validate(schema, args, verb) when is_list(schema) and is_list(args) do
+  # A-22. The checks below answer `{:error, "text"}` to each other; this is
+  # the one way out, and what leaves is a structured error.
+  def validate(schema, args, verb) when is_list(args) do
+    case do_validate(schema, args, verb) do
+      {:error, message} when is_binary(message) ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.runtime/invalid_argument",
+           field: verb,
+           message: message
+         )}
+
+      ok ->
+        ok
+    end
+  end
+
+  defp do_validate(schema, args, verb) when is_list(schema) do
     with :ok <- check_arity(schema, args, verb) do
       walk(schema, args, verb, 1, [])
     end
   end
 
-  def validate(_schema, args, verb) when is_list(args) do
+  defp do_validate(_schema, _args, verb) do
     {:error, "verb '#{verb}': malformed argument schema"}
   end
 
@@ -233,11 +250,11 @@ defmodule Anemos.Runtime.ArgSchema do
       {:ok, confined} ->
         {:ok, confined}
 
-      {:error, {:unknown_root, name}} ->
+      {:error, %{code: "anemos.path/unknown_root"}} ->
         {:error,
-         "verb '#{verb}' argument #{position}: path root #{inspect(name)} is not configured"}
+         "verb '#{verb}' argument #{position}: path root #{inspect(root_name)} is not configured"}
 
-      {:error, reason} ->
+      {:error, %{code: "anemos.path/" <> reason}} ->
         {:error,
          "verb '#{verb}' argument #{position}: path escapes root #{inspect(root_name)} " <>
            "(#{reason})"}

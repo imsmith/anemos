@@ -18,8 +18,9 @@ defmodule Anemos.Runtime.ModuleRegistry do
     * name unbound — bound, logged at `:info`
     * name bound to the *same* module — idempotent `:ok` (host code and
       tests re-register defaults freely)
-    * name bound to a *different* module — `{:error, {:already_registered,
-      current}}`, logged at `:warning`, binding unchanged
+    * name bound to a *different* module — an
+      `anemos.runtime/already_registered` error, logged at `:warning`,
+      binding unchanged
 
   A deliberate rebind is still possible, but it has to say so:
   `register(reg, name, module, replace: true)`. That path also logs at
@@ -79,12 +80,14 @@ defmodule Anemos.Runtime.ModuleRegistry do
       iex> {:ok, reg} = Anemos.Runtime.ModuleRegistry.start_link([])
       iex> Anemos.Runtime.ModuleRegistry.register(reg, "DEVICE", Anemos.Runtime.Modules.Device)
       :ok
-      iex> Anemos.Runtime.ModuleRegistry.register(reg, "DEVICE", Anemos.Runtime.Modules.File)
-      {:error, {:already_registered, Anemos.Runtime.Modules.Device}}
+      iex> {:error, error} =
+      ...>   Anemos.Runtime.ModuleRegistry.register(reg, "DEVICE", Anemos.Runtime.Modules.File)
+      iex> error.code
+      "anemos.runtime/already_registered"
 
   """
   @spec register(pid() | atom(), String.t(), module(), keyword()) ::
-          :ok | {:error, {:already_registered, module()}}
+          :ok | {:error, Comn.Errors.ErrorStruct.t()}
   def register(registry, name, module, opts \\ []) do
     replace? = Keyword.get(opts, :replace, false)
 
@@ -130,7 +133,11 @@ defmodule Anemos.Runtime.ModuleRegistry do
         "rejected #{inspect(module)}. Pass replace: true to rebind deliberately."
     )
 
-    {:error, {:already_registered, current}}
+    {:error,
+     Comn.Errors.Registry.error!("anemos.runtime/already_registered",
+       field: name,
+       message: "#{name} is bound to #{inspect(current)}; pass replace: true to rebind it"
+     )}
   end
 
   @doc """
@@ -199,5 +206,5 @@ defmodule Anemos.Runtime.ModuleRegistry do
 
   @impl Comn
   def act(%{action: :lookup, registry: reg, name: name}), do: {:ok, lookup(reg, name)}
-  def act(_input), do: {:error, :unknown_action}
+  def act(_input), do: {:error, Comn.Errors.Registry.error!("anemos.runtime/unknown_action")}
 end

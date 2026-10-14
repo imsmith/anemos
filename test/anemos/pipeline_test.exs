@@ -29,10 +29,10 @@ defmodule Anemos.PipelineTest do
     assert {:ok, []} = Anemos.run(input, event: "SOME_OTHER_EVENT")
   end
 
-  test "parse error returns {:error, message}" do
+  test "parse error returns {:error, %{message: message}}" do
     input = "rule { broken"
 
-    assert {:error, message} = Anemos.run(input, event: "ANYTHING")
+    assert {:error, %{message: message}} = Anemos.run(input, event: "ANYTHING")
     assert is_binary(message)
   end
 

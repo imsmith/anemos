@@ -85,7 +85,7 @@ defmodule Anemos.Runtime.SourceLevelSignedByTest do
     end
 
     test "signed_by without a signer name is a positioned parse error" do
-      assert {:error, message} =
+      assert {:error, %{message: message}} =
                Anemos.Parser.parse("""
                signed_by
 

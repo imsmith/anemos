@@ -45,8 +45,8 @@ rule update-ddns {
     demand katachora-ddns-key
 
     let fqdn = ?fqdn
-    let ipv4 = [INFRA::get_ip "eth0" type:ipv4]
-    let ipv6 = [INFRA::get_ip "eth0" type:ipv6]
+    let ipv4 = [INFRA::get_ip eth0 ipv4]
+    let ipv6 = [INFRA::get_ip eth0 ipv6]
     let update = (:fqdn IN A ipv4) AND (:fqdn IN AAAA ipv6)
 
     emit [INFRA::ddns_update(:katachora.ddns.key, katachora.com, update)
@@ -430,7 +430,7 @@ modules provide how.
 
 ```
 [DEVICE::set "light" "on"]
-[INFRA::get_ip "eth0" type:ipv4]
+[INFRA::get_ip eth0 ipv4]
 ```
 
 Define modules with the `Anemos.Module` macro — a declarative mapping

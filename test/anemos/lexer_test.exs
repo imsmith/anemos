@@ -215,4 +215,30 @@ defmodule Anemos.LexerTest do
     assert "192.168.0.0/16" in ip_tokens
     assert "fe80::/10" in ip_tokens
   end
+
+  describe "a verb whose name is hex letters (A-82)" do
+    test "lexes as a verb, not as an IPv6 address" do
+      for verb <- ["a", "be", "dead", "cafe", "f00d"] do
+        assert {:ok, tokens} = Lexer.tokenize("[ONE::#{verb} 1]")
+
+        assert [
+                 {:lbracket, _, _},
+                 {:module_id, _, "ONE"},
+                 {:double_colon, _, _},
+                 {_, _, ^verb} | _
+               ] =
+                 tokens
+      end
+    end
+
+    test "parses and compiles as a module call" do
+      assert {:ok, _} = Anemos.Parser.parse(~s|rule r { when EV { [ONE::a 1] } }|)
+    end
+
+    test "an address after a module-shaped word is still an address" do
+      assert {:ok, tokens} = Lexer.tokenize("AAAA ::1")
+      assert [{:module_id, _, "AAAA"}, {kind, _, _}] = tokens
+      assert kind != :double_colon
+    end
+  end
 end

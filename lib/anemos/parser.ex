@@ -119,7 +119,8 @@ defmodule Anemos.Parser do
       "test"
       iex> [%Anemos.AST.When{event: "EVENT", body: [%Anemos.AST.Log{}]}] = rule.body
 
-      iex> {:error, _msg} = Anemos.Parser.parse("rule { }")
+      iex> {:error, %Comn.Errors.ErrorStruct{code: "anemos.parser/syntax_error"}} =
+      ...>   Anemos.Parser.parse("rule { }")
 
   A source-level `signed_by` is a declaration in its own right, so a file
   carrying no `rule` can still make a provenance claim (A-60):
@@ -132,21 +133,28 @@ defmodule Anemos.Parser do
   Truncated input returns an error rather than raising. `parse/1` is total over
   binaries because it runs before the trust boundary, not after it:
 
-      iex> Anemos.Parser.parse("rule r { when")
-      {:error, "Expected event name after 'when' but got end of input"}
+      iex> {:error, error} = Anemos.Parser.parse("rule r { when")
+      iex> error.message
+      "Expected event name after 'when' but got end of input"
 
       iex> {:ok, %Anemos.AST.Program{declarations: []}} = Anemos.Parser.parse("")
   """
-  @spec parse(String.t()) :: {:ok, AST.Program.t()} | {:error, String.t()}
+  @spec parse(String.t()) :: {:ok, AST.Program.t()} | {:error, Comn.Errors.ErrorStruct.t()}
   def parse(source) when is_binary(source) do
     case Anemos.Lexer.tokenize(source) do
-      {:ok, tokens} ->
-        parse_program(tokens)
-
-      {:error, message, line, _col} ->
-        {:error, "Lexer error on line #{line}: #{message}"}
+      {:ok, tokens} -> structured(parse_program(tokens))
+      {:error, %Comn.Errors.ErrorStruct{}} = error -> error
     end
   end
+
+  # A-22. The parse functions below answer `{:error, "text"}` to each other,
+  # which is how a message is built up on the way out. This is the one door
+  # to a caller, and what leaves through it is a structured error.
+  defp structured({:error, message}) when is_binary(message) do
+    {:error, Comn.Errors.Registry.error!("anemos.parser/syntax_error", message: message)}
+  end
+
+  defp structured({:ok, _program} = ok), do: ok
 
   # --- Program ---
 
@@ -483,6 +491,12 @@ defmodule Anemos.Parser do
 
   defp parse_compound_event([{:module_id, _, name} | rest], acc) when name in ["OR", "AND"] do
     op = name |> String.downcase() |> String.to_atom()
+    parse_compound_event(rest, [{:op, op} | acc])
+  end
+
+  # Lowercase `and` / `or` are the same operators, as they are in an
+  # expression.
+  defp parse_compound_event([{:word_operator, _, op} | rest], acc) when op in [:and, :or] do
     parse_compound_event(rest, [{:op, op} | acc])
   end
 

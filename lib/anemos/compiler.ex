@@ -9,16 +9,22 @@ defmodule Anemos.CompiledRule do
   When `dwell_duration_ms` is non-nil, the rule is dispatched through the
   Dispatcher's dwell-timer state machine instead of being fired immediately.
   See `Anemos.Runtime.Dispatcher` for the state-machine semantics.
+
+  `trigger` is non-nil for a compound `when (A AND B)` / `when (A OR B)`:
+  the operator, the operand events, and the index of the `when` block within
+  its rule, which keys the reports the dispatcher keeps for it. See
+  `Anemos.Runtime.Report`.
   """
   @enforce_keys [:name, :subscriptions, :handler]
-  defstruct [:name, :subscriptions, :handler, :meta, :dwell_duration_ms]
+  defstruct [:name, :subscriptions, :handler, :meta, :dwell_duration_ms, :trigger]
 
   @type t :: %__MODULE__{
           name: String.t(),
           subscriptions: [String.t()],
           handler: (String.t(), map(), map() -> {:ok, [map()], map()}),
           meta: map() | nil,
-          dwell_duration_ms: pos_integer() | nil
+          dwell_duration_ms: pos_integer() | nil,
+          trigger: {:and | :or, [String.t()], non_neg_integer()} | nil
         }
 end
 
@@ -371,22 +377,26 @@ defmodule Anemos.Compiler do
 
     {:ok, result}
   catch
-    {:compile_error, msg} -> {:error, msg}
+    {:compile_error, msg} ->
+      {:error, Comn.Errors.Registry.error!("anemos.compiler/invalid_policy", message: msg)}
   end
 
   # --- Declaration dispatch ---
 
   defp compile_declaration(%AST.Rule{} = rule) do
+    check_bindings!("rule", rule.name, rule.body)
     {rules, schedules, inline_data, inline_queries} = compile_rule(rule)
     {:rule, rules, schedules, inline_data, inline_queries}
   end
 
   defp compile_declaration(%AST.Condition{} = cond_decl) do
+    check_bindings!("condition", cond_decl.name, cond_decl.body)
     {condition, schedules} = compile_condition(cond_decl)
     {:condition, condition, schedules}
   end
 
   defp compile_declaration(%AST.Capability{} = cap) do
+    check_bindings!("capability", cap.name, cap.body)
     {:capability, compile_capability(cap)}
   end
 
@@ -405,6 +415,73 @@ defmodule Anemos.Compiler do
   defp compile_declaration(%AST.SignedBy{}), do: :skip
 
   defp compile_declaration(_other), do: :skip
+
+  # --- Binding check ---
+
+  # A-25. `@name` is bound by `let name` or a loop variable, `$name` by
+  # `set name`, and by nothing else. A read that no statement in the
+  # declaration could ever bind is a typo or the wrong sigil; it used to
+  # resolve to `nil` and report success. It is refused here, at compile
+  # time, where the author is still looking at the source.
+  #
+  # This is deliberately the weak, certain check: "never bound anywhere in
+  # the declaration", not "unbound on this path". `$count` read before the
+  # first `set count` has run still answers `nil`, and so does `?name`,
+  # which the environment supplies and no source text can vouch for.
+  defp check_bindings!(kind, name, body) do
+    scan = scan_bindings(body, %{let: MapSet.new(), set: MapSet.new(), refs: []})
+
+    unbound =
+      Enum.find(Enum.reverse(scan.refs), fn %AST.VarRef{sigil: sigil, name: var} ->
+        not MapSet.member?(binders(scan, sigil), var)
+      end)
+
+    if unbound, do: throw({:compile_error, unbound_message(kind, name, unbound, scan)})
+    :ok
+  end
+
+  defp binders(scan, "@"), do: scan.let
+  defp binders(scan, "$"), do: scan.set
+
+  defp unbound_message(kind, name, %AST.VarRef{sigil: sigil, name: var, line: line}, scan) do
+    {keyword, other_sigil} = if sigil == "@", do: {"let", "$"}, else: {"set", "@"}
+
+    hint =
+      if MapSet.member?(binders(scan, other_sigil), var),
+        do: " — it is bound as #{other_sigil}#{var}",
+        else: ""
+
+    "#{kind} '#{name}'#{line_suffix(line)}: #{sigil}#{var} is never bound; " <>
+      "there is no `#{keyword} #{var}` in this #{kind}#{hint}"
+  end
+
+  defp line_suffix(nil), do: ""
+  defp line_suffix(line), do: " line #{line}"
+
+  # `exists @x` asks whether a variable is bound, so it is not a read of it.
+  defp scan_bindings(%AST.Introspect{}, acc), do: acc
+
+  defp scan_bindings(%AST.VarRef{sigil: sigil} = ref, acc) when sigil in ["@", "$"],
+    do: %{acc | refs: [ref | acc.refs]}
+
+  defp scan_bindings(%AST.Let{name: name, value: value}, acc),
+    do: scan_bindings(value, %{acc | let: MapSet.put(acc.let, name)})
+
+  defp scan_bindings(%AST.Set{name: name, value: value}, acc),
+    do: scan_bindings(value, %{acc | set: MapSet.put(acc.set, name)})
+
+  defp scan_bindings(%AST.For{var: var, iterable: iterable, body: body}, acc),
+    do: scan_bindings([iterable, body], %{acc | let: MapSet.put(acc.let, var)})
+
+  # `reduce total 0 ?n (...)` binds its accumulator as `$total`.
+  defp scan_bindings(%AST.BuiltinCall{name: :reduce, args: [acc_name | rest]}, acc),
+    do: scan_bindings(rest, %{acc | set: MapSet.put(acc.set, acc_name)})
+
+  defp scan_bindings(%_{} = node, acc), do: scan_bindings(Map.from_struct(node), acc)
+  defp scan_bindings(node, acc) when is_map(node), do: scan_bindings(Map.values(node), acc)
+  defp scan_bindings(node, acc) when is_list(node), do: Enum.reduce(node, acc, &scan_bindings/2)
+  defp scan_bindings(node, acc) when is_tuple(node), do: scan_bindings(Tuple.to_list(node), acc)
+  defp scan_bindings(_leaf, acc), do: acc
 
   # --- Condition compilation ---
 
@@ -473,19 +550,18 @@ defmodule Anemos.Compiler do
 
   defp build_condition_evaluator(when_blocks, at_blocks, predicates) do
     triggers =
-      Enum.map(when_blocks, fn %AST.When{event: event, guard: guard} ->
-        {event_to_subscriptions(event), guard}
-      end) ++
+      Enum.map(when_blocks, fn %AST.When{event: event, guard: guard} -> {event, guard} end) ++
         Enum.map(at_blocks, fn %AST.At{time_spec: time_spec, guard: guard} ->
           {event_name, _spec, _recurrence} = at_spec_to_event(time_spec)
-          {[event_name], guard}
+          {event_name, guard}
         end)
 
     fn event_name, context ->
       try do
         triggered? =
-          Enum.any?(triggers, fn {events, guard} ->
-            event_name in events and trigger_guard_satisfied?(guard, context)
+          Enum.any?(triggers, fn {event, guard} ->
+            event_reported?(event, event_name, context) and
+              trigger_guard_satisfied?(guard, context)
           end)
 
         triggered? and
@@ -602,8 +678,19 @@ defmodule Anemos.Compiler do
          return: ret,
          scope: scope
        }) do
-    handler = fn bindings, context ->
-      {:ok, %{engine: engine, body: body, bindings: bindings, context: context}}
+    # A-35. The engine is looked up when the query runs, not here: handlers
+    # are registered with a running runtime, and the compiler has none.
+    #
+    # `inputs` is the `expect`ed bindings by name. The engine answers a map
+    # of bindings and the query's value is the one `return` names.
+    #
+    # ponytail: the body is parsed on every call. Cache per query if an
+    # engine's parse ever costs enough to matter.
+    handler = fn inputs, context ->
+      with {:ok, engine_mod} <- query_engine(context, engine, name),
+           {:ok, result} <- run_engine(engine_mod, body, inputs, context, name) do
+        query_return(result, ret, name)
+      end
     end
 
     %Anemos.CompiledQuery{
@@ -615,6 +702,53 @@ defmodule Anemos.Compiler do
       return: ret,
       handler: handler
     }
+  end
+
+  defp query_engine(context, engine, name) do
+    registry = Map.get(context, :data_models)
+
+    with true <- registry != nil,
+         {:ok, engine_mod} <- Anemos.Runtime.DataModelRegistry.lookup(registry, engine) do
+      {:ok, engine_mod}
+    else
+      _ ->
+        {:error,
+         Comn.Errors.Registry.error!("anemos.runtime/unknown_data_model",
+           field: name,
+           message: "query '#{name}' names engine '#{engine}', which has no registered handler"
+         )}
+    end
+  end
+
+  # The engine is host code handed policy text. Whatever it raises or
+  # answers out of contract is a failed query, not a crashed rule; its own
+  # words are not copied into the error (A-21).
+  defp run_engine(engine_mod, body, inputs, context, name) do
+    with {:ok, parsed} <- engine_mod.parse(body),
+         {:ok, result} <-
+           engine_mod.eval(parsed, %{bindings: inputs, data_store: Map.get(context, :data_store)}) do
+      {:ok, result}
+    else
+      _ -> {:error, query_failed(name, "its engine did not answer it")}
+    end
+  rescue
+    _ -> {:error, query_failed(name, "its engine raised")}
+  end
+
+  defp query_return(result, nil, _name), do: {:ok, result}
+
+  defp query_return(result, ret, name) do
+    case result do
+      %{^ret => value} -> {:ok, value}
+      _ -> {:error, query_failed(name, "its engine did not bind ?#{ret}, which it returns")}
+    end
+  end
+
+  defp query_failed(name, why) do
+    Comn.Errors.Registry.error!("anemos.runtime/query_failed",
+      field: name,
+      message: "query '#{name}' failed: #{why}"
+    )
   end
 
   # --- Rule compilation ---
@@ -643,17 +777,19 @@ defmodule Anemos.Compiler do
     # them at load time (not as runtime ops) so they're in the DataStore
     # before any rule handler fires.
     inline_data = extract_inline_data(body, name)
-    inline_queries = extract_inline_queries(body)
+    inline_queries = extract_inline_queries(body, name)
 
     compiled_meta = Map.merge(rule_meta || %{}, %{context_path: context_path})
 
     when_rules =
-      Enum.map(when_blocks, fn %AST.When{
-                                 event: event,
-                                 body: when_body,
-                                 guard: guard,
-                                 duration: duration
-                               } ->
+      when_blocks
+      |> Enum.with_index()
+      |> Enum.map(fn {%AST.When{
+                        event: event,
+                        body: when_body,
+                        guard: guard,
+                        duration: duration
+                      }, index} ->
         subscriptions = event_to_subscriptions(event)
         handler = build_guarded_handler(when_body, guard)
         dwell_ms = duration_to_dwell_ms(duration)
@@ -663,7 +799,8 @@ defmodule Anemos.Compiler do
           subscriptions: subscriptions,
           handler: handler,
           meta: compiled_meta,
-          dwell_duration_ms: dwell_ms
+          dwell_duration_ms: dwell_ms,
+          trigger: compound_trigger(event, index)
         }
       end)
 
@@ -704,11 +841,19 @@ defmodule Anemos.Compiler do
     end)
   end
 
-  defp extract_inline_queries(body) do
+  defp extract_inline_queries(body, rule_name) do
     Enum.flat_map(body, fn
-      %AST.QueryDecl{} = query -> [compile_query(query)]
-      %AST.Context{body: ctx_body} -> extract_inline_queries(ctx_body)
-      _other -> []
+      %AST.QueryDecl{} = query ->
+        compiled = compile_query(query)
+        # As for inline data: the rule name is the discriminator.
+        scope = if compiled.scope == :local, do: {:local, rule_name}, else: compiled.scope
+        [%{compiled | scope: scope}]
+
+      %AST.Context{body: ctx_body} ->
+        extract_inline_queries(ctx_body, rule_name)
+
+      _other ->
+        []
     end)
   end
 
@@ -848,8 +993,25 @@ defmodule Anemos.Compiler do
 
   # --- Event to subscriptions ---
 
+  # The operator is not needed to know what to listen to; it is kept by
+  # compound_trigger/2 and event_reported?/3, which decide what was heard.
   defp event_to_subscriptions({:compound, _op, events}), do: events
   defp event_to_subscriptions(event) when is_binary(event), do: [event]
+
+  defp compound_trigger({:compound, op, events}, index), do: {op, events, index}
+  defp compound_trigger(_event, _index), do: nil
+
+  # A-47. A compound trigger is decided over the last report of each operand,
+  # which the condition server keeps and hands in as `:_reports`. Called
+  # without one, the arriving event is the only report there has been.
+  defp event_reported?({:compound, op, events}, event_name, context) do
+    reports =
+      Map.get(context, :_reports) || %{event_name => Anemos.Runtime.Report.truthy?(context)}
+
+    event_name in events and Anemos.Runtime.Report.value(op, events, reports)
+  end
+
+  defp event_reported?(event, event_name, _context), do: event == event_name
 
   # --- Handler builder ---
 
@@ -1249,8 +1411,15 @@ defmodule Anemos.Compiler do
   defp resolve_expr(%AST.Literal{value: value}, _context, _bindings), do: value
 
   # ? — resolve from context data (external, from the event context map)
-  defp resolve_expr(%AST.VarRef{sigil: "?", name: name}, context, _bindings) do
-    get_in(context, [:context_data, name])
+  #
+  # `?name` reads whatever is named in scope and is not a local binding:
+  # context data first, then a query of that name — which runs — then a data
+  # block of that name. A name that is none of them is `nil`.
+  defp resolve_expr(%AST.VarRef{sigil: "?", name: name}, context, bindings) do
+    case Map.get(context, :context_data) do
+      %{^name => value} -> value
+      _ -> resolve_named(name, context, bindings)
+    end
   end
 
   # @ — resolve from let bindings (immutable/ephemeral)
@@ -1315,6 +1484,81 @@ defmodule Anemos.Compiler do
   defp resolve_expr(%AST.BuiltinCall{} = call, _context, _bindings), do: call
 
   defp resolve_expr(other, _context, _bindings), do: other
+
+  defp resolve_named(name, context, bindings) do
+    queries = Map.get(context, :queries) || %{}
+    rule = Map.get(context, :_rule_name)
+    data_store = Map.get(context, :data_store)
+
+    cond do
+      query = Map.get(queries, {name, {:local, rule}}) || Map.get(queries, {name, :global}) ->
+        run_query(query, context, bindings)
+
+      data_store ->
+        Anemos.Runtime.DataStore.get(data_store, name, scope_hint(rule))
+
+      true ->
+        nil
+    end
+  end
+
+  # A data block that is not registered — never declared, or one whose
+  # format or feed failed at load — is not an empty set. An allow-list that
+  # answers `false` for everything denies nothing it was written to deny,
+  # so `memberof` against it is an error (A-26, A-34).
+  defp require_datasets!(data_store, names, opts) do
+    missing = Enum.find(names, &(Anemos.Runtime.DataStore.get(data_store, &1, opts) == nil))
+
+    if missing do
+      throw(
+        {:anemos_verb_error,
+         Comn.Errors.Registry.error!("anemos.runtime/unknown_dataset",
+           field: to_string(missing),
+           message: "memberof names '#{missing}', and no data block of that name is registered"
+         )}
+      )
+    end
+  end
+
+  defp scope_hint(nil), do: []
+  defp scope_hint(rule), do: [scope_hint: rule]
+
+  # A query is called by naming it: `?find-user`. What it `expect`s is taken
+  # from the caller's scope by name — a `let`, then a `set`, then context
+  # data — and a name that is none of those is an error, not a `nil` handed
+  # to the engine. A failed query aborts the body the way a failed
+  # expression-position verb does.
+  defp run_query(query, context, bindings) do
+    inputs =
+      Map.new(query.expect || [], fn name ->
+        case expected_binding(name, context, bindings) do
+          {:ok, value} ->
+            {name, value}
+
+          :error ->
+            throw(
+              {:anemos_verb_error,
+               Comn.Errors.Registry.error!("anemos.runtime/query_missing_binding",
+                 field: query.name,
+                 message:
+                   "query '#{query.name}' expects :#{name}, which is not bound where it is called"
+               )}
+            )
+        end
+      end)
+
+    case query.handler.(inputs, context) do
+      {:ok, value} -> value
+      {:error, error} -> throw({:anemos_verb_error, error})
+    end
+  end
+
+  defp expected_binding(name, context, bindings) do
+    with :error <- Map.fetch(bindings, {:let, name}),
+         :error <- Map.fetch(bindings, {:set, name}) do
+      Map.fetch(Map.get(context, :context_data) || %{}, name)
+    end
+  end
 
   # The one place the compiled closure reaches host code, and it does so
   # through the dispatcher's shared entry point so that A-11's schema
@@ -1436,8 +1680,9 @@ defmodule Anemos.Compiler do
         data_store = Map.get(context, :data_store)
 
         if data_store do
-          rule_name = Map.get(context, :_rule_name)
-          opts = if rule_name, do: [scope_hint: rule_name], else: []
+          opts = scope_hint(Map.get(context, :_rule_name))
+
+          require_datasets!(data_store, names, opts)
           Anemos.Runtime.DataStore.member_any?(data_store, names, l, opts)
         else
           false

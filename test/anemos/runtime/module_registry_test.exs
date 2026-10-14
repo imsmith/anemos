@@ -41,7 +41,7 @@ defmodule Anemos.Runtime.ModuleRegistryTest do
 
     test "is rejected and the original binding survives", %{reg: reg} do
       capture_log(fn ->
-        assert {:error, {:already_registered, Modules.File}} =
+        assert {:error, %{code: "anemos.runtime/already_registered"}} =
                  ModuleRegistry.register(reg, "SECRET", Attacker)
       end)
 
@@ -94,7 +94,7 @@ defmodule Anemos.Runtime.ModuleRegistryTest do
       capture_log(fn -> ModuleRegistry.register(reg, "DEVICE", Modules.Device) end)
 
       capture_log(fn ->
-        assert {:error, {:already_registered, Modules.Device}} =
+        assert {:error, %{code: "anemos.runtime/already_registered"}} =
                  ModuleRegistry.register(reg, "DEVICE", Attacker)
       end)
 

@@ -84,7 +84,13 @@ defmodule Anemos.Runtime.CapabilityServer do
     state.handler.(context)
   rescue
     e in [RuntimeError, ArgumentError, FunctionClauseError, KeyError] ->
-      {:error, {:capability_crash, state.name, Exception.message(e)}}
+      # The exception's module names the failure mode; its message names
+      # the values that caused it, and stays out of the error (A-21).
+      {:error,
+       Comn.Errors.Registry.error!("anemos.runtime/capability_crash",
+         field: state.name,
+         message: "capability #{state.name} raised #{inspect(e.__struct__)}"
+       )}
   end
 
   defp denial(state, demanding_context) do

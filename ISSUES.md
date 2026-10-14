@@ -47,33 +47,33 @@ than removed.
 | A-62 | MEDIUM | Recurring schedule resurrects itself after cancellation | **Fixed** |
 | A-63 | MEDIUM | `DataStore` monitors map leaked on deregister | **Fixed** |
 | A-16 | MEDIUM | `nextrule`/`nextevent` discard state | **Fixed** — state threaded through `execute_op/4`; args gap is A-51 |
-| A-17 | MEDIUM | Sibling `when` block destroys armed dwell state | Open |
+| A-17 | MEDIUM | Sibling `when` block destroys armed dwell state | Partially fixed — `dispatch_immediate` carries dwell and compound entries across a handler run; two `when` blocks on the same dwell event still collapse to one |
 | A-18 | MEDIUM | `Anemos.run/2` leaks 4 processes per call | **Fixed** — `Runtime.Standalone` with explicit teardown; 2 regression tests |
 | A-19 | MEDIUM | Same-time `at` blocks collide and leak timers | **Fixed** — displaced timers cancelled; `unschedule/2` added. Rule identity is A-61 |
 | A-20 | MEDIUM | Schedules that can never fire report `:ok` | Fixed at the scheduler; `load/2` propagation pending (see A-22) |
 | A-21 | MEDIUM | Internal error detail returned to callers | Open |
-| A-22 | MEDIUM | Three incompatible error representations | Partially fixed — `load/2` now propagates partial failure; the three representations remain |
+| A-22 | MEDIUM | Three incompatible error representations | **Fixed 2026-10-04** for the representations — one form, `{:error, %Comn.Errors.ErrorStruct{}}`, everywhere. The related fail-silent items in the entry are still open |
 | A-23 | MEDIUM | `TripleStore` unbounded list, O(n) insert | **Fixed** — `MapSet` backing; retention policy still undecided, see entry |
 | A-24 | MEDIUM | `DataStore` scope discriminators inconsistent; cleanup unreachable | **Fixed** — `get/3` takes `:scope_hint`; explicit `drop_scope/2` |
-| A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Open |
-| A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | Partially fixed — unhandled protocol now surfaces through `load/2`; `memberof` still fails open |
+| A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Partially fixed 2026-10-04 — a `@name` / `$name` nothing in the declaration binds is a compile error naming the right sigil; read-before-first-`set`, absent `?name` and bare-word literals still answer silently |
+| A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | **Fixed 2026-10-04** — a block whose feed fails is not registered, and `memberof` against an unregistered block is an `unknown_dataset` error |
 | A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55; no CI workflow, there is no git remote |
 | A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.2`; `mix.lock` records the commit |
-| A-29 | LOW | `TODO.md` contradicts the README and the code | Open |
-| A-30 | LOW | Two of three shipped examples do not work | Partial — `garage-lights` and `ddns` now run; `normalize-pdfs` blocked on A-56 |
+| A-29 | LOW | `TODO.md` contradicts the README and the code | **Fixed** — rewritten 2026-08-07; its stale "Known gaps" corrected 2026-10-04. The stray root file and Appendix A contradictions were not re-checked |
+| A-30 | LOW | Two of three shipped examples do not work | **Fixed** — all three run with their documented commands, re-run 2026-10-04. `:{...}` label interpolation still renders literally, listed in `TODO.md` |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
 | A-32 | LOW | Repository hygiene | Open |
 | A-33 | MEDIUM | `Anemos.Module` documents two functions that do not exist | **Fixed** — example uses a real API and points at `Anemos.Secret` |
-| A-34 | MEDIUM | Format `data` blocks are silently discarded | Open |
-| A-35 | MEDIUM | `compile_query/1` is an unmarked stub; `query_blocks` never read | Open |
+| A-34 | MEDIUM | Format `data` blocks are silently discarded | **Fixed 2026-10-04** — built by the registered `Anemos.DataModel` handler at load; a block that cannot be built fails the load and is not registered |
+| A-35 | MEDIUM | `compile_query/1` is an unmarked stub; `query_blocks` never read | **Fixed 2026-10-04** — a query is called by naming it, `?name`, and run by its engine's handler; see entry for what the spec left open |
 | A-36 | LOW | Spec/test drift on transducer naming | Open |
-| A-37 | LOW | `compiler.ex:453` type confusion latent in dwell duration | Open |
+| A-37 | LOW | `compiler.ex:453` type confusion latent in dwell duration | **Fixed** — `duration_to_dwell_ms/1` already calls `Duration.to_ms!/1`; register row was stale, found 2026-10-04 |
 | A-38 | LOW | DST exposure is wider than `scheduler.ex` — `nld.ex` too | Open |
 | A-39 | HIGH | `nextrule` bypasses context filtering and the dwell state machine | **Fixed** — `dispatch_rules/5` is now the only path into a handler |
 | A-51 | MEDIUM | `nextrule` args are dropped in the parser; `BlockArgs` never constructed | **Fixed** — syntax is `nextrule t with { k: v }`; needed a lexer fix too |
 | A-55 | LOW | `AST.NextEvent.args` has no producer **and** no consumer | **Fixed** — wired, per option 1; `with { }` shared with `nextrule` |
 | A-56 | HIGH | Module calls in expression position are never dispatched | **Fixed** — 2450f88; resolved and substituted at evaluation, eagerly |
-| A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | Open |
+| A-57 | MEDIUM | `type:ipv4` keyword arguments are flattened to positional by the parser | **Decided 2026-10-04** — there are no keyword arguments; the form is `[INFRA::get_ip eth0 ipv4]`. Example, README and the `INFRA` double updated |
 | A-52 | MEDIUM | `dispatcher.ex` still discloses payloads in three places | **Fixed** — structure stays, values go; two documented opt-ins |
 | A-58 | LOW | `log` of an authored literal is redacted like untrusted data | **Withdrawn** — the redaction it critiqued was reverted; see entry |
 | A-59 | HIGH | `Anemos.run/2` and the CLI bypass `LoadAuthority` entirely | **Fixed** — both callers collapsed onto `LoadAuthority.gate/3`, the only door to an AST |
@@ -84,10 +84,10 @@ than removed.
 | A-41 | MEDIUM | Armed dwell timers vanish on restart and never re-arm | **Fixed** — deadline stored with the binding; re-armed for the time remaining |
 | A-42 | MEDIUM | Condition state resets to false on restart, causing a double-fire | **Fixed** — each condition's value kept in `StateTable`; a redeployed condition whose text changed still reads false |
 | A-43 | MEDIUM | `ModuleRegistry` registrations have no durable backing | **Fixed** — `StateTable`; found A-76 on the way |
-| A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; the class is unaudited |
+| A-44 | MEDIUM | Parser accepts specs the runtime cannot dispatch — deferred crash | Partially fixed — two instances closed; decided 2026-10-04 that references are validated at runtime: unknown `nextrule` target and unknown `memberof` dataset are now errors where reached. The parser/runtime value audit is still undone |
 | A-45 | LOW | Lexer post-processing errors report column 1, violating the stated contract | Open |
 | A-46 | HIGH | The language has no boolean literals; `== true` is inverted from intent | **Fixed** — `{:boolean, _, true\|false}` token; mismatch warns, no coercion |
-| A-47 | MEDIUM | Compound `AND` event triggers behave as `OR` | Open |
+| A-47 | MEDIUM | Compound `AND` event triggers behave as `OR` | **Fixed 2026-10-04** — compound state over each operand's last report; `AND` and `OR` each fire at every report at which the state is true |
 | A-48 | MEDIUM | `until` on a condition trigger cannot latch | Open |
 | A-49 | MEDIUM | Multiple trigger blocks in one condition run each other's side effects | Open |
 | A-50 | MEDIUM | Condition-body operations are computed and dropped; needs dispatcher wiring | **Fixed** — wired via `run_ops/5`; body runs before woken listeners |
@@ -97,7 +97,7 @@ than removed.
 | A-79 | LOW | Runtime state does not survive the node | **Decided 2026-10-02** — left to the ecosystem; agento/llmagent already have a durable-state facility to integrate with |
 | A-80 | HIGH | An `at` time that does not exist crashed the scheduler, and with A-77 crash-looped the runtime | **Fixed** — arming is total; the declaration is reported inert |
 | A-81 | MEDIUM | `unload/2` is not gated by the load authority | **Decided 2026-10-02** — unsigned unloads stay permitted; the gated path is `[POLICY::unload "id"]` from a loaded (so authorised) policy |
-| A-82 | LOW | A verb whose name is hex letters (`[M::a]`, `[M::be]`) lexes as an IPv6 address | Open |
+| A-82 | LOW | A verb whose name is hex letters (`[M::a]`, `[M::be]`) lexes as an IPv6 address | **Fixed 2026-10-04** — `::` hard against a module name and followed by a lowercase letter is the verb separator |
 | L-01 | — | `RuleSupervisor` is dead code that ships in the published docs | **Resolved** — wired as the per-rule tier alongside `StoreSupervisor` |
 | L-02 | — | `DataModelRegistry` is exercised only by its own tests | **Diagnosis corrected** — premise was wrong; keep the module, real defects split to A-34/A-35 |
 | L-03 | — | `Anemos.Application` starts no supervision tree | **Resolved** — documented as a library application |
@@ -880,6 +880,43 @@ Related fail-open and fail-silent defects in the same area:
 - The `ErrorStruct` carries a `suggestion:` field that is `nil` in every error the system
   produces (see A-31).
 
+### Fixed 2026-10-04 — one representation
+
+Decided by the owner: structured errors only, for everything. Every error Anemos answers is
+`{:error, %Comn.Errors.ErrorStruct{}}`; a load that leaves declarations inert answers
+`{:partial, [%ErrorStruct{}]}`. The `code` is what a caller matches. Codes live in
+`Anemos.Runtime.Errors`:
+
+| Prefix | From |
+| --- | --- |
+| `anemos.lexer/`, `anemos.parser/`, `anemos.compiler/` | source that does not lex, parse or compile |
+| `anemos.runtime/` | load, unload, dispatch, registration, verb arguments |
+| `anemos.scheduler/`, `anemos.data/` | a schedule or data block that loaded inert; `field` names it |
+| `anemos.trust/` | the trust store and signature verification; `field` is the signer |
+| `anemos.path/`, `anemos.duration/`, `anemos.nld/` | `PathGuard`, `Duration`, `NLD` |
+
+The lexer, parser and `ArgSchema` still pass `{:error, "text"}` between their own private
+functions; each has one way out and converts there. `test/anemos/structured_errors_test.exs`
+asserts the shape layer by layer.
+
+What an error can no longer carry: `ErrorStruct` holds strings, so a failure term is carried
+as its tag and not its values. Two places this changed behaviour —
+
+- A feed that refuses to start used to hand its full reason back on the `load/3` failure
+  (A-52 site 3, so that it stayed out of the log and was not lost). The failure now says
+  `:auth_failed` and not what the handler said with it.
+- A host verb answering `{:error, reason}` used to have `reason` passed through to the
+  dispatch results. It is now `anemos.runtime/verb_failed` with the reason's tag. A host
+  that wants more said answers an `ErrorStruct` itself, which passes through untouched.
+
+Left as they were, because they are not Anemos's errors: what host code answers *to* Anemos
+through a behaviour (`Anemos.Runtime.Module`, `DataModel`, `Subscribable`, `LoadAuthority`),
+and OTP's own `{:error, {:already_started, pid}}` and the like from supervisors.
+
+Still open from the list above: `dispatch/3` answers `{:ok, results}` when every result is
+an error; channel publish results are discarded; `safe_handle/4`'s catch-all; `suggestion`
+is `nil` in every error.
+
 ---
 
 ## A-23 — `TripleStore` unbounded list, O(n) insert
@@ -962,6 +999,18 @@ sigil resolution will miss it.
 Distinguish "not bound" from "bound to nil" in `resolve_expr` and surface the former as a
 diagnostic. This is the defect most likely to cost a user hours, because the failure mode
 for a typo is a successful run with wrong output.
+
+### Partially fixed 2026-10-04
+
+`Compiler.check_bindings!/3` refuses, at compile time, a `@name` or `$name` that no statement
+in the rule, condition or capability could ever bind — `let`, a loop variable, `set`, or a
+`reduce` accumulator. The message names the line and, where the name is bound under the
+other sigil, says so. That covers the typo and the wrong sigil.
+
+Still silent, deliberately: `$count` read before the first `set count` has run (bound in the
+declaration, not yet at runtime); `?name` the environment did not supply; and the bare-word
+literal shape described above, which no binding check can see. Three tests that seeded a
+`$` binding straight into a handler, for a variable no source could set, were given a `set`.
 
 ---
 
@@ -1268,6 +1317,38 @@ every keyword is accepted.
 Either implement the query path per the spec, or mark the construct explicitly
 unimplemented so it fails loudly at compile time rather than silently at runtime. Do not
 leave a construct that reports success and does nothing.
+
+### Fixed 2026-10-04
+
+Implemented, with A-34, against `docs/superpowers/specs/2026-04-15-data-query-blocks-design.md`.
+
+- The host registers `Anemos.DataModel` handlers with `Anemos.Runtime.register_data_model/2`.
+  The runtime ships none. `DataModelRegistry` is now a child of the store supervisor (L-02).
+- A query's engine handler `parse/1`s the body and `eval/2`s it with
+  `%{bindings: <expected, by name>, data_store: pid}`. It answers a map of bindings; the
+  query's value is the one `return` names.
+
+Three things the spec did not settle, and what was built:
+
+- **How a rule calls a query.** The spec has no call syntax. A query is called by naming it:
+  `?find-user`. This follows the owner's definition of `?` as "dereference a named thing in
+  scope: context data, a named query result, a named data reference". `?name` resolves in
+  that order, so context data of the same name wins. `?name` naming a data block answers
+  its dataset.
+- **Where `expect`ed bindings come from.** From the caller's scope by name: a `let`, then a
+  `set`, then context data. One that is none of these is a `query_missing_binding` error.
+- **Unregistered engine or format.** The spec says compile-time error. Handlers are
+  registered with a running runtime and the compiler has none, so it is a runtime check,
+  per the 2026-10-04 decision that references are validated at runtime: a format block
+  fails its `load/3`, a query fails with `unknown_data_model` when called.
+
+A failed query aborts the body, as a failed expression-position verb does. A handler that
+raises is caught on both paths.
+
+Not built: `periodic` on a dynamic block; parse caching; queries called from a `condition`
+or `capability` body, which are not handed the query index; the spec's optional `member?/2`
+handler callback; "import" and "function/eval" shapes are whatever a handler makes of its
+body — nothing in the runtime distinguishes them.
 
 ---
 
@@ -1605,6 +1686,33 @@ semantics require knowing whether the events must be simultaneous, or both-seen-
 events, paired-event dwell cancellation). Guessing here would bake in the wrong answer.
 
 The A-04 evaluator work makes the gap explicit and cheap to close once that model lands.
+
+### Fixed 2026-10-04
+
+The owner's model, stated that day:
+
+- An event arriving is a **report**, true or false at the time it is made — true unless its
+  payload carries a falsy `state`, the convention the dwell timer already read. The report
+  stands as that event's state until its next report. There is no "cleared" state and no
+  history: only the last report.
+- `when (A AND B)` is a **compound state**, true if and only if A and B are both true as last
+  reported. It is evaluated at every report of either.
+- `when` reads "when the condition holds, do" — not "when the condition comes to hold".
+  Every report of an operand is a check, and **every check that finds the state true fires
+  the block**. It is not an edge. (A fire-once reading was built first and corrected by the
+  owner the same day.)
+- Reports are kept per `when` block within its rule, so within its context: a report the
+  rule's context does not admit is not heard at all.
+- `OR` is boolean over the same reports. The report is recorded before the state is decided,
+  so neither operator skips an operand because another already settled the answer.
+
+`Anemos.Runtime.Report` holds the two functions; the dispatcher keeps a rule's reports in
+`rule_bindings` under `{:compound, index}`, a condition server keeps its own in `StateTable`.
+`when (A AND B) for <duration>` runs one dwell machine over the compound state. Lowercase
+`and` / `or` are accepted in a compound `when`.
+
+A `condition` is the edge: its own false→true broadcast is unchanged, so
+`condition c { when (A AND B) { ... } }` runs its body once per transition.
 
 ---
 
@@ -2052,6 +2160,25 @@ it and silently discards its structure.
 
 Same family as A-51's colon defect: colon-delimited syntax that the language's own
 documents use and the lexer/parser never modelled.
+
+### Decided 2026-10-04
+
+The owner's answer: the language has no keyword arguments. Verb arguments are positional,
+and the call is written
+
+```text
+let ipv4 = [INFRA::get_ip eth0 ipv4]
+let ipv6 = [INFRA::get_ip eth0 ipv6]
+```
+
+`priv/examples/ddns.rule`, the README and the `INFRA` example double now use that form, and
+the double's `keyword_after/3` workaround is gone.
+
+Not done: `type:ipv4` is still accepted and still arrives as `"type"`, `"ipv4"`. It cannot
+simply be made a lexer error, because an identifier hard against a `:name` is also how a
+key path is written — `agent.did_meshid_z6MkAgent123.operator.security:did_key_67890` in
+the same example. The language specification in the vault (lines 771-772) still shows the
+old form.
 
 ---
 

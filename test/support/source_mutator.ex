@@ -142,25 +142,25 @@ defmodule Anemos.SourceMutator do
 
   def mutate(source, :flip_byte) when byte_size(source) > 0 do
     i = :rand.uniform(byte_size(source)) - 1
-    <<head::binary-size(i), _replaced, tail::binary>> = source
+    <<head::binary-size(^i), _replaced, tail::binary>> = source
     <<head::binary, :rand.uniform(255), tail::binary>>
   end
 
   def mutate(source, :insert_byte) do
     i = :rand.uniform(byte_size(source) + 1) - 1
-    <<head::binary-size(i), tail::binary>> = source
+    <<head::binary-size(^i), tail::binary>> = source
     <<head::binary, :rand.uniform(255), tail::binary>>
   end
 
   def mutate(source, :delete_byte) when byte_size(source) > 0 do
     i = :rand.uniform(byte_size(source)) - 1
-    <<head::binary-size(i), _dropped, tail::binary>> = source
+    <<head::binary-size(^i), _dropped, tail::binary>> = source
     <<head::binary, tail::binary>>
   end
 
   def mutate(source, :invalid_utf8) do
     i = :rand.uniform(byte_size(source) + 1) - 1
-    <<head::binary-size(i), tail::binary>> = source
+    <<head::binary-size(^i), tail::binary>> = source
     <<head::binary, 0xFF, 0xFE, tail::binary>>
   end
 

@@ -6,7 +6,7 @@ defmodule Anemos.MixProject do
     [
       app: :anemos,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.20",
       package: package(),
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -15,6 +15,10 @@ defmodule Anemos.MixProject do
       aliases: aliases(),
       dialyzer: dialyzer()
     ]
+  end
+
+  def cli do
+    [preferred_envs: [check: :test]]
   end
 
   # `mix check` is the single entry point for a developer or a CI runner.
@@ -72,10 +76,10 @@ defmodule Anemos.MixProject do
       # does on its own.
       #
       # `req` is resolved through comn's own `{:req, "~> 0.5"}` — which permits
-      # `< 1.0.0`, so mix.lock reaches 0.7.2. An override pinning it here was
-      # removed once comn was tested green against 0.7.2 (A-66); Anemos should
+      # `< 1.0.0`, so mix.lock floats within 0.7.x. An override pinning it here was
+      # removed once comn was tested green against 0.7.x (A-66); Anemos should
       # not be legislating its dependency's dependencies.
-      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.5.2"},
+      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.6.3"},
       {:nimble_parsec, "~> 1.4"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

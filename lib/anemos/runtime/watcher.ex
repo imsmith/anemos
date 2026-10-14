@@ -209,6 +209,5 @@ defmodule Anemos.Runtime.Watcher do
     Logger.error("[anemos] policy #{id} not deployed, previous version kept: #{describe(reason)}")
   end
 
-  defp describe(reason) when is_binary(reason), do: reason
   defp describe(%{message: message}) when is_binary(message), do: message
 end

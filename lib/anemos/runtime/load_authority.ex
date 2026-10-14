@@ -116,7 +116,7 @@ defmodule Anemos.Runtime.LoadAuthority do
   `:ok` permits the load. `{:error, reason}` refuses it; `reason` is logged
   and named in the caller's error, so it must not carry a credential.
   """
-  @type verdict :: :ok | {:error, atom() | String.t()}
+  @type verdict :: :ok | {:error, atom() | String.t() | Comn.Errors.ErrorStruct.t()}
 
   @doc "Decides whether `request` may be installed into the runtime. Refuse by default."
   @callback authorize(request :: LoadRequest.t()) :: verdict()

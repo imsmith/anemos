@@ -15,9 +15,9 @@ defmodule Anemos.Runtime.Duration do
   @doc """
   Converts a duration tuple to milliseconds.
 
-  Returns the millisecond count, or `{:error, {:unknown_duration_unit, unit}}`
-  for an unrecognised unit, or `{:error, {:invalid_duration, term}}` for
-  anything that is not a `{amount, unit}` pair.
+  Returns the millisecond count, or `{:error, %Comn.Errors.ErrorStruct{}}` with
+  code `anemos.duration/unknown_unit` for an unrecognised unit, or
+  `anemos.duration/invalid` for anything that is not a `{amount, unit}` pair.
 
   ## Examples
 
@@ -27,12 +27,11 @@ defmodule Anemos.Runtime.Duration do
       iex> Anemos.Runtime.Duration.to_ms({2, :s})
       2_000
 
-      iex> Anemos.Runtime.Duration.to_ms({2, :fortnights})
-      {:error, {:unknown_duration_unit, :fortnights}}
+      iex> {:error, %Comn.Errors.ErrorStruct{code: code}} = Anemos.Runtime.Duration.to_ms({2, :fortnights})
+      iex> code
+      "anemos.duration/unknown_unit"
   """
-  @spec to_ms(term()) ::
-          non_neg_integer()
-          | {:error, {:unknown_duration_unit, atom()} | {:invalid_duration, term()}}
+  @spec to_ms(term()) :: non_neg_integer() | {:error, Comn.Errors.ErrorStruct.t()}
   def to_ms({amount, :ms}), do: amount
   def to_ms({amount, :s}), do: amount * 1_000
   def to_ms({amount, :seconds}), do: amount * 1_000

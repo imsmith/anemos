@@ -344,7 +344,8 @@ defmodule Anemos.Compiler do
       ["h", "IN", "A", "1"]
 
   """
-  @spec compile(AST.Program.t()) :: {:ok, Anemos.CompilationResult.t()} | {:error, String.t()}
+  @spec compile(AST.Program.t()) ::
+          {:ok, Anemos.CompilationResult.t()} | {:error, Comn.Errors.ErrorStruct.t()}
   def compile(%AST.Program{declarations: declarations}) do
     result =
       Enum.reduce(declarations, %Anemos.CompilationResult{}, fn decl, acc ->

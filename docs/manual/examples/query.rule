@@ -1,0 +1,12 @@
+query greet {
+  expect :name
+  greeter { hello }
+  return ?line
+}
+
+rule welcome {
+  when ARRIVAL {
+    let name = ?visitor
+    log ?greet
+  }
+}

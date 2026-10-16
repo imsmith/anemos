@@ -8,6 +8,7 @@ defmodule Anemos.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       package: package(),
+      docs: docs(),
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       consolidate_protocols: Mix.env() != :test,
@@ -56,7 +57,36 @@ defmodule Anemos.MixProject do
   defp package do
     [
       licenses: ["AGPL-3.0-or-later"],
-      files: ~w(lib mix.exs LICENSE README* CLAUDE.md)
+      files: ~w(lib mix.exs LICENSE README* CLAUDE.md docs/manual)
+    ]
+  end
+
+  defp docs do
+    chapters = [
+      "docs/manual/01-first-policy.md",
+      "docs/manual/02-execution-model.md",
+      "docs/manual/03-values-and-expressions.md",
+      "docs/manual/04-control-flow.md",
+      "docs/manual/05-collections.md",
+      "docs/manual/06-conditions-and-capabilities.md",
+      "docs/manual/07-time.md",
+      "docs/manual/08-data.md",
+      "docs/manual/09-embedding.md",
+      "docs/manual/10-operation.md",
+      "docs/manual/11-troubleshooting.md",
+      "docs/manual/12-workshop.md",
+      "docs/manual/reference.md",
+      "docs/manual/glossary.md"
+    ]
+
+    [
+      main: "programming-anemos",
+      source_url: "https://github.com/imsmith/anemos",
+      extras: [{"docs/manual/README.md", filename: "programming-anemos"} | chapters],
+      groups_for_extras: [
+        "Programming Anemos": ["docs/manual/README.md" | chapters]
+      ],
+      assets: %{"docs/manual/examples" => "examples"}
     ]
   end
 

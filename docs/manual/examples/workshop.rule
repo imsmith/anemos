@@ -1,0 +1,36 @@
+data accepted_sensors {
+  bench_a
+  bench_b
+}
+
+rule workshop-alerts {
+  context workshop.bench
+
+  when MUTE {
+    set muted = true
+  }
+
+  when UNMUTE {
+    set muted = false
+  }
+
+  when TEMPERATURE unless $muted {
+    if not exists ?celsius {
+      log "Missing temperature"
+      return
+    }
+    if ?sensor memberof(accepted_sensors) {
+      if ?celsius >= 30 {
+        let receipt = [ALERT::send ?sensor ?celsius]
+        set sent = ($sent OR 0) + 1
+        log @receipt
+      }
+    } else {
+      log "Unknown sensor"
+    }
+  }
+
+  when REPORT {
+    log $sent OR 0
+  }
+}

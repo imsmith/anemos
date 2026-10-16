@@ -8,7 +8,7 @@ defmodule Anemos.Runtime.StoreSupervisor do
   per declaration in the loaded policy set.
 
   These processes were previously `start_link`ed from inside
-  `Anemos.Runtime.Dispatcher.init/1`. Because the dispatcher does not trap
+  the dispatcher's initialization callback. Because the dispatcher does not trap
   exits, the death of any one of them killed the dispatcher, and the
   dispatcher's own restart came back with an empty rule set — silently
   destroying every loaded policy. Re-parenting them here severs that link:

@@ -1,0 +1,9 @@
+rule summarize {
+  when BATCH {
+    let total = ?values
+      |> filter ?n (?n > 0)
+      |> map ?n (?n * 2)
+      |> reduce sum 0 ?n ($sum + ?n)
+    log @total
+  }
+}

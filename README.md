@@ -1,689 +1,119 @@
 # Anemos
 
-Event-driven automation DSL on the BEAM. Define reactive policies that listen
-for events, track conditions, gate on capabilities, and execute operations —
-all in a concise, readable language.
+Anemos is an event-driven automation language on the BEAM. Write policies that
+listen for events, make decisions, retain state, and invoke commands supplied
+by an Elixir host application.
 
-## Quick Example
+**Start with [Programming Anemos](docs/manual/README.md)**, the user manual.
+It teaches the language from first principles, then covers embedding,
+deployment, troubleshooting, and the full language reference.
 
-```
-rule garage-lights-on {
-  context "garage.motion.sensor" {
-    when SENSOR_MOTION_DETECTED {
-      [DEVICE::set "garage.lights" "on"]
+## A first rule
+
+```text
+rule garage-motion {
+  context "garage" {
+    when MOTION {
+      log "Garage motion detected"
     }
   }
 }
 ```
 
-## Richer Example
+The rule listens for `MOTION` events arriving from `garage` or a descendant
+context such as `garage.sensor`. Its body runs when an eligible event arrives.
+Host actions use commands such as `[DEVICE::set "garage.lights" "on"]`;
+the host registers the implementation behind each module and verb.
 
-Conditions, capabilities, and rules compose. Here a network change condition
-gates a DNS update rule that demands a capability before executing:
+## Build and try it
 
-```
-capability katachora-ddns-key {
-  context infra.networking
+Use the Erlang/Elixir versions in [.tool-versions](.tool-versions). The project
+requires Elixir `~> 1.20`.
 
-  on demand {
-    emit [SECRET::unlock(agent.did_meshid_z6MkAgent123.operator.security:did_key_67890)]
-      as :katachora.ddns.key
-  }
-}
-
-condition networkchanged {
-  when (INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed) {
-    emit [EVENT::ip.addr.changed to channel(system.config.network)]
-      as :{?hostname}.network.ip.addr.changed
-  }
-}
-
-rule update-ddns {
-  context infra.networking.dns
-
-  when CONDITION_networkchanged {
-    demand katachora-ddns-key
-
-    let fqdn = ?fqdn
-    let ipv4 = [INFRA::get_ip eth0 ipv4]
-    let ipv6 = [INFRA::get_ip eth0 ipv6]
-    let update = (:fqdn IN A ipv4) AND (:fqdn IN AAAA ipv6)
-
-    emit [INFRA::ddns_update(:katachora.ddns.key, katachora.com, update)
-          to channel(system.config.network.dns.ddns)]
-      as ddns.update.:{?fqdn}
-  }
-}
-```
-
-More examples in `priv/examples/`.
-
-## Integration
-
-Anemos is a language interpreter, not an application. Start a blank runtime
-in your supervision tree, then load modules and policies into it dynamically.
-
-### Building it
-
-```bash
-git clone <this repo>
-cd anemos
+```sh
 mix deps.get
-mix test
+mix compile
+mix anemos.run docs/manual/examples/garage.rule \
+  --event MOTION --context garage.sensor
 ```
 
-No sibling checkouts are required. The one substantial dependency,
-[comn](https://github.com/imsmith/comn), is a git dependency pinned to a
-tag, and `mix.lock` records the exact commit — so a fresh clone builds
-the same tree that was tested.
+Dependencies are pinned in `mix.lock`; no sibling checkout is required.
+The CLI dispatches one event and exits. Payload fields can be supplied as
+repeatable `--context-data KEY=VALUE` options; these values are strings.
+See [the first chapter](docs/manual/01-first-policy.md) for a guided session.
 
-`mix deps.get` reports two remaining advisories, both against `cowlib`
-(one LOW, one MEDIUM), reached transitively through `comn`'s NATS client.
-Neither has a fixed release to move to — `cowlib` 2.19.0 is the newest
-published version and is itself named as affected. No HIGH advisories
-remain. Tracked as A-66 in `ISSUES.md`.
+Run the accompanying examples, which check their own answers:
 
-### Supervise the runtime
+```sh
+mix run docs/manual/examples/walkthrough.exs
+mix run docs/manual/examples/data_models.exs
+mix run docs/manual/examples/workshop.exs
+```
+
+## Embed a persistent interpreter
 
 ```elixir
-children = [
-  {Anemos.Runtime, name: :anemos}
-]
-
+children = [{Anemos.Runtime, name: :anemos}]
 Supervisor.start_link(children, strategy: :one_for_one)
+
+# This log-only policy needs no command modules.
+source = File.read!("docs/manual/examples/garage.rule")
+:ok = Anemos.Runtime.load(:anemos, source, policy: "garage.rule")
+{:ok, results} = Anemos.Runtime.dispatch(:anemos, "MOTION",
+  %{context_path: "garage.sensor", context_data: %{}})
 ```
 
-### Register modules
-
-Modules provide the implementation behind `[MODULE::verb]` commands.
-Register them at any time — they accumulate.
-
-```elixir
-Anemos.Runtime.register(:anemos, "DEVICE", MyApp.Device)
-Anemos.Runtime.register(:anemos, "INFRA", MyApp.Infra)
-Anemos.Runtime.register(:anemos, "SECRET", MyApp.Secret)
-```
-
-### Load policies
-
-Policies can be loaded one at a time or in bulk. They accumulate —
-each `load/2` adds rules, conditions, and capabilities to the running
-interpreter without replacing what's already there.
-
-```elixir
-Anemos.Runtime.load(:anemos, File.read!("policies/garage.rule"))
-Anemos.Runtime.load(:anemos, File.read!("policies/ddns.rule"))
-```
-
-### Deploy, and keep deployed
-
-Name the policy and a load becomes a deploy: it replaces whatever was last
-loaded under that name, exactly. Declarations the new version drops are torn
-down; a rule or condition whose text did not change keeps its state.
-
-```elixir
-Anemos.Runtime.load(:anemos, source, policy: "garage.rule")
-Anemos.Runtime.unload(:anemos, "garage.rule")
-Anemos.Runtime.policies(:anemos)
-```
-
-Or hand the runtime a directory. Saving a `.rule` file deploys it, deleting
-it unloads it, and a file that does not load leaves the running version
-alone.
-
-```elixir
-{Anemos.Runtime, name: :anemos, watch: "/etc/anemos/policies"}
-```
-
-### Dispatch events
-
-```elixir
-{:ok, results} = Anemos.Runtime.dispatch(:anemos, "SENSOR_MOTION_DETECTED")
-{:ok, results} = Anemos.Runtime.dispatch(:anemos, "EVENT", %{context_path: "garage"})
-```
-
-### Query state
-
-```elixir
-Anemos.Runtime.condition_state(:anemos, "networkchanged")
-# => true | false | nil
-```
-
-```elixir
-Anemos.Runtime.describe(:anemos)          # everything loaded, with its state
-Anemos.Runtime.explain(:anemos, "MOTION") # what the event would do
-Anemos.Runtime.trace(:anemos)             # what the last dispatches did
-```
-
-### Set context data
-
-Context data provides values for `?` variable resolution.
-
-```elixir
-Anemos.Runtime.put_context(:anemos, "infra.networking.dns.fqdn", "host.example.tld")
-```
-
-### One-shot API
-
-For testing and scripts, `Anemos.run/2` parses, compiles, and dispatches
-in a single call without a supervision tree:
-
-```elixir
-source = File.read!("priv/examples/garage-lights.rule")
-
-{:ok, results} =
-  Anemos.run(source,
-    event: "SENSOR_MOTION_DETECTED",
-    context_path: "garage.motion.sensor"
-  )
-```
-
-`context_path` is required here because the rule is wrapped in a `context`
-block. `context` is a security boundary and fails closed: omitting the path
-is not "run everything", it is "I decline to say where I am standing", and a
-declared boundary refuses that.
-
-### CLI
-
-```bash
-mix anemos.run <file.rule> --event <EVENT_NAME> [options]
-```
-
-| Option | Meaning |
-| --- | --- |
-| `--event`, `-e` | Event name to dispatch. Required. |
-| `--context`, `-c` | Context path the caller occupies, matched against each rule's `context` block. |
-| `--context-data K=V` | External data that `?var` resolves against. Repeatable. |
-| `--stub-modules` | Register the demonstration doubles some examples need. |
-| `--help`, `-h` | Usage summary. |
-
-`--context` and `--context-data` are different things: the first is *where
-the caller stands*, the second is *what it brought with it*.
-
-```bash
-$ mix anemos.run priv/examples/garage-lights.rule \
-    --event SENSOR_MOTION_DETECTED --context garage.motion.sensor
-Parsed priv/examples/garage-lights.rule.
-Dispatched SENSOR_MOTION_DETECTED -- 1 operation(s):
-
-  [DEVICE::set "garage.lights" "on"]
-```
-
-The task exits `0` only when every operation succeeded, so it can gate a
-script or a CI step.
-
-## Language Constructs
-
-### Rules
-
-Rules subscribe to events and execute operations when they fire.
-
-```
-rule name {
-  context scope.path {
-    when EVENT_NAME {
-      [MODULE::verb arg1 arg2]
-    }
-  }
-}
-```
-
-### Provenance
-
-`signed_by` names a signer the source must carry. It is written at source
-level, outside any declaration, because a detached signature covers the
-whole file — not one rule inside it.
-
-```
-signed_by :operator
-
-condition night {
-  when SUNSET { log "dark" }
-}
-```
-
-Whether an unsigned source loads is the runtime's `:unsigned_policy`
-setting: `:permit` (the default), `:warn`, or `:strict`. A source naming
-any signer is never treated as unsigned — it is making a provenance
-claim, and `:permit` does not launder it. Where several signers are
-named, all of them must verify.
-
-`signed_by` is also accepted as rule metadata, where it means the same
-thing. Source level is the placement to prefer; it is the only one
-available to a file that declares no rule.
-
-### Conditions
-
-Conditions are stateful processes. They evaluate incoming events and track
-boolean state. When a condition transitions from false to true, it emits a
-synthetic `CONDITION_<name>` event and executes its body as side effects.
-Rules can subscribe to these with `when`, or query current state with `if`.
-
-```
-condition networkchanged {
-  when (EVENT_A OR EVENT_B) {
-    log "condition met"
-  }
-}
-```
-
-### Capabilities and Demand
-
-Capabilities define named actions the system can perform. They are passive
-until demanded. `demand` invokes a capability with PAM-style control flags:
-
-- bare / `--requisite` (default) — must succeed, fail immediately if not
-- `--required` — must succeed, but evaluate rest of stack before failing
-- `--optional` — continue whether it succeeds or fails
-- `--sufficient` — if succeeds, skip rest of stack
-
-```
-capability secret-key {
-  context infra
-
-  on demand {
-    emit [SECRET::unlock key]
-  }
-}
-
-rule use-key {
-  when EVENT {
-    demand secret-key
-    demand audit-log --optional
-  }
-}
-```
-
-### Context
-
-Context is an exclusionary boundary on the listener side. It defines the
-workspace a rule or condition operates in, filtering which events it sees
-and which capabilities are reachable.
-
-Events are broadcast freely — contexts self-select what's relevant.
-
-### Guards
-
-Guard modifiers on trigger blocks (`when`, `if`, `at`):
-
-```
-; Skip block if expression is truthy
-when SENSOR_MOTION unless $disabled { ... }
-
-; Fire only until expression becomes true, then stop permanently
-when ALERT until $acknowledged { ... }
-```
-
-`unless` is stateless — evaluated fresh each time. `until` is stateful —
-once the expression becomes true, the block never fires again (persists
-across firings via `set` bindings).
-
-### Variables
-
-Three sigils, two binding keywords:
-
-| Sigil | Meaning | Created by |
-|-------|---------|------------|
-| `?name` | Dereference — resolve from external context data | Environment |
-| `@name` | Immutable, ephemeral — dies when execution ends | `let` |
-| `$name` | Mutable, persistent — survives across firings | `set` |
-
-The keyword determines the kind: `let fqdn = ?fqdn` creates `@fqdn`.
-The sigil is how you read it back.
-
-### Loops
-
-Iterate over collections or repeat while a condition holds.
-
-```
-; Iterate a list
-for item in ?items {
-  log @item
-}
-
-; Repeat while condition is true (safety limit: 10,000 iterations)
-while $count > 0 {
-  log $count
-  set count = $count - 1
-}
-
-; each/every are aliases for for-in, foreach iterates module results
-each record { log @record }
-foreach FILE::list { log @item }
-```
-
-Loop variables are bound as `@var` (immutable, ephemeral). `$set` bindings
-inside loops persist across iterations.
-
-### Flow Control
-
-Control execution flow within and across rules.
-
-```
-; Early exit — stops the current handler
-return
-done
-
-; Transition to another when block in the same rule
-nextevent STEP_TWO
-
-; Dispatch to a different rule by name
-nextrule other-rule
-
-; Either one may carry arguments to its target
-nextevent STEP_TWO with { stage: "two", file: @path }
-nextrule other-rule with { who: ?sender }
-```
-
-`return` and `done` stop execution immediately — statements after them
-are not reached. `nextevent` re-dispatches within the same rule's when
-blocks. `nextrule` invokes another rule directly, bypassing event
-subscription matching.
-
-A `with { }` block delivers its pairs to the target as event context
-data, so the target reads them with `?key` exactly as it would read a
-real event payload. The pairs are resolved against the *sending* body's
-bindings and merged over the originating event's context rather than
-replacing it, so the target still sees what got it there.
-
-### Scheduled Triggers
-
-`at` blocks are clock-driven event sources. They fire at specific times,
-on intervals, or on recurring schedules.
-
-```
-; One-shot
-at 13:00 { log "lunch" }
-
-; Interval
-at interval(5min) { log "tick" }
-
-; Recurring
-at 09:00 every day { log "morning" }
-at 11:00 every weekday { log "standup" }
-at 09:00 every monday { log "week start" }
-
-; Prefixed forms
-at TIME_1300 { log "lunch" }
-at DATE_2026.04.15 { log "deadline" }
-at DAY_friday { log "weekend" }
-
-; Natural language dates
-at NLD_tomorrow { log "due" }
-at NLD_next.wednesday { log "standup" }
-at NLD_end.of.month { log "reports" }
-at NLD_next.week { log "new sprint" }
-```
-
-Supported NLD expressions: `today`, `tomorrow`, `yesterday`,
-`next.monday`..`next.sunday`, `next.week`, `next.month`, `next.year`,
-`end.of.month`, `end.of.week`.
-
-`at` blocks work inside both rules and conditions. In a condition,
-the condition becomes true at the scheduled time.
-
-### Modules
-
-Modules are external — registered dynamically, never defined in policy.
-`MODULE::verb` is the dispatch syntax. Policies declare what to do;
-modules provide how.
-
-```
-[DEVICE::set "light" "on"]
-[INFRA::get_ip eth0 ipv4]
-```
-
-Define modules with the `Anemos.Module` macro — a declarative mapping
-of verbs to functions:
-
-```elixir
-defmodule MyApp.Anemos.Secret do
-  use Anemos.Module, name: "SECRET"
-
-  verb :unlock, &Comn.Secret.unlock/2
-  verb :rotate, fn args, ctx -> Comn.Secret.rotate(hd(args), ctx[:tenant]) end
-end
-```
-
-Register with just the module — name comes from the macro:
-
-```elixir
-Anemos.Runtime.register(:anemos, MyApp.Anemos.Secret)
-```
-
-### Emit
-
-Emit operations produce output. With a label, the label is re-dispatched
-as an event through the interpreter — other rules can react to emits.
-
-```
-emit [EVENT::fire] as :my.event
-emit state [SENSOR::reading] to channel(telemetry) as :sensor.update
-```
-
-### Triple Patterns
-
-Triple patterns are RDF-like subject-predicate-object facts. Two syntaxes
-for two operations:
-
-**Assert** (arrows — create a fact):
-```
-let [:p001 -> :knows -> :p002]
-let [:p001 -> :worksOn -> :proj1]
-```
-
-**Query** (spaces — match against existing facts):
-```
-[?a :worksOn ?p]              ; binds ?a and ?p from matches
-[:p001 :knows :p002]          ; exact match check
-```
-
-Facts accumulate in a triple store within the runtime. Query variables
-bind to matched values.
-
-### Introspection
-
-Comn's three questions, as statements — `show` is look, `explain` is
-recon, `list` is choices — asked of a module, an event, a catalogue
-(`rules`, `conditions`, `modules`, `events`, `policies`, `schedules`) or a
-value. Every answer is in the dispatch results and the trace, with its
-value.
-
-```
-show DEVICE            ; what is it
-explain DEVICE         ; what can it do
-list DEVICE            ; what are my options
-list rules
-explain SENSOR_MOTION  ; who listens for it
-show ?payload
-infer ?payload         ; its kind: string, number, list, map, secret, nothing
-graph :host            ; the triples it is in
-trace ?payload         ; its value, kept in the trace
-exists ?maybe          ; also a value: if exists ?maybe { ... }
-assert ?count > 0      ; or the rule stops here, and the results say so
-```
-
-A module answers through `Comn` (`look/0`, `recon/0`, `choices/0`) or,
-for one bound under several names, `Anemos.Runtime.Module.describe/1`.
-
-### Expressions
-
-Full operator precedence (14 levels, matching the language spec):
-
-```
-2 + 3 * 4          ; 14, not 20 — multiplication binds tighter
-(2 + 3) * 4        ; 20 — parentheses override
-1 == 1 and 2 == 2  ; true — comparison before logical
-5 & 3              ; 1 — bitwise AND
-1 << 3             ; 8 — left shift
-```
-
-Arithmetic (`+`, `-`, `*`, `/`, `%`), bitwise (`&`, `|`, `^`, `<<`, `>>`, `~`),
-comparison, logical, and membership operators all at correct precedence.
-
-#### `AND` compounds, `OR` alternates
-
-Over booleans these are ordinary conjunction and disjunction. Over any
-other operands they carry values, and the two differ: **`AND` answers
-every operand, `OR` answers the first available one.**
-
-```
-; AND — "let update have the value A *and* the value B"
-let update = (:host IN A "1.1.1.1") AND (:host IN AAAA "::1")
-; @update == [["host", "IN", "A", "1.1.1.1"], ["host", "IN", "AAAA", "::1"]]
-
-; OR — "let pick have the value A, *or else* B"
-let pick = ?preferred OR ?fallback
-; @pick is whichever of the two the host actually sent
-```
-
-A compound is an ordinary list by the time it reaches a binding, so it
-flows into a call like `[INFRA::ddns_update ... update]` as an argument.
-The `update-ddns` example above depends on this: it builds an A record
-and an AAAA record and sends both.
-
-For `AND`, a `false` or `nil` operand answers for the whole expression
-and nothing is compounded, so `if ?missing AND ?present` stays false
-rather than becoming a truthy list. `true` carries nothing and drops
-out. For `OR`, `false` and `nil` drop out instead, and the first operand
-carrying a value wins.
-
-Neither short-circuits. An operand may be a `[MODULE::verb]` call whose
-side effect is the point, and it happens whether or not its value turns
-out to be reachable.
-
-The two spellings are not symmetric, and the reason is that only one of
-them changed meaning. `||` is the same operator as `OR` — alternation
-was already what it did, so there was nothing to preserve. `&&` stays
-purely logical and answers its right operand, which is how you ask for
-that behaviour deliberately now that `AND` no longer provides it:
-
-```
-(A) AND (B)   ; [A, B]  — both values
-(A) &&  (B)   ; B       — purely logical
-(A) OR  (B)   ; A       — the first available
-(A) ||  (B)   ; A       — same operator as OR
-```
-
-### Event Protocol
-
-Implement the `Anemos.Event` protocol on your application's event types
-for zero-translation dispatch:
-
-```elixir
-defimpl Anemos.Event, for: MyApp.MQTTMessage do
-  def name(msg), do: msg.topic |> String.upcase() |> String.replace("/", "_")
-  def context(msg), do: msg.topic
-  def payload(msg), do: msg.body
-end
-
-# Dispatch directly — no wrapping
-Anemos.Runtime.dispatch(:anemos, mqtt_message)
-```
-
-The protocol has three callbacks: `name/1` (for rule matching), `context/1`
-(for listener filtering), `payload/1` (for `?` variable resolution).
-String dispatch still works for simple cases.
-
-### Channel Connectors
-
-Emits that target a channel publish through a pluggable connector.
-The connector bridges Anemos to your messaging infrastructure —
-Comn.EventBus, NATS, AMQP, or anything else.
-
-```elixir
-# Built-in: Comn.EventBus connector
-Anemos.Runtime.connect(:anemos, Anemos.Channel.ComnBus)
-
-# Subscribe in any process:
-Comn.EventBus.subscribe("sensors/temperature")
-receive do
-  {:event, _topic, %Anemos.Envelope{} = env} -> handle(env)
-end
-```
-
-Custom connectors implement `Anemos.Channel`:
-
-```elixir
-defmodule MyApp.NatsChannel do
-  @behaviour Anemos.Channel
-
-  @impl true
-  def publish(channel, envelope) do
-    Gnat.pub(:gnat, channel, :erlang.term_to_binary(envelope))
-  end
-end
-
-Anemos.Runtime.connect(:anemos, MyApp.NatsChannel)
-```
-
-Default connector: `Anemos.Channel.Logger` — logs all emits so they're
-never silent.
-
-Every published message is an `%Anemos.Envelope{}`:
-
-| Field | Description |
-|-------|-------------|
-| `type` | `:state`, `:effect`, `:stream`, or nil |
-| `payload` | The emitted value |
-| `source` | Rule name and context (`"rule@context.path"`) |
-| `timestamp` | UTC time of emission |
-| `label` | Symbolic handle from `as :label` |
-| `channel` | Destination channel path |
-| `signature` | Reserved for cryptographic signing |
-
-## Architecture
-
-```
-                    ┌──────────────────────────────────────────┐
-                    │            Anemos.Runtime                │
-                    │            (Supervisor)                  │
-                    └──┬──────────┬──────────┬──────────┬──────┘
-                       │          │          │          │
-              ModuleRegistry  ContextStore  Dispatcher  Scheduler
-              (Agent)         (Agent)       (GenServer) (GenServer)
-                                               │          │
-                              ┌────────────────┼───┐      │
-                              │                │   │   AT_* events
-                     ConditionServer    CapServer  Rule    │
-                     (GenServer×N)     (GS×N)    Index ◄───┘
-                                          │
-                                     TripleStore
-                                      (Agent)
-```
-
-Policies are loaded via `Anemos.Runtime.load/2`, which parses, compiles,
-and merges new declarations into the running dispatcher. The scheduler
-manages timers for `at` blocks and dispatches synthetic `AT_*` events.
-Multiple policies accumulate. Log operations go through Elixir Logger.
-Emits with labels re-dispatch as events. Condition side effects fire on
-transition. `set` bindings persist across event firings.
-
-## Project Status
-
-**v0.1.0** — Supervisable interpreter with dynamic policy and module loading.
-Conditions, capabilities, demand gating, context filtering, variable binding,
-emit re-dispatch, scheduled `at` triggers, triple patterns, full operator
-precedence (14 levels), channel connectors with message envelopes, NLD
-natural language dates, loops (`while`, `for`, `each`, `every`, `foreach`),
-flow control (`return`, `done`, `nextevent`, `nextrule`),
-guard modifiers (`unless`, `until`), Logger integration,
-`Anemos.Module` macro, and `Anemos.Event` protocol all work end-to-end.
-Module backends are stubs — bring your own implementations.
-
-## Docs
-
-```bash
+Register host command modules before using them. The persistent runtime starts
+with `POLICY`; it does not inherit the one-shot runner's development `DEVICE`
+and `FILE` stubs. Those stubs perform no external I/O. The other bundled
+example doubles require explicit opt-in with `--stub-modules` or
+`modules: Anemos.example_modules()`.
+
+Named loads replace the previous contents of that policy ID. Inspect all
+load outcomes: `:ok`, `{:partial, failures}` (installed with inert declarations),
+and `{:error, reason}` (not installed). An outer `{:ok, results}` from dispatch
+can contain individual `{:error, reason}` entries.
+
+See [embedding](docs/manual/09-embedding.md) for complete module, event,
+channel, and data-handler examples, and [operation](docs/manual/10-operation.md)
+for policy replacement, directory watching, signing, and recovery.
+
+## Documentation
+
+[Programming Anemos](docs/manual/README.md) contains twelve chapters, a language
+and API reference, a glossary, a subject index, exercises, and runnable examples.
+For direct lookup:
+
+- [Values, sigils, and operators](docs/manual/03-values-and-expressions.md)
+- [Conditions and capabilities](docs/manual/06-conditions-and-capabilities.md)
+- [Time and duration](docs/manual/07-time.md)
+- [Datasets, queries, and facts](docs/manual/08-data.md)
+- [Troubleshooting](docs/manual/11-troubleshooting.md)
+- [Language reference and implementation limits](docs/manual/reference.md)
+
+Generate the navigable manual and module API documentation together:
+
+```sh
 mix docs
-open doc/index.html
+# Open doc/index.html in a browser.
 ```
 
-Interactive playground:
+The historical [design notes](docs/design-notes/README.md) describe motivation
+and possible extensions. The manual describes current behavior. In particular,
+read its feature-status table before relying on demand gating, `until`, triple
+query values, pipeline `emit`, or schedules inside context boundaries.
 
-```bash
-livebook server notebooks/playground.livemd
+## Development
+
+```sh
+mix check
+mix test test/anemos/manual_test.exs
 ```
+
+`mix check` runs formatting, strict Credo, and the test suite. `mix dialyzer`
+is a separate optional analysis. Documentation tests parse and compile every
+complete `anemos` listing and exercise the main tutorial behaviors.
 
 ## License
 
-AGPL-3.0
+[AGPL-3.0-or-later](LICENSE).

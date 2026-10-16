@@ -309,7 +309,7 @@ defmodule Anemos.Compiler do
   it there.
 
   One resolver (`resolve_block_args/3`) and one merge
-  (`Anemos.Runtime.Dispatcher.with_block_args/2`) serve both statements. A
+  (the dispatcher's `with_block_args` helper) serve both statements. A
   second path that mostly does what the first does, minus a check, is the shape
   that accounted for four separate defects on this branch (A-39, A-59, and two
   others), and a symmetry feature is where it gets introduced.

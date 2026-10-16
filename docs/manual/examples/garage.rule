@@ -1,0 +1,7 @@
+rule garage-motion {
+  context "garage" {
+    when MOTION {
+      log "Garage motion detected"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+data allowed_users {
+  alice
+  bob
+  "Grace Hopper"
+}
+
+rule check-user {
+  when LOGIN {
+    if ?user memberof(allowed_users) {
+      log "Allowed"
+    } else {
+      log "Denied"
+    }
+  }
+}

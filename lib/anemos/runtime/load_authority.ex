@@ -44,7 +44,7 @@ defmodule Anemos.Runtime.LoadAuthority do
   boundary and which is hygiene:
 
   1. **Loading is no longer reachable from the generic action surface.**
-     `Anemos.Runtime.act/1` used to accept `%{action: :load, ...}`, so
+     The runtime's `act` callback used to accept `%{action: :load, ...}`, so
      anything that could reach the Comn action dispatcher could install
      policy. It no longer does, and `choices/0` no longer advertises it.
      This is a real reduction in reachability.
@@ -72,7 +72,7 @@ defmodule Anemos.Runtime.LoadAuthority do
   preserves the contract every current embedder was written against. It is
   named rather than implicit precisely so that "we never configured an
   authority" is a visible fact — `configured/0` and
-  `Anemos.Runtime.recon/0` both report it — rather than an absence nobody
+  the runtime's `recon` callback both report it — rather than an absence nobody
   notices. An operator running multi-tenant is expected to replace it.
 
   ## Writing one

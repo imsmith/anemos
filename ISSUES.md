@@ -57,7 +57,7 @@ than removed.
 | A-24 | MEDIUM | `DataStore` scope discriminators inconsistent; cleanup unreachable | **Fixed** — `get/3` takes `:scope_hint`; explicit `drop_scope/2` |
 | A-25 | MEDIUM | Unbound variables silently resolve to `nil` | Partially fixed 2026-10-04 — a `@name` / `$name` nothing in the declaration binds is a compile error naming the right sigil; read-before-first-`set`, absent `?name` and bare-word literals still answer silently |
 | A-26 | MEDIUM | Subscription failures logged and dropped (fail-open) | **Fixed 2026-10-04** — a block whose feed fails is not registered, and `memberof` against an unregistered block is an `unknown_dataset` error |
-| A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55; no CI workflow, there is no git remote |
+| A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55. Remote now exists (`origin` = github.com/imsmith/anemos), so the workflow is unblocked; not yet written |
 | A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.2`; `mix.lock` records the commit |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | **Fixed** — rewritten 2026-08-07; its stale "Known gaps" corrected 2026-10-04. The stray root file and Appendix A contradictions were not re-checked |
 | A-30 | LOW | Two of three shipped examples do not work | **Fixed** — all three run with their documented commands, re-run 2026-10-04. `:{...}` label interpolation still renders literally, listed in `TODO.md` |
@@ -1064,6 +1064,11 @@ data registration to load time) are what that looks like when the hand-sync slip
 Tests use 20 `Process.sleep` calls as wall-clock timing assertions; the flake tax is
 already visible in the history (`9116ec3 chore: ... widen dwell-test timing window`). Test
 logging is not silenced, so a run prints hundreds of `[info]` lines that drown failures.
+
+**2026-10-28:** the repository is now pushed to `origin` (github.com/imsmith/anemos), which
+removes the only blocker on a workflow. Plan stands: hexpm Alpine image, cache `deps/`,
+`_build/` and the PLT, run `mix check`, `mix dialyzer`, `mix hex.audit`. comn v0.7.0 (git
+tag) is reachable from GitHub runners without a mirror.
 
 ---
 

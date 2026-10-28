@@ -113,7 +113,7 @@ Recorded so they are not mistaken for missing syntax:
 - A `@name` / `$name` that nothing binds is a compile error, but `$name` read before its
   first `set`, a `?name` the environment did not supply, and a bare word where a variable
   was meant still resolve silently (A-25)
-- No CI — there is no git remote. Credo, Dialyzer and `mix check` exist (A-27)
+- No CI workflow yet. The remote exists as of 2026-10-28; Credo, Dialyzer and `mix check` exist (A-27)
 - Runtime state survives the restart of any process in the runtime, not the node (A-79)
 
 ## Conventions

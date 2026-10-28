@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>API Reference — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>API Reference <small class="app-vsn">anemos v#0.1.0</small></h1>
+<a href="api-reference.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+    <section class="details-list">
+      <h2 id="modules" class="section-heading">Modules</h2>
+      <div class="summary">
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.html" translate="no">Anemos</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Anemos — event-driven automation DSL.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.html" translate="no">Anemos.<wbr />AST</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>AST node structs for the Anemos DSL.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.At.html" translate="no">Anemos.<wbr />AST.<wbr />At</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A time-triggered <code class="inline">at</code> block with a time spec, optional guard, and body.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.BinaryOp.html" translate="no">Anemos.<wbr />AST.<wbr />BinaryOp</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A binary operator expression.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.BlockArgs.html" translate="no">Anemos.<wbr />AST.<wbr />BlockArgs</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A block argument list of key-value pairs.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.BuiltinCall.html" translate="no">Anemos.<wbr />AST.<wbr />BuiltinCall</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A built-in function call (filter, map, reduce, emit).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Capability.html" translate="no">Anemos.<wbr />AST.<wbr />Capability</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A named capability declaration with context, body, and source line.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Command.html" translate="no">Anemos.<wbr />AST.<wbr />Command</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A module command expression with a verb and arguments.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Condition.html" translate="no">Anemos.<wbr />AST.<wbr />Condition</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A named condition declaration with a body and source line.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Context.html" translate="no">Anemos.<wbr />AST.<wbr />Context</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A context scope block with a dotted path and body.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.DataDecl.html" translate="no">Anemos.<wbr />AST.<wbr />DataDecl</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A named data declaration with content, optional source/transclude, scope, and source line.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Demand.html" translate="no">Anemos.<wbr />AST.<wbr />Demand</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">demand</code> expression referencing a capability with a PAM-style control flag.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Done.html" translate="no">Anemos.<wbr />AST.<wbr />Done</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">done</code> statement: exits the current handler with no value.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Emit.html" translate="no">Anemos.<wbr />AST.<wbr />Emit</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>An <code class="inline">emit</code> expression that produces a typed value to an optional destination.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Flow.html" translate="no">Anemos.<wbr />AST.<wbr />Flow</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A named flow declaration with a body and source line.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.For.html" translate="no">Anemos.<wbr />AST.<wbr />For</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">for</code> loop: iterates <code class="inline">var</code> over <code class="inline">iterable</code>, executing body each time. Covers <code class="inline">for</code>, <code class="inline">each</code>, <code class="inline">every</code>, <code class="inline">foreach</code>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.If.html" translate="no">Anemos.<wbr />AST.<wbr />If</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A conditional <code class="inline">if</code> block with an optional guard, body, and else branch.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Introspect.html" translate="no">Anemos.<wbr />AST.<wbr />Introspect</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>An introspection statement — <code class="inline">show</code>, <code class="inline">list</code>, <code class="inline">graph</code>, <code class="inline">trace</code>,
+<code class="inline">explain</code>, <code class="inline">exists</code>, <code class="inline">infer</code>, <code class="inline">assert</code> — or <code class="inline">exists</code> in expression
+position. The subject is a bare <code class="inline">{:name, &quot;NAME&quot;}</code>, a <code class="inline">{:catalogue, :rules | :conditions | :modules | :events | :policies | :schedules}</code>, or
+<code class="inline">{:expr, expression}</code>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.It.html" translate="no">Anemos.<wbr />AST.<wbr />It</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>An <code class="inline">it</code> modal reference block.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Let.html" translate="no">Anemos.<wbr />AST.<wbr />Let</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">let</code> variable binding.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.ListLiteral.html" translate="no">Anemos.<wbr />AST.<wbr />ListLiteral</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A list literal expression.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Literal.html" translate="no">Anemos.<wbr />AST.<wbr />Literal</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A literal value node (string, integer, float, boolean, atom).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Log.html" translate="no">Anemos.<wbr />AST.<wbr />Log</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">log</code> expression.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.NextEvent.html" translate="no">Anemos.<wbr />AST.<wbr />NextEvent</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">nextevent</code> statement: transitions to another <code class="inline">when</code> block within the
+same rule, optionally carrying a <code class="inline">with { }</code> argument block (A-55).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.NextRule.html" translate="no">Anemos.<wbr />AST.<wbr />NextRule</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">nextrule</code> statement: dispatches to a different rule's pipeline,
+optionally carrying a <code class="inline">with { }</code> argument block.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.On.html" translate="no">Anemos.<wbr />AST.<wbr />On</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>An <code class="inline">on</code> invocation block triggered by a named invocation.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Program.html" translate="no">Anemos.<wbr />AST.<wbr />Program</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Top-level program node wrapping all parsed declarations.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.QueryDecl.html" translate="no">Anemos.<wbr />AST.<wbr />QueryDecl</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A named query declaration with expect/engine/body/return, scope, and source line.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Return.html" translate="no">Anemos.<wbr />AST.<wbr />Return</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">return</code> statement: exits the current handler, optionally with a value.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Rule.html" translate="no">Anemos.<wbr />AST.<wbr />Rule</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A named rule declaration with a body, optional metadata, and source line.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Set.html" translate="no">Anemos.<wbr />AST.<wbr />Set</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">set</code> variable assignment.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.SignedBy.html" translate="no">Anemos.<wbr />AST.<wbr />SignedBy</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A source-level <code class="inline">signed_by</code> declaration (A-60).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.Triple.html" translate="no">Anemos.<wbr />AST.<wbr />Triple</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>An RDF-style triple with subject, predicate, and object.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.UnaryOp.html" translate="no">Anemos.<wbr />AST.<wbr />UnaryOp</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A unary operator expression.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.VarRef.html" translate="no">Anemos.<wbr />AST.<wbr />VarRef</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A variable reference with an optional sigil prefix.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.When.html" translate="no">Anemos.<wbr />AST.<wbr />When</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">when</code> trigger block: fires on an event, with optional duration, guard, and body.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.While.html" translate="no">Anemos.<wbr />AST.<wbr />While</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">while</code> loop: repeats body while condition is truthy.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Application.html" translate="no">Anemos.<wbr />Application</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>OTP application callback for Anemos. Starts no interpreter.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Channel.html" translate="no">Anemos.<wbr />Channel</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Behaviour for channel connectors — the bridge between Anemos emit
+operations and the host app's messaging infrastructure.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Channel.ComnBus.html" translate="no">Anemos.<wbr />Channel.<wbr />ComnBus</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Channel connector that publishes envelopes via <a href="https://comn.hexdocs.pm/0.7.0/Comn.EventBus.html"><code class="inline">Comn.EventBus</code></a>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Channel.Logger.html" translate="no">Anemos.<wbr />Channel.<wbr />Logger</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Default channel connector that logs emitted messages via <a href="https://logger.hexdocs.pm/Logger.html#info/1"><code class="inline">Logger.info/1</code></a>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompilationResult.html" translate="no">Anemos.<wbr />CompilationResult</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Result of compiling an Anemos program.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledCapability.html" translate="no">Anemos.<wbr />CompiledCapability</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled capability: name, context scope, and handler closure for on-demand execution.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledCondition.html" translate="no">Anemos.<wbr />CompiledCondition</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled condition: name, trigger subscriptions, evaluator function, and side effects.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledData.html" translate="no">Anemos.<wbr />CompiledData</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled data block.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledQuery.html" translate="no">Anemos.<wbr />CompiledQuery</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled query block.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledRule.html" translate="no">Anemos.<wbr />CompiledRule</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled rule: name, event subscriptions, handler closure, and optional dwell duration.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledSchedule.html" translate="no">Anemos.<wbr />CompiledSchedule</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled schedule: event name, time spec, recurrence, and handler.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Compiler.html" translate="no">Anemos.<wbr />Compiler</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Walks the AST produced by <a href="Anemos.Parser.html"><code class="inline">Anemos.Parser</code></a> and produces <code class="inline">%Anemos.CompiledRule{}</code>,
+<code class="inline">%Anemos.CompiledCondition{}</code>, and <code class="inline">%Anemos.CompiledCapability{}</code> structs with
+executable closures. No code generation, no Module.create.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.DataModel.html" translate="no">Anemos.<wbr />DataModel</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Behaviour for pluggable data format and query engine handlers.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Envelope.html" translate="no">Anemos.<wbr />Envelope</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Message envelope for emitted values.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Event.html" translate="no">Anemos.<wbr />Event</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Protocol for types that can be dispatched as Anemos events.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Lexer.html" translate="no">Anemos.<wbr />Lexer</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>NimbleParsec-based tokenizer for the Anemos DSL.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Module.html" translate="no">Anemos.<wbr />Module</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Macro for defining Anemos modules — named sets of verb handlers.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Parser.html" translate="no">Anemos.<wbr />Parser</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Recursive descent parser for the Anemos DSL.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Redact.html" translate="no">Anemos.<wbr />Redact</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Shape summaries for values that must be observable without being disclosed.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.html" translate="no">Anemos.<wbr />Runtime</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Supervisable runtime interpreter for Anemos policies.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.ArgSchema.html" translate="no">Anemos.<wbr />Runtime.<wbr />ArgSchema</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Validates the arguments of a <code class="inline">[MODULE::verb ...]</code> command before they
+reach a host module.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Builtins.html" translate="no">Anemos.<wbr />Runtime.<wbr />Builtins</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Built-in collection-processing functions for pipeline expressions.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.CapabilityServer.html" translate="no">Anemos.<wbr />Runtime.<wbr />CapabilityServer</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>GenServer for a single named capability.
+Passive until demanded. Executes its <code class="inline">on demand</code> handler and returns the result.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.ConditionServer.html" translate="no">Anemos.<wbr />Runtime.<wbr />ConditionServer</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>GenServer for a single named condition.
+Holds boolean state. Evaluates incoming events against trigger logic.
+Broadcasts <code class="inline">CONDITION_&lt;name&gt;</code> on false-&gt;true transition.
+Queryable for current state at any time.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.ContextScope.html" translate="no">Anemos.<wbr />Runtime.<wbr />ContextScope</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>The one comparison that decides whether one context path lies inside another.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.ContextStore.html" translate="no">Anemos.<wbr />Runtime.<wbr />ContextStore</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Agent holding external key-value context data.
+Keys are dotted paths (e.g., &quot;infra.networking.dns.fqdn&quot;).
+Resolution joins the context path with the variable name to form the lookup key.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.DataModelRegistry.html" translate="no">Anemos.<wbr />Runtime.<wbr />DataModelRegistry</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Agent mapping data model keyword strings to handler modules.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.DataStore.html" translate="no">Anemos.<wbr />Runtime.<wbr />DataStore</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>GenServer holding named datasets for data blocks.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Demand.html" translate="no">Anemos.<wbr />Runtime.<wbr />Demand</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Evaluates a stack of demand operations against capability servers
+using PAM-style control flag semantics.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Dispatcher.html" translate="no">Anemos.<wbr />Runtime.<wbr />Dispatcher</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>GenServer holding compiled rules indexed by subscription.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Duration.html" translate="no">Anemos.<wbr />Runtime.<wbr />Duration</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Converts duration tuples (e.g., <code class="inline">{5, :min}</code>) to milliseconds.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Errors.html" translate="no">Anemos.<wbr />Runtime.<wbr />Errors</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Compile-time error code registry for the Anemos runtime.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Introspection.html" translate="no">Anemos.<wbr />Runtime.<wbr />Introspection</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Answers the introspection statements — <code class="inline">show</code>, <code class="inline">list</code>, <code class="inline">graph</code>, <code class="inline">trace</code>,
+<code class="inline">explain</code>, <code class="inline">exists</code>, <code class="inline">infer</code> — from the dispatcher's state.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.LoadAuthority.html" translate="no">Anemos.<wbr />Runtime.<wbr />LoadAuthority</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>The trust boundary on loading policy (A-12).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.LoadAuthority.Denied.html" translate="no">Anemos.<wbr />Runtime.<wbr />LoadAuthority.<wbr />Denied</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Refuses every load.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.LoadAuthority.Permissive.html" translate="no">Anemos.<wbr />Runtime.<wbr />LoadAuthority.<wbr />Permissive</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>The default authority: grants every load.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.LoadAuthority.Signed.html" translate="no">Anemos.<wbr />Runtime.<wbr />LoadAuthority.<wbr />Signed</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A load authority that verifies detached Ed25519 signatures over the
+policy source (A-05).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.LoadRequest.html" translate="no">Anemos.<wbr />Runtime.<wbr />LoadRequest</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Everything an <a href="Anemos.Runtime.LoadAuthority.html"><code class="inline">Anemos.Runtime.LoadAuthority</code></a> gets to decide on.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Module.html" translate="no">Anemos.<wbr />Runtime.<wbr />Module</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Behaviour for Anemos runtime modules (DEVICE, FILE, etc.).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.ModuleRegistry.html" translate="no">Anemos.<wbr />Runtime.<wbr />ModuleRegistry</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Maps module names (e.g. &quot;DEVICE&quot;, &quot;FILE&quot;) to Elixir modules
+implementing the <a href="Anemos.Runtime.Module.html"><code class="inline">Anemos.Runtime.Module</code></a> behaviour.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Device.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Device</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Stub DEVICE module for development and testing.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Demonstration doubles for the module verbs used by <code class="inline">priv/examples/</code>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.Event.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example.<wbr />Event</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">EVENT</code> double. Verb names are dotted event names (<code class="inline">ip.addr.changed</code>),
+so <code class="inline">handle_verb/3</code> accepts any verb and echoes it rather than
+enumerating a fixed list.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.File.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example.<wbr />File</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">FILE</code> double that answers <code class="inline">extension</code> from the path under evaluation.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.Infra.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example.<wbr />Infra</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">INFRA</code> double for <code class="inline">ddns.rule</code>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.Pdf.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example.<wbr />Pdf</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">PDF</code> double distinguishing document content from stored metadata.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.Secret.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example.<wbr />Secret</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">SECRET</code> double that deliberately yields nothing usable.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Example.String.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Example.<wbr />String</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">STRING</code> double. <code class="inline">slugify</code> is a genuine pure function, not a stand-in —
+there is nothing to fake about lowercasing and hyphenating a string.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.File.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />File</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Stub FILE module for development and testing.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modules.Policy.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modules.<wbr />Policy</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p><code class="inline">[POLICY::unload &quot;id&quot;]</code> — a policy that removes another.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.NLD.html" translate="no">Anemos.<wbr />Runtime.<wbr />NLD</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Natural Language Date resolver.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.PathGuard.html" translate="no">Anemos.<wbr />Runtime.<wbr />PathGuard</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Confines a caller-supplied path to a configured root.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.PolicyStore.html" translate="no">Anemos.<wbr />Runtime.<wbr />PolicyStore</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Durable record of everything that has been loaded into a runtime.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Report.html" translate="no">Anemos.<wbr />Runtime.<wbr />Report</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>What an event <em>reports</em>, and what a compound trigger makes of the reports
+it has heard (A-47).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.RuleSupervisor.html" translate="no">Anemos.<wbr />Runtime.<wbr />RuleSupervisor</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Second supervision tier: rule-scoped processes.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Scheduler.html" translate="no">Anemos.<wbr />Runtime.<wbr />Scheduler</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>GenServer that manages time-triggered schedules.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Standalone.html" translate="no">Anemos.<wbr />Runtime.<wbr />Standalone</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Wires a dispatcher and its stores together outside a full <a href="Anemos.Runtime.html"><code class="inline">Anemos.Runtime</code></a>
+tree.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.StateTable.html" translate="no">Anemos.<wbr />Runtime.<wbr />StateTable</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Where a runtime keeps what its processes have accumulated, so that the
+restart of one of them does not lose it.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.StoreSupervisor.html" translate="no">Anemos.<wbr />Runtime.<wbr />StoreSupervisor</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Supervisor for stores-as-infrastructure.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.SubscribableRegistry.html" translate="no">Anemos.<wbr />Runtime.<wbr />SubscribableRegistry</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Agent mapping protocol strings to <a href="Anemos.Subscribable.html"><code class="inline">Anemos.Subscribable</code></a> handler modules.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.TripleStore.html" translate="no">Anemos.<wbr />Runtime.<wbr />TripleStore</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Agent-based triple store for RDF-like facts.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.TrustStore.html" translate="no">Anemos.<wbr />Runtime.<wbr />TrustStore</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Per-runtime trust configuration: a keyring of <strong>public</strong> verification
+keys, and the policy for sources that declare no signer at all (A-05).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Watcher.html" translate="no">Anemos.<wbr />Runtime.<wbr />Watcher</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Keeps a directory of <code class="inline">*.rule</code> files deployed into a runtime.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Secret.html" translate="no">Anemos.<wbr />Secret</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A wrapper for secret-bearing values that refuses to disclose itself.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Subscribable.html" translate="no">Anemos.<wbr />Subscribable</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Behaviour for data sources that support dynamic subscription.</p></div>
+
+</div>
+
+      </div>
+    </section>
+
+
+    <section class="details-list">
+      <h2 id="tasks" class="section-heading">Mix Tasks</h2>
+      <div class="summary">
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Mix.Tasks.Anemos.Run.html" translate="no">mix anemos.<wbr />run</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Parse and execute a <code class="inline">.rule</code> file against a given event.</p></div>
+
+</div>
+
+      </div>
+    </section>
+
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

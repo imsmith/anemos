@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.Scheduler — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />Scheduler</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.Scheduler.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>GenServer that manages time-triggered schedules.</p><p>Holds compiled <code class="inline">at</code> specs, manages timers via <a href="https://elixir.hexdocs.pm/Process.html#send_after/3"><code class="inline">Process.send_after/3</code></a> and
+<a href="https://www.erlang.org/doc/apps/stdlib/timer.html#send_interval/2"><code class="inline">:timer.send_interval/2</code></a>, and dispatches synthetic <code class="inline">AT_*</code> events into the
+runtime when timers fire.</p><h2 id="module-resource-limits" class="section-heading"><a href="#module-resource-limits" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Resource limits</span></h2><p>Schedule specs come from policy text, which is not necessarily trusted.
+Two limits bound what a policy can cost the runtime:</p><ul><li><p><strong>Interval floor</strong> (<code class="inline">:min_interval_ms</code>, default 1000). Every firing of
+an interval schedule becomes a synchronous dispatch through a single
+dispatcher process, so a <code class="inline">1ms</code> interval is a 1000 Hz loop that starves
+every other rule. Intervals below the floor are <strong>rejected, not
+clamped</strong>: silently running a schedule at a rate the policy did not ask
+for makes the runtime's behaviour diverge from its policy text with
+nothing to observe. Rejection tells the author their schedule is
+unrunnable; clamping does not.</p></li><li><p><strong>Schedule cap</strong> (<code class="inline">:max_schedules</code>, default 1000) on the number of
+armed timers per scheduler, enforced cumulatively across calls.</p></li></ul><p>Both default from application env (<code class="inline">:anemos</code>, <code class="inline">:min_schedule_interval_ms</code>
+and <code class="inline">:max_schedules</code>) and may be overridden per scheduler at <a href="#start_link/1"><code class="inline">start_link/1</code></a>.</p><h2 id="module-schedules-that-cannot-be-armed" class="section-heading"><a href="#module-schedules-that-cannot-be-armed" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Schedules that cannot be armed</span></h2><p>A past-dated schedule, an unresolvable natural-language date, or an
+unrecognised duration unit yields a schedule that will never fire. These do
+not report <code class="inline">:ok</code> — <a href="#schedule/2"><code class="inline">schedule/2</code></a> returns <code class="inline">{:error, failures}</code> and logs a
+warning for each. Arming is otherwise best-effort per spec: one bad entry
+does not prevent the rest of the batch from being armed, since a batch is
+the compiled output of a whole policy and discarding all of it for one bad
+date would be worse than partial arming plus a loud report.</p><h2 id="module-one-timer-per-event-name" class="section-heading"><a href="#module-one-timer-per-event-name" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">One timer per event name</span></h2><p>A schedule is identified by its <code class="inline">event_name</code>, and that name is the whole
+of its identity here: the compiler derives it from the time spec alone, so
+<code class="inline">at 08:00</code> in two unrelated rules — in two unrelated policy files —
+produces two specs both named <code class="inline">AT_08_00</code>.</p><p>Arming both would be wrong twice over. The timers map is keyed by event
+name, so the second <code class="inline">Map.put</code> used to displace the first entry while its
+timer stayed armed: an uncancellable timer firing forever, dispatching an
+event nothing in the map accounts for (A-19). And the fix is not to key
+the map more finely, because the <em>event</em> is genuinely shared — one
+<code class="inline">AT_08_00</code> dispatch already reaches every rule subscribed to <code class="inline">AT_08_00</code>.
+Two timers would fire every such rule twice.</p><p>So arming an event name that is already armed <strong>replaces</strong> it: the
+displaced timer is cancelled first, and the replacement does not consume
+cap headroom. Re-loading the same policy is therefore idempotent with
+respect to timers.</p><p>What this cannot fix from here: because the event name carries no rule
+identity, the scheduler has no way to distinguish <code class="inline">at 08:00</code> in rule A
+from <code class="inline">at 08:00</code> in rule B, and <a href="#unschedule/2"><code class="inline">unschedule/2</code></a> therefore disarms the time,
+not the rule. That requires the compiler to derive schedule names from
+rule identity as well as time spec.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-types summary">
+  <h3>
+    <a href="#types">Types</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#t:failure_reason/0" data-no-tooltip="" translate="no">failure_reason()</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Why a schedule spec could not be armed.</p></div>
+
+    </div>
+
+</div>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#child_spec/1" data-no-tooltip="" translate="no">child_spec(init_arg)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns a specification to start this module under a supervisor.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#fired_at/2" data-no-tooltip="" translate="no">fired_at(server, event_name)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>When the schedule <code class="inline">event_name</code> last fired, or nil.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#forget/2" data-no-tooltip="" translate="no">forget(server, event_names)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Forgets that the named schedules fired, so a one-shot among them can arm again.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#schedule/2" data-no-tooltip="" translate="no">schedule(server, schedules)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Adds schedule specs to the running scheduler. Timers start immediately.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#schedules/1" data-no-tooltip="" translate="no">schedules(server)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the specs currently armed, one per event name.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#start_link/1" data-no-tooltip="" translate="no">start_link(opts)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Starts the scheduler.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#sync/1" data-no-tooltip="" translate="no">sync(server)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Makes what is armed match what is loaded: arms every schedule in the
+policy store that is not armed, disarms every timer no loaded policy
+declares, and leaves the rest running.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#unschedule/2" data-no-tooltip="" translate="no">unschedule(server, event_names)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Disarms the timers for the named events and forgets their specs.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="types" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#types">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Types</span>
+    </h2>
+
+    <div class="types-list">
+<section class="detail" id="t:failure_reason/0">
+
+  <div class="detail-header">
+    <a href="#t:failure_reason/0" class="detail-link" data-no-tooltip="" aria-label="Link to this type">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">failure_reason()</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L75" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@type</span> failure_reason() ::
+  {:interval_below_minimum, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pos_integer</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pos_integer</a>()}
+  | {:schedule_limit_exceeded, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pos_integer</a>()}
+  | {:date_in_past, {<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">integer</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">integer</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">integer</a>()}}
+  | {:unresolvable_nld, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}
+  | {:nld_in_past, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}
+  | {:unknown_duration_unit, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()}
+  | {:invalid_duration, <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()}
+  | {:invalid_time_spec, <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()}</pre>
+
+      </div>
+
+<p>Why a schedule spec could not be armed.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="child_spec/1">
+
+  <div class="detail-header">
+    <a href="#child_spec/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">child_spec(init_arg)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L66" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Returns a specification to start this module under a supervisor.</p><p>See <a href="https://elixir.hexdocs.pm/Supervisor.html"><code class="inline">Supervisor</code></a>.</p>
+  </section>
+</section>
+<section class="detail" id="fired_at/2">
+
+  <div class="detail-header">
+    <a href="#fired_at/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">fired_at(server, event_name)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L158" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> fired_at(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) :: <a href="https://elixir.hexdocs.pm/DateTime.html#t:t/0">DateTime.t</a>() | nil</pre>
+
+      </div>
+
+<p>When the schedule <code class="inline">event_name</code> last fired, or nil.</p>
+  </section>
+</section>
+<section class="detail" id="forget/2">
+
+  <div class="detail-header">
+    <a href="#forget/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">forget(server, event_names)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L154" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> forget(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), [<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()]) :: :ok</pre>
+
+      </div>
+
+<p>Forgets that the named schedules fired, so a one-shot among them can arm again.</p>
+  </section>
+</section>
+<section class="detail" id="schedule/2">
+
+  <div class="detail-header">
+    <a href="#schedule/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">schedule(server, schedules)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L119" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> schedule(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), [<a href="Anemos.CompiledSchedule.html#t:t/0">Anemos.CompiledSchedule.t</a>()]) ::
+  :ok | {:error, [<a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()]}</pre>
+
+      </div>
+
+<p>Adds schedule specs to the running scheduler. Timers start immediately.</p><p>Returns <code class="inline">:ok</code> when every spec was armed, or <code class="inline">{:error, failures}</code> where
+<code class="inline">failures</code> is a <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html"><code class="inline">Comn.Errors.ErrorStruct</code></a> for each spec that was not: its <code class="inline">code</code> is
+<code class="inline">anemos.scheduler/&lt;reason&gt;</code> and its <code class="inline">field</code> the schedule's event name.
+Specs not named in <code class="inline">failures</code> were armed.</p><p>A spec whose <code class="inline">event_name</code> is already armed replaces it — see the moduledoc.</p>
+  </section>
+</section>
+<section class="detail" id="schedules/1">
+
+  <div class="detail-header">
+    <a href="#schedules/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">schedules(server)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L164" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> schedules(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()) :: [<a href="Anemos.CompiledSchedule.html#t:t/0">Anemos.CompiledSchedule.t</a>()]</pre>
+
+      </div>
+
+<p>Returns the specs currently armed, one per event name.</p>
+  </section>
+</section>
+<section class="detail" id="start_link/1">
+
+  <div class="detail-header">
+    <a href="#start_link/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">start_link(opts)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L102" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Starts the scheduler.</p><h2 id="start_link/1-options" class="section-heading"><a href="#start_link/1-options" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Options</span></h2><ul><li><code class="inline">:name</code> — process registration name (optional)</li><li><code class="inline">:runtime_name</code> — the Anemos.Runtime name for dispatching events (required)</li><li><code class="inline">:policy_store</code> — the runtime's <code class="inline">PolicyStore</code>; a scheduler given one
+arms every loaded schedule when it starts, so its own restart does
+not leave <code class="inline">at</code> blocks that never fire (optional)</li><li><code class="inline">:state_table</code> — an <a href="Anemos.Runtime.StateTable.html"><code class="inline">Anemos.Runtime.StateTable</code></a>. Each firing is
+recorded there, and a one-shot schedule that has fired is not armed
+again when the scheduler restarts or reconciles (optional)</li><li><code class="inline">:dispatch_fn</code> — override dispatch function for testing (optional)</li><li><code class="inline">:min_interval_ms</code> — interval floor (optional, see moduledoc)</li><li><code class="inline">:max_schedules</code> — cap on armed timers (optional, see moduledoc)</li></ul>
+  </section>
+</section>
+<section class="detail" id="sync/1">
+
+  <div class="detail-header">
+    <a href="#sync/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">sync(server)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L150" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> sync(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()) :: :ok | {:error, [<a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()]}</pre>
+
+      </div>
+
+<p>Makes what is armed match what is loaded: arms every schedule in the
+policy store that is not armed, disarms every timer no loaded policy
+declares, and leaves the rest running.</p><p>The policy store is read here, inside the scheduler, and not by the
+caller. Two deploys finishing at once each call this after recording
+themselves, so whichever call runs last sees both — a caller that computed
+&quot;arm this, disarm that&quot; from its own view could disarm a time the other
+had just picked up.</p><p>Answers like <a href="#schedule/2"><code class="inline">schedule/2</code></a>, with a failure for every loaded spec that could
+not be armed. A scheduler started without a <code class="inline">:policy_store</code> does nothing.</p>
+  </section>
+</section>
+<section class="detail" id="unschedule/2">
+
+  <div class="detail-header">
+    <a href="#unschedule/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">unschedule(server, event_names)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/scheduler.ex#L131" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> unschedule(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), [<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()]) :: :ok</pre>
+
+      </div>
+
+<p>Disarms the timers for the named events and forgets their specs.</p><p>Idempotent: an event name that is not armed is skipped. This is the
+counterpart <code class="inline">load/2</code> needed and did not have — without it, unloading a
+policy left its <code class="inline">at</code> blocks firing indefinitely.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

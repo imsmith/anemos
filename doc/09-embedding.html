@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>9. Embedding and extending Anemos — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>9. Embedding and extending Anemos</h1>
+
+<a href="09-embedding.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/09-embedding.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>Anemos is an interpreter library. The host application starts it, installs
+modules and policies, and supplies events. This chapter builds that host one
+piece at a time. You can run the examples in <code class="inline">iex -S mix</code> from this checkout.</p><h2 id="start-a-persistent-runtime" class="section-heading"><a href="#start-a-persistent-runtime" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Start a persistent runtime</span></h2><pre><code class="makeup elixir" translate="no"><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">runtime_pid</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">start_link</span><span class="p" data-group-id="group-2">(</span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="ss">:anemos</span><span class="p" data-group-id="group-2">)</span></code></pre><p>In an application, put the runtime in its supervision tree instead:</p><pre><code class="makeup elixir" translate="no"><span class="n">children</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p" data-group-id="group-1">[</span><span class="w">
+  </span><span class="p" data-group-id="group-2">{</span><span class="nc">Anemos.Runtime</span><span class="p">,</span><span class="w"> </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="ss">:anemos</span><span class="p" data-group-id="group-2">}</span><span class="w">
+</span><span class="p" data-group-id="group-1">]</span><span class="w">
+</span><span class="nc">Supervisor</span><span class="o">.</span><span class="n">start_link</span><span class="p" data-group-id="group-3">(</span><span class="n">children</span><span class="p">,</span><span class="w"> </span><span class="ss">strategy</span><span class="p">:</span><span class="w"> </span><span class="ss">:one_for_one</span><span class="p" data-group-id="group-3">)</span></code></pre><p>Choose one of these approaches; do not start two runtimes with the same name.
+Names are host-controlled atoms. Use a bounded set of configured names rather
+than generating atoms from user input.</p><p>A persistent runtime starts with <code class="inline">POLICY</code> registered, but without the
+development <code class="inline">DEVICE</code> and <code class="inline">FILE</code> defaults used by <a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a>. Register
+what your application needs. Supplying modules at startup is especially
+useful with a watcher that loads policies immediately:</p><pre><code class="makeup elixir" translate="no"><span class="p" data-group-id="group-1">{</span><span class="nc">Anemos.Runtime</span><span class="p">,</span><span class="w"> </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">modules</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="s">&quot;DEVICE&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nc">MyApp.Device</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">}</span></code></pre><h2 id="define-a-real-command-contract" class="section-heading"><a href="#define-a-real-command-contract" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Define a real command contract</span></h2><p>This small host module performs a deterministic calculation, so you can test
+the whole path without any external service:</p><pre><code class="makeup elixir" translate="no"><span class="kd">defmodule</span><span class="w"> </span><span class="nc">Tutorial.Math</span><span class="w"> </span><span class="k" data-group-id="group-1">do</span><span class="w">
+  </span><span class="kn">use</span><span class="w"> </span><span class="nc">Anemos.Module</span><span class="p">,</span><span class="w"> </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;MATH&quot;</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="nc">Anemos.Runtime.Module</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">arg_schema</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;double&quot;</span><span class="p" data-group-id="group-2">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">[</span><span class="p" data-group-id="group-4">[</span><span class="ss">type</span><span class="p">:</span><span class="w"> </span><span class="ss">:number</span><span class="p" data-group-id="group-4">]</span><span class="p" data-group-id="group-3">]</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">arg_schema</span><span class="p" data-group-id="group-5">(</span><span class="c">_verb</span><span class="p" data-group-id="group-5">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="no">nil</span><span class="w">
+
+  </span><span class="n">verb</span><span class="w"> </span><span class="ss">:double</span><span class="p">,</span><span class="w"> </span><span class="k" data-group-id="group-6">fn</span><span class="w"> </span><span class="p" data-group-id="group-7">[</span><span class="n">number</span><span class="p" data-group-id="group-7">]</span><span class="p">,</span><span class="w"> </span><span class="c">_context</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p" data-group-id="group-8">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">number</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">2</span><span class="p" data-group-id="group-8">}</span><span class="w"> </span><span class="k" data-group-id="group-6">end</span><span class="w">
+</span><span class="k" data-group-id="group-1">end</span><span class="w">
+
+</span><span class="ss">:ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">register</span><span class="p" data-group-id="group-9">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="nc">Tutorial.Math</span><span class="p" data-group-id="group-9">)</span></code></pre><p>Every handler receives a list of resolved arguments and a context map, and
+returns <code class="inline">{:ok, value}</code> or <code class="inline">{:error, reason}</code>. The macro supplies the module
+name, unknown-verb fallback, and basic introspection. You can also implement
+the <a href="Anemos.Runtime.Module.html"><code class="inline">Anemos.Runtime.Module</code></a> behavior directly and register an explicit name:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">register</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;MATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="nc">Tutorial.Math</span><span class="p" data-group-id="group-1">)</span></code></pre><p>Now load a policy:</p><pre><code class="anemos">rule calculate {
+  when NUMBER {
+    let doubled = [MATH::double ?number]
+    log @doubled
+  }
+}</code></pre><p>Put that source in a string called <code class="inline">source</code>, then:</p><pre><code class="makeup elixir" translate="no"><span class="ss">:ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="ss">policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;math.rule&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="p" data-group-id="group-2">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">results</span><span class="p" data-group-id="group-2">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">dispatch</span><span class="p" data-group-id="group-3">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;NUMBER&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="p" data-group-id="group-4">%{</span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-5">%{</span><span class="s">&quot;number&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">21</span><span class="p" data-group-id="group-5">}</span><span class="p" data-group-id="group-4">}</span><span class="p" data-group-id="group-3">)</span><span class="w">
+</span><span class="c1"># results includes %{type: :log, value: 42}</span></code></pre><p>In value position, the command's unwrapped success value becomes <code class="inline">@doubled</code>.
+In statement position, the command's success value is an operation result.
+Host failures in value position stop the current handler's evaluation. Use
+structured domain errors where possible; the runtime also normalizes ordinary
+module failures into its error reporting system.</p><p>Registration is write-once by default. Registering the same name and module
+again is idempotent; registering a different module under an occupied name
+returns <code class="inline">anemos.runtime/already_registered</code>. A deliberate rebind uses the
+lower-level registry API with <code class="inline">replace: true</code> and is logged:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime.ModuleRegistry</span><span class="o">.</span><span class="n">register</span><span class="p" data-group-id="group-1">(</span><span class="w">
+  </span><span class="ss">:&quot;anemos.registry&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;MATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="nc">MyApp.ReplacementMath</span><span class="p">,</span><span class="w"> </span><span class="ss">replace</span><span class="p">:</span><span class="w"> </span><span class="no">true</span><span class="p" data-group-id="group-1">)</span></code></pre><p>Treat changing a module's behavior as an API change for every policy using it.</p><h2 id="validate-inputs-at-the-module-boundary" class="section-heading"><a href="#validate-inputs-at-the-module-boundary" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Validate inputs at the module boundary</span></h2><p>The optional <code class="inline">arg_schema/1</code> callback declares positional arguments. The
+dispatcher applies it to both standalone and value-position calls before host
+code runs. A <code class="inline">nil</code> schema leaves the verb unvalidated.</p><table><thead><tr><th style="text-align: left;">Spec key</th><th style="text-align: left;">Purpose</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">type:</code></td><td style="text-align: left;"><code class="inline">:string</code>, <code class="inline">:integer</code>, <code class="inline">:float</code>, <code class="inline">:number</code>, <code class="inline">:boolean</code>, <code class="inline">:atom</code>, <code class="inline">:any</code></td></tr><tr><td style="text-align: left;"><code class="inline">max_bytes:</code></td><td style="text-align: left;">Limit a string's byte length</td></tr><tr><td style="text-align: left;"><code class="inline">in:</code></td><td style="text-align: left;">Restrict to an explicit list of values</td></tr><tr><td style="text-align: left;"><code class="inline">optional: true</code></td><td style="text-align: left;">Allow a trailing argument to be absent</td></tr><tr><td style="text-align: left;"><code class="inline">rest: true</code></td><td style="text-align: left;">Apply the final spec to remaining arguments</td></tr><tr><td style="text-align: left;"><code class="inline">path:</code></td><td style="text-align: left;">Normalize and confine a path to a configured root</td></tr></tbody></table><p>Remember that policy symbols evaluate to strings, so <code class="inline">:atom</code> describes a
+value supplied by host data, not the DSL's <code class="inline">:symbol</code> syntax. Schemas do not
+coerce CLI strings into numeric or boolean values. Business decisions and
+cross-argument constraints belong in the handler itself.</p><p>For a filesystem verb, configure a root and declare a path argument:</p><pre><code class="makeup elixir" translate="no"><span class="c1"># In config/config.exs:</span><span class="w">
+</span><span class="n">config</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">:path_roots</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-1">%{</span><span class="ss">documents</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/var/lib/my_app/documents&quot;</span><span class="p" data-group-id="group-1">}</span><span class="w">
+
+</span><span class="c1"># In the host module:</span><span class="w">
+</span><span class="kd">def</span><span class="w"> </span><span class="nf">arg_schema</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;read&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w"> </span><span class="k" data-group-id="group-3">do</span><span class="w">
+  </span><span class="p" data-group-id="group-4">[</span><span class="p" data-group-id="group-5">[</span><span class="ss">type</span><span class="p">:</span><span class="w"> </span><span class="ss">:string</span><span class="p">,</span><span class="w"> </span><span class="ss">max_bytes</span><span class="p">:</span><span class="w"> </span><span class="mi">4096</span><span class="p">,</span><span class="w"> </span><span class="ss">path</span><span class="p">:</span><span class="w"> </span><span class="ss">:documents</span><span class="p" data-group-id="group-5">]</span><span class="p" data-group-id="group-4">]</span><span class="w">
+</span><span class="k" data-group-id="group-3">end</span></code></pre><p>The validated argument becomes a confined absolute path. Pass that value
+directly to the filesystem API instead of resolving the original input again.
+The shipped <code class="inline">FILE</code> is a stub; its shape checks alone do not make a future
+filesystem implementation confined. <a href="Anemos.Runtime.PathGuard.html"><code class="inline">Anemos.Runtime.PathGuard</code></a> performs
+lexical normalization and containment. It does not resolve symlinks: an
+in-root link pointing outside the root can escape it. Use filesystem-level
+confinement when that boundary must withstand changes to the directory tree.</p><h2 id="supply-event-data" class="section-heading"><a href="#supply-event-data" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Supply event data</span></h2><p>The string API accepts a context map:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">dispatch</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;READING&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="w">
+  </span><span class="ss">context_path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;building.garage.sensor&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;temperature&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">24</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;enabled&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="no">true</span><span class="p" data-group-id="group-3">}</span><span class="p">,</span><span class="w">
+  </span><span class="ss">correlation_id</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;reading-001&quot;</span><span class="w">
+</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>Use string payload keys. Supply all fields needed for <code class="inline">?</code> lookup in this
+dispatch's <code class="inline">context_data</code>. <code class="inline">Runtime.put_context/3</code> writes a separate context
+store, but that store is not currently merged into ordinary dispatch lookup.
+To supply shared defaults, merge them in the host before dispatch:</p><pre><code class="makeup elixir" translate="no"><span class="n">defaults</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p" data-group-id="group-1">%{</span><span class="s">&quot;site&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="s">&quot;west&quot;</span><span class="p" data-group-id="group-1">}</span><span class="w">
+</span><span class="n">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Map</span><span class="o">.</span><span class="n">merge</span><span class="p" data-group-id="group-2">(</span><span class="n">defaults</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;temperature&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">24</span><span class="p" data-group-id="group-3">}</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">dispatch</span><span class="p" data-group-id="group-4">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;READING&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-5">%{</span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="n">payload</span><span class="p" data-group-id="group-5">}</span><span class="p" data-group-id="group-4">)</span></code></pre><p>For ordinary maps there is also a protocol shorthand:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">dispatch</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="w">
+  </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;READING&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">context</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;building.garage.sensor&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">payload</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;temperature&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">24</span><span class="p" data-group-id="group-3">}</span><span class="w">
+</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>The shorthand's outer keys are atoms and use <code class="inline">context</code>/<code class="inline">payload</code>; the string
+API's context map uses <code class="inline">context_path</code>/<code class="inline">context_data</code>. Confusing these shapes
+is a common cause of missing data or denied contexts.</p><p>Application event structs can implement <a href="Anemos.Event.html"><code class="inline">Anemos.Event</code></a> with <code class="inline">name/1</code>,
+<code class="inline">context/1</code>, and <code class="inline">payload/1</code>. Return an exact event-name string, a path or
+<code class="inline">nil</code>, and a payload map. The protocol form derives those fields from the
+event; use the string form when you need the richer dispatch context.
+<code class="inline">correlation_id</code> in the string context is carried into the ambient Comn
+context used by operations.</p><h2 id="emit-values-and-connect-a-channel" class="section-heading"><a href="#emit-values-and-connect-a-channel" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Emit values and connect a channel</span></h2><p><code class="inline">emit</code> currently takes a command expression. It evaluates that command,
+then produces an emit operation containing its returned value:</p><pre><code class="anemos">rule publish-reading {
+  when READING {
+    emit state [SENSOR::read] to channel(telemetry.readings) as :reading.ready
+  }
+}</code></pre><p>The host supplies <code class="inline">SENSOR::read</code>. The optional type is <code class="inline">state</code>, <code class="inline">effect</code>, or
+<code class="inline">stream</code>; it is an envelope tag, not an automatic storage, streaming, or
+delivery guarantee. <code class="inline">emit ?payload</code> is not the implemented emit syntax.</p><p>With a channel destination, the runtime calls the current connector's
+<code class="inline">publish/2</code> with an <a href="Anemos.Envelope.html"><code class="inline">Anemos.Envelope</code></a>. Its fields are:</p><table><thead><tr><th style="text-align: left;">Field</th><th style="text-align: left;">Meaning</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">type</code></td><td style="text-align: left;"><code class="inline">:state</code>, <code class="inline">:effect</code>, <code class="inline">:stream</code>, or <code class="inline">nil</code></td></tr><tr><td style="text-align: left;"><code class="inline">payload</code></td><td style="text-align: left;">The command's returned value</td></tr><tr><td style="text-align: left;"><code class="inline">source</code></td><td style="text-align: left;">Declaration name, optionally <code class="inline">name@context</code></td></tr><tr><td style="text-align: left;"><code class="inline">timestamp</code></td><td style="text-align: left;">UTC emission time</td></tr><tr><td style="text-align: left;"><code class="inline">label</code></td><td style="text-align: left;">The <code class="inline">as</code> label, if any</td></tr><tr><td style="text-align: left;"><code class="inline">channel</code></td><td style="text-align: left;">Destination path</td></tr><tr><td style="text-align: left;"><code class="inline">signature</code></td><td style="text-align: left;">Reserved field; publishing does not sign automatically</td></tr></tbody></table><p>The default connector, <a href="Anemos.Channel.Logger.html"><code class="inline">Anemos.Channel.Logger</code></a>, logs channel emits. To use
+the bundled in-process event bus connector:</p><pre><code class="makeup elixir" translate="no"><span class="ss">:ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">connect</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="nc">Anemos.Channel.ComnBus</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="nc">Comn.EventBus</span><span class="o">.</span><span class="n">subscribe</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;telemetry.readings&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="c1"># The subscriber receives {:event, topic, %Anemos.Envelope{}}</span></code></pre><p>Or implement <code class="inline">Anemos.Channel.publish(channel, envelope)</code> and connect your
+module. A connector is host infrastructure, so design its retry, buffering,
+serialization, and error reporting explicitly. The current emit path does
+not turn a connector's returned <code class="inline">{:error, reason}</code> into a failed operation.</p><p>A binary <code class="inline">as</code> label also redispatches an event internally after the current
+operation list. The redispatch retains the originating context/payload; it
+does not automatically install the emitted command result as a new payload.
+Use <code class="inline">nextevent ... with</code> to send explicit fields. Labels are strings after
+parsing. Interpolated-label spellings are accepted but not dynamically
+resolved; prefer fixed labels with understood subscriptions.</p><h2 id="supply-a-complete-data-handler" class="section-heading"><a href="#supply-a-complete-data-handler" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Supply a complete data handler</span></h2><p>This implementation makes the <code class="inline">words</code> examples in Chapter 8 concrete:</p><pre><code class="makeup elixir" translate="no"><span class="kd">defmodule</span><span class="w"> </span><span class="nc">Tutorial.Words</span><span class="w"> </span><span class="k" data-group-id="group-1">do</span><span class="w">
+  </span><span class="na">@behaviour</span><span class="w"> </span><span class="nc">Anemos.DataModel</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">keyword</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;words&quot;</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">parse</span><span class="p" data-group-id="group-2">(</span><span class="n">raw</span><span class="p" data-group-id="group-2">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="nc">String</span><span class="o">.</span><span class="n">split</span><span class="p" data-group-id="group-4">(</span><span class="n">raw</span><span class="p" data-group-id="group-4">)</span><span class="p" data-group-id="group-3">}</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">eval</span><span class="p" data-group-id="group-5">(</span><span class="n">words</span><span class="p">,</span><span class="w"> </span><span class="c">_context</span><span class="p" data-group-id="group-5">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-6">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">words</span><span class="p" data-group-id="group-6">}</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">transduce</span><span class="p" data-group-id="group-7">(</span><span class="n">words</span><span class="p">,</span><span class="w"> </span><span class="c">_shape</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;resource.transducer.upcase&quot;</span><span class="p" data-group-id="group-7">)</span><span class="w"> </span><span class="k" data-group-id="group-8">do</span><span class="w">
+    </span><span class="p" data-group-id="group-9">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="nc">Enum</span><span class="o">.</span><span class="n">map</span><span class="p" data-group-id="group-10">(</span><span class="n">words</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nc">String</span><span class="o">.</span><span class="n">upcase</span><span class="o">/</span><span class="mi">1</span><span class="p" data-group-id="group-10">)</span><span class="p" data-group-id="group-9">}</span><span class="w">
+  </span><span class="k" data-group-id="group-8">end</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">transduce</span><span class="p" data-group-id="group-11">(</span><span class="c">_words</span><span class="p">,</span><span class="w"> </span><span class="c">_shape</span><span class="p">,</span><span class="w"> </span><span class="c">_name</span><span class="p" data-group-id="group-11">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-12">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="ss">:not_supported</span><span class="p" data-group-id="group-12">}</span><span class="w">
+</span><span class="k" data-group-id="group-1">end</span><span class="w">
+
+</span><span class="ss">:ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">register_data_model</span><span class="p" data-group-id="group-13">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="nc">Tutorial.Words</span><span class="p" data-group-id="group-13">)</span></code></pre><p>A query engine uses the same behavior. For the <code class="inline">greeter</code> example:</p><pre><code class="makeup elixir" translate="no"><span class="kd">defmodule</span><span class="w"> </span><span class="nc">Tutorial.Greeter</span><span class="w"> </span><span class="k" data-group-id="group-1">do</span><span class="w">
+  </span><span class="na">@behaviour</span><span class="w"> </span><span class="nc">Anemos.DataModel</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">keyword</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;greeter&quot;</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">parse</span><span class="p" data-group-id="group-2">(</span><span class="n">raw</span><span class="p" data-group-id="group-2">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="nc">String</span><span class="o">.</span><span class="n">trim</span><span class="p" data-group-id="group-4">(</span><span class="n">raw</span><span class="p" data-group-id="group-4">)</span><span class="p" data-group-id="group-3">}</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">eval</span><span class="p" data-group-id="group-5">(</span><span class="n">prefix</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-6">%{</span><span class="ss">bindings</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-7">%{</span><span class="s">&quot;name&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="n">name</span><span class="p" data-group-id="group-7">}</span><span class="p" data-group-id="group-6">}</span><span class="p" data-group-id="group-5">)</span><span class="w"> </span><span class="k" data-group-id="group-8">do</span><span class="w">
+    </span><span class="p" data-group-id="group-9">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-10">%{</span><span class="s">&quot;line&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="n">prefix</span><span class="w"> </span><span class="o">&lt;&gt;</span><span class="w"> </span><span class="s">&quot; &quot;</span><span class="w"> </span><span class="o">&lt;&gt;</span><span class="w"> </span><span class="n">name</span><span class="p" data-group-id="group-10">}</span><span class="p" data-group-id="group-9">}</span><span class="w">
+  </span><span class="k" data-group-id="group-8">end</span><span class="w">
+
+  </span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+  </span><span class="kd">def</span><span class="w"> </span><span class="nf">transduce</span><span class="p" data-group-id="group-11">(</span><span class="c">_data</span><span class="p">,</span><span class="w"> </span><span class="c">_shape</span><span class="p">,</span><span class="w"> </span><span class="c">_name</span><span class="p" data-group-id="group-11">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-12">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="ss">:not_supported</span><span class="p" data-group-id="group-12">}</span><span class="w">
+</span><span class="k" data-group-id="group-1">end</span><span class="w">
+
+</span><span class="ss">:ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">register_data_model</span><span class="p" data-group-id="group-13">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="nc">Tutorial.Greeter</span><span class="p" data-group-id="group-13">)</span></code></pre><p>These handlers intentionally accept simple words, not arbitrary embedded
+documents. The <a href="examples/data_models.exs">data-model example script</a> installs
+both, loads the relevant policies, and checks their answers.</p><h2 id="keep-credentials-wrapped" class="section-heading"><a href="#keep-credentials-wrapped" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Keep credentials wrapped</span></h2><p>A host verb returning a credential should return
+<code class="inline">{:ok, Anemos.Secret.new(value, label: &quot;non-sensitive-name&quot;)}</code>. Normal
+inspection, interpolation, and logging redact the wrapped value. The
+consumer deliberately unwraps it with <a href="Anemos.Secret.html#expose/1"><code class="inline">Anemos.Secret.expose/1</code></a> at the point
+where the raw credential is needed.</p><p>Wrapping is opt-in. The runtime cannot infer that an arbitrary string is a
+password. A label must not contain the credential. The wrapper prevents
+accidental formatting disclosure; it is not encryption or a sandbox against
+host code that reads the raw term. Custom connectors must consider serialization
+carefully: serializing the underlying struct can expose its contents.</p><p><a href="10-operation.html">Next: Deploying and operating policies</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="08-data.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+8. Datasets, queries, and facts
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="10-operation.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+10. Deploying and operating policies
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/09-embedding.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

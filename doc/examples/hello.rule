@@ -1,0 +1,5 @@
+rule welcome {
+  when MOTION {
+    log "Motion detected"
+  }
+}

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.StoreSupervisor — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />StoreSupervisor</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.StoreSupervisor.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>Supervisor for stores-as-infrastructure.</p><p>Owns every process the dispatcher reads from or writes to but does not
+itself represent: the <code class="inline">TripleStore</code>, the <code class="inline">DataStore</code>, the
+<code class="inline">SubscribableRegistry</code>, and one <code class="inline">ConditionServer</code> / <code class="inline">CapabilityServer</code>
+per declaration in the loaded policy set.</p><p>These processes were previously <code class="inline">start_link</code>ed from inside
+the dispatcher's initialization callback. Because the dispatcher does not trap
+exits, the death of any one of them killed the dispatcher, and the
+dispatcher's own restart came back with an empty rule set — silently
+destroying every loaded policy. Re-parenting them here severs that link:
+a store crash is now a local, recoverable event.</p><h2 id="module-resolution-not-caching" class="section-heading"><a href="#module-resolution-not-caching" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Resolution, not caching</span></h2><p>Children are addressed by supervisor child id, never by cached pid:</p><ul><li><code class="inline">:triple_store</code>, <code class="inline">:data_store</code>, <code class="inline">:subscribable_registry</code></li><li><code class="inline">{:condition, name}</code>, <code class="inline">{:capability, name}</code></li></ul><p><a href="#whereis/2"><code class="inline">whereis/2</code></a> and <a href="#snapshot/1"><code class="inline">snapshot/1</code></a> read the live child list, so a restarted
+child is picked up on the next dispatch rather than leaving the caller
+holding a dead pid. The cost is one supervisor call per dispatch cycle,
+which is cheap next to the rule bodies it precedes.</p><h2 id="module-restart-strategy" class="section-heading"><a href="#module-restart-strategy" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Restart strategy</span></h2><p><code class="inline">:one_for_one</code> — the children are mutually independent. A <code class="inline">TripleStore</code>
+crash tells you nothing about the <code class="inline">DataStore</code>, and restarting healthy
+stores would discard state for no reason.</p><p>Every child is <code class="inline">:permanent</code>. All of them are infrastructure the runtime
+needs in order to interpret a policy at all; none has a &quot;finished
+normally&quot; state. Restarted stores come back empty, which is the correct
+safe default: a condition that has lost its history reads <code class="inline">false</code>, and a
+data block that has lost its dataset reports no members.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#child_spec/1" data-no-tooltip="" translate="no">child_spec(init_arg)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns a specification to start this module under a supervisor.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#delete/2" data-no-tooltip="" translate="no">delete(sup, id)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Stops and forgets the server for a condition or capability that is no
+longer declared. Idempotent.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#put_capability/2" data-no-tooltip="" translate="no">put_capability(sup, cap)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Starts (or replaces) the capability server for a compiled capability.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#put_condition/5" data-no-tooltip="" translate="no">put_condition(sup, cond_spec, on_transition, on_side_effects \\ nil, state_table \\ nil)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Starts (or replaces) the condition server for a compiled condition.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#snapshot/1" data-no-tooltip="" translate="no">snapshot(sup)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Reads the whole child list in one call and shapes it for the dispatcher.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#start_link/1" data-no-tooltip="" translate="no">start_link(opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Starts the store supervisor.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#whereis/2" data-no-tooltip="" translate="no">whereis(sup, id)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the live pid for a child id, or <code class="inline">nil</code> if it is absent or restarting.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="child_spec/1">
+
+  <div class="detail-header">
+    <a href="#child_spec/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">child_spec(init_arg)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L42" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Returns a specification to start this module under a supervisor.</p><p>See <a href="https://elixir.hexdocs.pm/Supervisor.html"><code class="inline">Supervisor</code></a>.</p>
+  </section>
+</section>
+<section class="detail" id="delete/2">
+
+  <div class="detail-header">
+    <a href="#delete/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">delete(sup, id)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L212" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> delete(<a href="https://elixir.hexdocs.pm/Supervisor.html#t:supervisor/0">Supervisor.supervisor</a>(), {:condition | :capability, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}) :: :ok</pre>
+
+      </div>
+
+<p>Stops and forgets the server for a condition or capability that is no
+longer declared. Idempotent.</p>
+  </section>
+</section>
+<section class="detail" id="put_capability/2">
+
+  <div class="detail-header">
+    <a href="#put_capability/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">put_capability(sup, cap)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L192" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> put_capability(<a href="https://elixir.hexdocs.pm/Supervisor.html#t:supervisor/0">Supervisor.supervisor</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()) ::
+  {:ok, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>()} | {:error, <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()}</pre>
+
+      </div>
+
+<p>Starts (or replaces) the capability server for a compiled capability.</p>
+  </section>
+</section>
+<section class="detail" id="put_condition/5">
+
+    <span id="put_condition/3"></span>
+
+    <span id="put_condition/4"></span>
+
+  <div class="detail-header">
+    <a href="#put_condition/5" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">put_condition(sup, cond_spec, on_transition, on_side_effects \\ nil, state_table \\ nil)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L168" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> put_condition(
+  <a href="https://elixir.hexdocs.pm/Supervisor.html#t:supervisor/0">Supervisor.supervisor</a>(),
+  <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>(),
+  (<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>() -&gt; <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">any</a>()),
+  (<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), [<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()] -&gt; <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">any</a>()) | nil,
+  <a href="Anemos.Runtime.StateTable.html#t:t/0">Anemos.Runtime.StateTable.t</a>()
+) :: {:ok, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>()} | {:error, <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()}</pre>
+
+      </div>
+
+<p>Starts (or replaces) the condition server for a compiled condition.</p><p>Replacement rather than reuse is deliberate: <code class="inline">on_transition</code> closes over
+the dispatcher pid, so a dispatcher that has just restarted must install
+callbacks pointing at itself. The condition's boolean state resets to
+<code class="inline">false</code> in the process, which is the safe reading.</p><p><code class="inline">on_side_effects</code> is the second such callback, and it exists for the same
+reason <code class="inline">on_transition</code> does: the condition server can compute a body's
+operations but cannot execute one — routing an <code class="inline">emit</code> or a <code class="inline">[MOD::verb]</code>
+is the dispatcher's job. Omitting it leaves the operations dropped, which
+is what A-50 was.</p>
+  </section>
+</section>
+<section class="detail" id="snapshot/1">
+
+  <div class="detail-header">
+    <a href="#snapshot/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">snapshot(sup)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L106" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> snapshot(<a href="https://elixir.hexdocs.pm/Supervisor.html#t:supervisor/0">Supervisor.supervisor</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()</pre>
+
+      </div>
+
+<p>Reads the whole child list in one call and shapes it for the dispatcher.</p><p>Returns <code class="inline">%{triple_store: pid, data_store: pid, subscribable_registry: pid, conditions: %{name =&gt; pid}, capabilities: %{name =&gt; pid}}</code>. Any child that
+is mid-restart appears as <code class="inline">nil</code> (infrastructure) or is simply absent from
+the maps.</p>
+  </section>
+</section>
+<section class="detail" id="start_link/1">
+
+    <span id="start_link/0"></span>
+
+  <div class="detail-header">
+    <a href="#start_link/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">start_link(opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L60" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Starts the store supervisor.</p><h2 id="start_link/1-options" class="section-heading"><a href="#start_link/1-options" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Options</span></h2><ul><li><code class="inline">:name</code> — process registration name (optional)</li></ul>
+  </section>
+</section>
+<section class="detail" id="whereis/2">
+
+  <div class="detail-header">
+    <a href="#whereis/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">whereis(sup, id)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/store_supervisor.ex#L88" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> whereis(<a href="https://elixir.hexdocs.pm/Supervisor.html#t:supervisor/0">Supervisor.supervisor</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | nil</pre>
+
+      </div>
+
+<p>Returns the live pid for a child id, or <code class="inline">nil</code> if it is absent or restarting.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

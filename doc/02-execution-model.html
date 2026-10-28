@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>2. How policies run — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>2. How policies run</h1>
+
+<a href="02-execution-model.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/02-execution-model.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>Knowing a language's syntax tells you what you can write. Knowing its execution
+model tells you what the program will do. In Anemos, the important questions
+are which listeners receive an event, which state they share, and when an
+expression actually invokes host code.</p><h2 id="from-text-to-a-running-policy" class="section-heading"><a href="#from-text-to-a-running-policy" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">From text to a running policy</span></h2><p>The host loads source text. The load boundary checks its size and authority,
+the parser recognizes declarations, and the compiler builds executable
+handlers. The runtime installs those handlers, datasets, and schedules.
+Loading a rule does not execute its <code class="inline">when</code> body.</p><p>An incoming event supplies an exact name, an optional context path, and a
+payload. The dispatcher finds subscribers, filters them by context, evaluates
+the eligible handlers, and executes the operations they produce. Conditions
+also receive events they subscribe to and may generate transition events.</p><p>An event can reach several rules. Rules are listeners rather than an
+exclusive chain of alternatives. If two rules subscribe to <code class="inline">MOTION</code>, both
+eligible rules can run. Use <code class="inline">if</code>/<code class="inline">elseif</code>/<code class="inline">else</code> within a handler when you want
+mutually exclusive choices. Do not make correctness depend on one independent
+listener having run before another.</p><h2 id="the-four-kinds-of-name" class="section-heading"><a href="#the-four-kinds-of-name" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">The four kinds of name</span></h2><p>Most policy mistakes become easier to see when names are classified:</p><table><thead><tr><th style="text-align: left;">Name</th><th style="text-align: left;">Example</th><th style="text-align: left;">Who supplies it?</th></tr></thead><tbody><tr><td style="text-align: left;">Declaration</td><td style="text-align: left;"><code class="inline">garage-motion</code></td><td style="text-align: left;">The policy author</td></tr><tr><td style="text-align: left;">Event</td><td style="text-align: left;"><code class="inline">MOTION</code>, <code class="inline">SENSOR::motion</code></td><td style="text-align: left;">The event producer and policy agree</td></tr><tr><td style="text-align: left;">Module and verb</td><td style="text-align: left;"><code class="inline">DEVICE::set</code></td><td style="text-align: left;">The host registers the implementation</td></tr><tr><td style="text-align: left;">Binding</td><td style="text-align: left;"><code class="inline">?visitor</code>, <code class="inline">@message</code>, <code class="inline">$count</code></td><td style="text-align: left;">Event data or policy evaluation</td></tr></tbody></table><p><code class="inline">when SENSOR::motion</code> subscribes to that event name. It does not call the
+<code class="inline">SENSOR</code> module. <code class="inline">[SENSOR::motion]</code> is a command and does call a module. The
+brackets distinguish an action from a subscription.</p><h2 id="a-context-belongs-to-a-listener" class="section-heading"><a href="#a-context-belongs-to-a-listener" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A context belongs to a listener</span></h2><p>Declare one context boundary per rule. Either of these forms expresses it:</p><pre><code class="anemos">rule listen {
+  context &quot;building.garage&quot; {
+    when MOTION { log &quot;heard&quot; }
+  }
+}</code></pre><pre><code class="anemos">rule listen {
+  context building.garage
+  when MOTION { log &quot;heard&quot; }
+}</code></pre><p>The latter form is convenient in longer definitions. Use a single path rather
+than several apparently independent context blocks: the compiler extracts one
+context for the declaration, not a separate access domain for every block.
+Nested contexts do not provide lexical path composition.</p><p>For a boundary <code class="inline">building.garage</code>:</p><table><thead><tr><th style="text-align: left;">Arriving context</th><th style="text-align: left;">Admitted?</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">building.garage</code></td><td style="text-align: left;">Yes</td></tr><tr><td style="text-align: left;"><code class="inline">building.garage.sensor</code></td><td style="text-align: left;">Yes</td></tr><tr><td style="text-align: left;"><code class="inline">building</code></td><td style="text-align: left;">No</td></tr><tr><td style="text-align: left;"><code class="inline">building.garden</code></td><td style="text-align: left;">No</td></tr><tr><td style="text-align: left;"><code class="inline">building.garageband</code></td><td style="text-align: left;">No</td></tr><tr><td style="text-align: left;">Absent</td><td style="text-align: left;">No</td></tr></tbody></table><p>A rule with no context boundary accepts any arriving context, including an
+absent one. The host is responsible for authenticating the path it places on
+events. The language's comparison does not establish who sent an event.</p><h2 id="state-has-a-lifetime-and-an-owner" class="section-heading"><a href="#state-has-a-lifetime-and-an-owner" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">State has a lifetime and an owner</span></h2><p>There are three ways to read values:</p><table><thead><tr><th style="text-align: left;">Read</th><th style="text-align: left;">Meaning</th><th style="text-align: left;">Lifetime</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">?name</code></td><td style="text-align: left;">External/name resolution</td><td style="text-align: left;">Current event plus visible queries/datasets</td></tr><tr><td style="text-align: left;"><code class="inline">@name</code></td><td style="text-align: left;">A <code class="inline">let</code> or loop binding</td><td style="text-align: left;">Current handler evaluation</td></tr><tr><td style="text-align: left;"><code class="inline">$name</code></td><td style="text-align: left;">A <code class="inline">set</code> binding</td><td style="text-align: left;">Retained for this named rule across events</td></tr></tbody></table><p>Several <code class="inline">when</code> blocks in the same named rule can communicate through <code class="inline">set</code>.
+Different named rules have separate binding state. That state is not
+automatically divided by sensor, user, or arriving context. If two devices
+reach the same rule, they reach the same <code class="inline">$count</code>. To maintain per-device
+state, arrange separate rule identities or keep keyed state in a host module.</p><p>This counter initializes lazily and then increments:</p><pre><code class="anemos">rule count-motion {
+  when MOTION {
+    if not exists $count {
+      set count = 0
+    }
+    set count = $count + 1
+    log $count
+  }
+  when RESET {
+    set count = 0
+  }
+}</code></pre><p>In one persistent runtime, <code class="inline">MOTION</code>, <code class="inline">MOTION</code>, <code class="inline">RESET</code>, <code class="inline">MOTION</code> logs
+<code class="inline">1</code>, <code class="inline">2</code>, and <code class="inline">1</code>. <code class="inline">RESET</code> logs nothing. Repeating <a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a> four times
+cannot reproduce this sequence because each call creates fresh state.</p><p>Persistent here means retained in a running runtime. State survives supported
+worker restarts, but is not an on-disk database and does not survive loss of
+the whole runtime or VM. Chapter 10 explains replacement and recovery.</p><h2 id="bodies-evaluate-then-operations-execute" class="section-heading"><a href="#bodies-evaluate-then-operations-execute" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Bodies evaluate, then operations execute</span></h2><p>This distinction matters whenever host commands have side effects.</p><p>A standalone command statement produces an operation for the dispatcher to
+execute after evaluating the handler. A command in an expression must supply
+a value immediately, so it invokes the host while the expression is evaluated.</p><pre><code class="anemos">rule demonstrate-order {
+  when GO {
+    [AUDIT::record &quot;statement&quot;]
+    let answer = [LOOKUP::read &quot;value&quot;]
+    log @answer
+  }
+}</code></pre><p>Here <code class="inline">LOOKUP::read</code> runs while the handler is being evaluated. Only afterward
+does the dispatcher execute the queued <code class="inline">AUDIT::record</code> operation and log the
+answer. The source order alone is therefore not the order of all external
+side effects. These modules are illustrative host implementations, not bundled
+services.</p><p>When sequencing host calls is essential, express the sequence through value
+bindings whose calls are evaluated in order, or provide a host verb that owns
+the whole operation. Do not treat a sequence of independent statements as a
+transaction.</p><p>A failed value-position call aborts the rest of that handler's evaluation and
+reports an error. Previously evaluated calls and earlier queued operations
+are not rolled back. Errors returned by queued operations do not, in general,
+cancel later queued operations. This is especially relevant to <code class="inline">demand</code>.</p><h2 id="put-executable-statements-inside-triggers" class="section-heading"><a href="#put-executable-statements-inside-triggers" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Put executable statements inside triggers</span></h2><p>Rules are compiled from their <code class="inline">when</code> and <code class="inline">at</code> blocks. A top-level <code class="inline">set</code> or
+<code class="inline">log</code> in a rule is not a rule initializer, even where the parser accepts it.
+Place initialization inside a handler, guarded by <code class="inline">exists</code> as in the counter.
+Inline <code class="inline">data</code> and <code class="inline">query</code> declarations are an exception: they are definitions
+installed at load time, not executable statements.</p><h2 id="exercise-who-owns-the-count" class="section-heading"><a href="#exercise-who-owns-the-count" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Exercise: who owns the count?</span></h2><p>Give <code class="inline">count-motion</code> a context of <code class="inline">garage</code>, then send motion from
+<code class="inline">garage.north</code> followed by <code class="inline">garage.south</code>. What does it log?</p><p>Answer: <code class="inline">1</code>, then <code class="inline">2</code>. Both paths are admitted to the same named rule.
+Context filtering changes reachability; it does not allocate independent
+copies of persistent bindings.</p><p><a href="03-values-and-expressions.html">Next: Values and expressions</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="01-first-policy.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+1. Your first policy
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="03-values-and-expressions.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+3. Values and expressions
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/02-execution-model.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

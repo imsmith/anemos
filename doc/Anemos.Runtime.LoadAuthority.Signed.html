@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.LoadAuthority.Signed — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />LoadAuthority.<wbr />Signed</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.LoadAuthority.Signed.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority/signed.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>A load authority that verifies detached Ed25519 signatures over the
+policy source (A-05).</p><h2 id="module-what-was-wrong" class="section-heading"><a href="#module-what-was-wrong" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">What was wrong</span></h2><p><code class="inline">signed_by :operator</code> was parsed into rule metadata and read by nothing.
+A rule declaring it looked authenticated to every human and every tool
+that inspected the file, and was installed identically to one that
+declared nothing. That manufactures false provenance, which is worse
+than having no signing at all — an unsigned file at least tells the
+truth about itself.</p><h2 id="module-the-shape-of-the-check" class="section-heading"><a href="#module-the-shape-of-the-check" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">The shape of the check</span></h2><p><a href="Anemos.Runtime.LoadAuthority.html#authorize/1"><code class="inline">Anemos.Runtime.LoadAuthority.authorize/1</code></a> runs <em>after</em> the source is
+parsed and <em>before</em> it is compiled. After, because parsing is the only
+thing that can produce the <code class="inline">signed_by</code> names; before, because compiling
+is what turns text into closures, and nothing unauthorized should get
+that far. That is precisely the position a signature check needs, so
+this is an authority implementation and required no change to
+<a href="Anemos.Runtime.html#load/3"><code class="inline">Anemos.Runtime.load/3</code></a>, to <a href="Anemos.Runtime.LoadRequest.html"><code class="inline">Anemos.Runtime.LoadRequest</code></a>, or to the
+behaviour.</p><p>The signature is <strong>detached</strong>: it travels in the existing
+<code class="inline">:authorization</code> option, not in the source. <code class="inline">signed_by</code> continues to
+carry identity only, and the <code class="inline">.rule</code> file stays clean and diffable.</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w">
+  </span><span class="ss">authorization</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="ss">signatures</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;operator&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="n">sig</span><span class="p" data-group-id="group-3">}</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>A single-signer shorthand is accepted too, and resolves to the sole
+declared signer:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="ss">authorization</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="ss">signature</span><span class="p">:</span><span class="w"> </span><span class="n">sig</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>Each signature is a raw 64-byte Ed25519 signature or its Base64
+encoding, computed over the <strong>exact source bytes</strong> — the same
+<code class="inline">request.source</code> the parser was handed, byte for byte, whitespace and
+all. Anything else and a re-serialised source could verify against a
+signature made over different text.</p><p>Other keys in the <code class="inline">:authorization</code> map are ignored, so this composes
+with an authority scheme that also carries a tenant or a token.</p><h2 id="module-public-keys-only-deliberately" class="section-heading"><a href="#module-public-keys-only-deliberately" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Public keys only, deliberately</span></h2><p>Keys come from <a href="Anemos.Runtime.TrustStore.html"><code class="inline">Anemos.Runtime.TrustStore</code></a>, which holds
+<a href="https://comn.hexdocs.pm/0.7.0/Comn.Secrets.Key.html"><code class="inline">Comn.Secrets.Key</code></a> structs with <code class="inline">private: nil</code> and refuses anything
+else. Producing signatures is explicitly <strong>out of scope for this
+repository</strong>: Anemos verifies, something else signs.</p><p>That is not squeamishness. <code class="inline">comn</code> finding C-3 records that the Ed25519
+signing private key is currently reused as ChaCha20 encryption key
+material — a key-separation violation. A verifier that never holds a
+private key cannot compound it. Do not &quot;helpfully&quot; add a signing
+function here later; add it to whatever owns the private key, which is
+not this runtime.</p><p>Only <code class="inline">:ed25519</code> keys verify. <a href="https://comn.hexdocs.pm/0.7.0/Comn.Secrets.Key.html"><code class="inline">Comn.Secrets.Key</code></a> also declares
+<code class="inline">:rsa_4096</code> and <code class="inline">:ecdsa_p256</code>; a signer whose key is one of those is
+<strong>refused by name</strong>, not skipped, because a signer that is silently
+never checked is a signer that can never fail.</p><h2 id="module-every-decision-fails-closed" class="section-heading"><a href="#module-every-decision-fails-closed" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Every decision fails closed</span></h2><table><thead><tr><th style="text-align: left;">Situation</th><th style="text-align: left;">Verdict</th></tr></thead><tbody><tr><td style="text-align: left;">Runtime has no trust store</td><td style="text-align: left;">refused</td></tr><tr><td style="text-align: left;">Signer not in the keyring</td><td style="text-align: left;">refused</td></tr><tr><td style="text-align: left;">Signer declared, no signature supplied</td><td style="text-align: left;">refused</td></tr><tr><td style="text-align: left;">Signature not 64 bytes, raw or Base64</td><td style="text-align: left;">refused</td></tr><tr><td style="text-align: left;">Key is not Ed25519</td><td style="text-align: left;">refused</td></tr><tr><td style="text-align: left;">Signature does not verify</td><td style="text-align: left;">refused</td></tr><tr><td style="text-align: left;">No <code class="inline">signed_by</code> anywhere</td><td style="text-align: left;">per <code class="inline">:unsigned_policy</code></td></tr></tbody></table><p>An unknown signer is refused rather than permitted because under the
+multi-tenant decision a name nobody has vouched for is a name with no
+authority behind it. Permitting it would let any tenant mint provenance
+by inventing a signer.</p><h2 id="module-multiple-signers-are-conjunctive-all-must-verify" class="section-heading"><a href="#module-multiple-signers-are-conjunctive-all-must-verify" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Multiple signers are conjunctive — <em>all</em> must verify</span></h2><p>A source whose rules declare <code class="inline">:operator</code> and <code class="inline">:auditor</code> must carry a
+valid signature from both. Not one, not a quorum: both.</p><p>The alternative reading — any one signature suffices — is weakened by
+the attacker rather than by the defender. Under it, adding a
+<code class="inline">signed_by</code> naming a key you already control turns a source you could
+not get loaded into one you can, and the union of every named signer's
+trust becomes available to whoever names the most. Conjunctive is the
+only reading where adding a name to a source cannot make it easier to
+load.</p><p>Note that the signature covers the <em>whole source</em>, so per-rule
+attribution is not representable: <code class="inline">signed_by</code> names who must have
+signed the file, not which rule they vouched for. A source that names
+any signer is never treated as unsigned, whatever <code class="inline">:unsigned_policy</code>
+says — it is making a provenance claim, and <code class="inline">:permit</code> must not launder
+it.</p><h2 id="module-where-signed_by-may-be-written" class="section-heading"><a href="#module-where-signed_by-may-be-written" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Where <code class="inline">signed_by</code> may be written</span></h2><p>At <strong>source level</strong>, outside any declaration, which is the placement
+that matches what the signature covers:</p><pre><code class="makeup elixir" translate="no"><span class="n">signed_by</span><span class="w"> </span><span class="ss">:operator</span><span class="w">
+
+</span><span class="n">condition</span><span class="w"> </span><span class="n">night</span><span class="w"> </span><span class="p" data-group-id="group-1">{</span><span class="w"> </span><span class="n">...</span><span class="w"> </span><span class="p" data-group-id="group-1">}</span></code></pre><p>It is also still accepted as rule metadata, where it means the same
+thing — a signer the whole source must carry — because that is what it
+has always meant and every policy already written against it keeps
+working. The two placements are unioned by
+<a href="Anemos.Runtime.LoadAuthority.html#signers/1"><code class="inline">Anemos.Runtime.LoadAuthority.signers/1</code></a>.</p><p>Source level exists because rule metadata was the <em>only</em> placement
+(A-60), so a source carrying no <code class="inline">rule</code> — conditions, capabilities, data
+blocks — could not make a provenance claim and <code class="inline">:strict</code> could never
+load one. Since condition bodies execute side effects, such a file is a
+full payload, so exempting it from <code class="inline">:strict</code> was not available either.</p><h2 id="module-configuring-it" class="section-heading"><a href="#module-configuring-it" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Configuring it</span></h2><pre><code class="makeup elixir" translate="no"><span class="n">config</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">:load_authority</span><span class="p">,</span><span class="w"> </span><span class="nc">Anemos.Runtime.LoadAuthority.Signed</span><span class="w">
+
+</span><span class="p" data-group-id="group-1">{</span><span class="nc">Anemos.Runtime</span><span class="p">,</span><span class="w">
+  </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w">
+  </span><span class="ss">keyring</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="s">&quot;operator&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="n">operator_public_key</span><span class="p" data-group-id="group-2">}</span><span class="p">,</span><span class="w">
+  </span><span class="ss">unsigned_policy</span><span class="p">:</span><span class="w"> </span><span class="ss">:strict</span><span class="p" data-group-id="group-1">}</span></code></pre><p>Refusals surface through <a href="Anemos.Runtime.html#load/3"><code class="inline">Anemos.Runtime.load/3</code></a> as a
+<a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html"><code class="inline">Comn.Errors.ErrorStruct</code></a> with code <code class="inline">anemos.runtime/load_denied</code> —
+<code class="inline">:auth</code>, which is what a signature failure is. The reason names the
+signer and the failure mode and carries no key material.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-types summary">
+  <h3>
+    <a href="#types">Types</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#t:refusal/0" data-no-tooltip="" translate="no">refusal()</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Why a load was refused, inside this module. <a href="#decide/1"><code class="inline">decide/1</code></a> answers the same
+thing as a structured error whose code ends in the tag.</p></div>
+
+    </div>
+
+</div>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#decide/1" data-no-tooltip="" translate="no">decide(request)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>The verdict. A refusal is a structured error whose <code class="inline">code</code> is
+<code class="inline">anemos.trust/&lt;mode&gt;</code> — the modes are <a href="#t:refusal/0"><code class="inline">refusal/0</code></a>'s tags — and whose
+<code class="inline">field</code> is the signer it concerns, where there is one.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="types" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#types">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Types</span>
+    </h2>
+
+    <div class="types-list">
+<section class="detail" id="t:refusal/0">
+
+  <div class="detail-header">
+    <a href="#t:refusal/0" class="detail-link" data-no-tooltip="" aria-label="Link to this type">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">refusal()</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority/signed.ex#L152" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@type</span> refusal() ::
+  {:no_trust_store, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()}
+  | {:unknown_signer, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}
+  | {:missing_signature, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}
+  | {:malformed_signature, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}
+  | {:unsupported_algorithm, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()}
+  | {:bad_signature, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}
+  | {:unsigned, :strict}</pre>
+
+      </div>
+
+<p>Why a load was refused, inside this module. <a href="#decide/1"><code class="inline">decide/1</code></a> answers the same
+thing as a structured error whose code ends in the tag.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="decide/1">
+
+  <div class="detail-header">
+    <a href="#decide/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">decide(request)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority/signed.ex#L175" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> decide(<a href="Anemos.Runtime.LoadRequest.html#t:t/0">Anemos.Runtime.LoadRequest.t</a>()) ::
+  :ok | {:error, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>The verdict. A refusal is a structured error whose <code class="inline">code</code> is
+<code class="inline">anemos.trust/&lt;mode&gt;</code> — the modes are <a href="#t:refusal/0"><code class="inline">refusal/0</code></a>'s tags — and whose
+<code class="inline">field</code> is the signer it concerns, where there is one.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

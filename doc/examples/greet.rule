@@ -1,0 +1,10 @@
+rule greet {
+  when ARRIVAL {
+    log ?visitor
+    if ?visitor == "Ada" {
+      log "Welcome back"
+    } else {
+      log "Welcome"
+    }
+  }
+}

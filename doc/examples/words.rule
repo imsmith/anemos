@@ -1,0 +1,12 @@
+data crew {
+  words { alice bob }
+  transclude to shape(resource.schema.crew)
+    with resource.transducer.upcase as loud_crew
+}
+
+rule check-crew {
+  when LOGIN {
+    if ?user memberof(crew) { log "Crew member" }
+    if ?user memberof(loud_crew) { log "Loud crew member" }
+  }
+}

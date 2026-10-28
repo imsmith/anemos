@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>10. Deploying and operating policies — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>10. Deploying and operating policies</h1>
+
+<a href="10-operation.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/10-operation.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>A useful policy becomes part of a running system. Operators need to know
+whether a load succeeded, what an edit replaces, which state survives, and
+who is allowed to install code. These are application contracts as much as
+language features.</p><h2 id="give-deployed-sources-stable-identities" class="section-heading"><a href="#give-deployed-sources-stable-identities" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Give deployed sources stable identities</span></h2><pre><code class="makeup elixir" translate="no"><span class="n">source</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">File</span><span class="o">.</span><span class="n">read!</span><span class="p" data-group-id="group-1">(</span><span class="s">&quot;policies/garage.rule&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-2">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="ss">policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;garage.rule&quot;</span><span class="p" data-group-id="group-2">)</span></code></pre><p>A named load replaces the previous contents of that policy identity.
+Declarations removed from the source are removed from the runtime. Unchanged
+rules and conditions keep their state; changed declarations start fresh.
+Source fingerprints ignore line positions, so moving unchanged text down
+the file does not itself reset the declaration. Changing a declaration's
+actual parsed content can reset it even if the change seems operationally
+minor.</p><p>Names are also protected across policies. A rule, condition, or capability
+owned by one named policy cannot be silently taken by another named load.
+An anonymous load cannot replace a name owned by a named policy either.
+Resolve ownership conflicts before deploying.</p><p>Without <code class="inline">policy:</code>, loading is anonymous: declarations accumulate, and rules
+are replaced by name. Anonymous loads are useful for exploration, but they
+do not express a complete file replacement or give you a policy ID to unload.
+Use named policies for a managed deployment.</p><h2 id="handle-all-three-load-outcomes" class="section-heading"><a href="#handle-all-three-load-outcomes" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Handle all three load outcomes</span></h2><pre><code class="makeup elixir" translate="no"><span class="k">case</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w"> </span><span class="ss">policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;garage.rule&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w"> </span><span class="k" data-group-id="group-2">do</span><span class="w">
+  </span><span class="ss">:ok</span><span class="w"> </span><span class="o">-&gt;</span><span class="w">
+    </span><span class="ss">:ready</span><span class="w">
+
+  </span><span class="p" data-group-id="group-3">{</span><span class="ss">:partial</span><span class="p">,</span><span class="w"> </span><span class="n">failures</span><span class="p" data-group-id="group-3">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w">
+    </span><span class="p" data-group-id="group-4">{</span><span class="ss">:needs_attention</span><span class="p">,</span><span class="w"> </span><span class="n">failures</span><span class="p" data-group-id="group-4">}</span><span class="w">
+
+  </span><span class="p" data-group-id="group-5">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="n">reason</span><span class="p" data-group-id="group-5">}</span><span class="w"> </span><span class="o">-&gt;</span><span class="w">
+    </span><span class="p" data-group-id="group-6">{</span><span class="ss">:not_deployed</span><span class="p">,</span><span class="w"> </span><span class="n">reason</span><span class="p" data-group-id="group-6">}</span><span class="w">
+</span><span class="k" data-group-id="group-2">end</span></code></pre><p><code class="inline">:ok</code> means the policy installed and its declarations loaded successfully.
+<code class="inline">{:error, reason}</code> means nothing from this attempted load was installed; an
+existing deployment remains active. Parse failure, compile failure, rejected
+authority, excessive source size, and ownership conflicts can produce errors.</p><p><code class="inline">{:partial, failures}</code> means the policy <strong>did install</strong>, but some declarations
+are inert. Schedules may not have armed or datasets may not have initialized.
+Other rules and capabilities in that source are present. This is not a
+rollback and must not be reported to operators as one. A successful load is
+also not an exhaustive application validation: unknown command modules and
+query engines may only be discovered when called.</p><p>List or remove deployments with:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">policies</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">unload</span><span class="p" data-group-id="group-2">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;garage.rule&quot;</span><span class="p" data-group-id="group-2">)</span></code></pre><p>Unload removes owned declarations, rule state, global data, subscriptions,
+and schedules no other policy needs. The direct host API is not authority
+gated; restrict who can call it. The runtime's <code class="inline">POLICY::unload</code> verb requests
+an unload from an already admitted policy; the request is completed after
+the active dispatch. Its returned acknowledgement is not proof the target
+has already disappeared.</p><h2 id="deploy-a-directory" class="section-heading"><a href="#deploy-a-directory" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Deploy a directory</span></h2><pre><code class="makeup elixir" translate="no"><span class="p" data-group-id="group-1">{</span><span class="nc">Anemos.Runtime</span><span class="p">,</span><span class="w">
+ </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w">
+ </span><span class="ss">modules</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="s">&quot;DEVICE&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nc">MyApp.Device</span><span class="p" data-group-id="group-2">}</span><span class="p">,</span><span class="w">
+ </span><span class="ss">watch</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/etc/my_app/policies&quot;</span><span class="p" data-group-id="group-1">}</span></code></pre><p>The watcher recursively polls for <code class="inline">*.rule</code> files. A path relative to that
+directory becomes the policy ID. Saving deploys; deleting unloads. A missing
+directory is not treated as an empty one, so it does not erase the deployment.
+A file that fails a load leaves its last good version running and is retried
+on later scans. A partial load is still a deployed policy with failures to
+inspect.</p><pre><code class="makeup elixir" translate="no"><span class="n">watcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">watcher_name</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime.Watcher</span><span class="o">.</span><span class="n">status</span><span class="p" data-group-id="group-2">(</span><span class="n">watcher</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime.Watcher</span><span class="o">.</span><span class="n">scan</span><span class="p" data-group-id="group-3">(</span><span class="n">watcher</span><span class="p" data-group-id="group-3">)</span></code></pre><p>The default polling interval is 1,000 ms. To configure it or scan manually,
+start <a href="Anemos.Runtime.Watcher.html"><code class="inline">Anemos.Runtime.Watcher</code></a> separately under your supervisor with
+<code class="inline">runtime:</code>, <code class="inline">dir:</code>, and <code class="inline">interval_ms:</code> (<code class="inline">:manual</code> disables automatic polling).
+Register required modules and data/feed handlers before dependent policies
+are loaded. A module map can be supplied at runtime startup; custom data/feed
+registration may require startup sequencing before starting the watcher.</p><h2 id="authorize-policy-loads" class="section-heading"><a href="#authorize-policy-loads" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Authorize policy loads</span></h2><p>A policy can invoke registered host verbs. Treat loading it as installing
+code with access to those verbs. The public loading paths, including
+<a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a> and the CLI, check a source-size limit and consult the configured
+load authority. The default authority is permissive.</p><p>A custom authority implements <a href="Anemos.Runtime.LoadAuthority.html#authorize/1"><code class="inline">Anemos.Runtime.LoadAuthority.authorize/1</code></a> and
+receives an <a href="Anemos.Runtime.LoadRequest.html"><code class="inline">Anemos.Runtime.LoadRequest</code></a> with source, byte size, runtime name,
+policy ID, declared signers, and the caller's <code class="inline">authorization</code> term. Return
+<code class="inline">:ok</code> to admit or <code class="inline">{:error, reason}</code> to refuse. Configure the module:</p><pre><code class="makeup elixir" translate="no"><span class="n">config</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">:load_authority</span><span class="p">,</span><span class="w"> </span><span class="nc">MyApp.PolicyAuthority</span></code></pre><p>Pass its credentials explicitly:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w">
+  </span><span class="ss">policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;garage.rule&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">authorization</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="ss">tenant</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;acme&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">token</span><span class="p">:</span><span class="w"> </span><span class="n">token</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>One-shot execution presents runtime <code class="inline">:standalone</code> to the authority. A host
+can refuse that path independently of named runtimes. The authority boundary
+does not isolate hostile host Elixir code already running inside the VM.</p><h2 id="verify-signed-source" class="section-heading"><a href="#verify-signed-source" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Verify signed source</span></h2><p>The bundled signed authority verifies detached Ed25519 signatures. Select it
+in application configuration:</p><pre><code class="makeup elixir" translate="no"><span class="n">config</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">:load_authority</span><span class="p">,</span><span class="w"> </span><span class="nc">Anemos.Runtime.LoadAuthority.Signed</span></code></pre><p>Start a runtime with public keys and an explicit unsigned policy:</p><pre><code class="makeup elixir" translate="no"><span class="p" data-group-id="group-1">{</span><span class="nc">Anemos.Runtime</span><span class="p">,</span><span class="w">
+ </span><span class="ss">name</span><span class="p">:</span><span class="w"> </span><span class="ss">:anemos</span><span class="p">,</span><span class="w">
+ </span><span class="ss">keyring</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="s">&quot;operator&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="n">operator_public_key</span><span class="p" data-group-id="group-2">}</span><span class="p">,</span><span class="w">
+ </span><span class="ss">unsigned_policy</span><span class="p">:</span><span class="w"> </span><span class="ss">:strict</span><span class="p" data-group-id="group-1">}</span></code></pre><p><code class="inline">operator_public_key</code> is a <a href="https://comn.hexdocs.pm/0.7.0/Comn.Secrets.Key.html"><code class="inline">Comn.Secrets.Key</code></a> containing the public Ed25519
+key and no private key. The signing system supplies it; Anemos does not
+generate or hold signing private keys. <code class="inline">:strict</code> refuses unsigned sources,
+<code class="inline">:warn</code> admits and warns, and <code class="inline">:permit</code> admits without requiring a signer.
+The default unsigned setting is <code class="inline">:permit</code>.</p><p>Declare the signer at source level:</p><pre><code class="anemos">signed_by :operator
+
+rule greet {
+  when HELLO { log &quot;Hello&quot; }
+}</code></pre><p>Then supply a detached signature over the <strong>exact source bytes</strong>, including
+the declaration and whitespace:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">load</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="n">source</span><span class="p">,</span><span class="w">
+  </span><span class="ss">policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;greeting.rule&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">authorization</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-2">%{</span><span class="ss">signatures</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;operator&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="n">signature</span><span class="p" data-group-id="group-3">}</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>A signature is raw 64-byte Ed25519 data or its Base64 encoding. With one
+declared signer, <code class="inline">%{signature: signature}</code> is also accepted. Every declared
+signer must verify. Unknown signers, absent signatures, unsupported key types,
+and bad signatures are refused; an unsigned-permit setting does not waive a
+declared signer's check. <code class="inline">signed_by</code> is an identity claim, not a signature
+by itself, and only an enforcing authority gives that claim meaning.</p><p>The watcher reads a Base64 signature from <code class="inline">&lt;file&gt;.sig</code>. It supports one
+signature per source file; sources requiring several signers must use
+<code class="inline">Runtime.load/3</code>. Replacing the sidecar triggers a new deployment attempt.</p><p>Rule metadata also accepts <code class="inline">signed_by</code>; it still means a signer for the
+whole source. Source-level placement makes that scope clearer and also works
+for a source containing only conditions or data.</p><h2 id="understand-recovery-boundaries" class="section-heading"><a href="#understand-recovery-boundaries" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Understand recovery boundaries</span></h2><p>The runtime owns an in-memory state table that outlives its worker processes.
+Supported dispatcher/scheduler/condition restarts preserve rule <code class="inline">set</code>
+bindings, condition values and reports, module registrations, deployment
+definitions, and timer/firing state held there. The supervision tree rebuilds
+dependent workers from that retained information.</p><p>This is crash recovery inside a running supervisor, not disk persistence.
+Stopping the entire runtime or restarting the VM loses in-memory state.
+External side effects already performed are not rolled back; replaying an
+event can perform them again. Keep durable business records in host services,
+and give side-effecting operations application-level idempotency keys when
+replay is possible.</p><h2 id="resource-limits-and-observability" class="section-heading"><a href="#resource-limits-and-observability" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Resource limits and observability</span></h2><table><thead><tr><th style="text-align: left;">Setting or limit</th><th style="text-align: left;">Default</th><th style="text-align: left;">Purpose</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">:max_policy_bytes</code></td><td style="text-align: left;">1,048,576</td><td style="text-align: left;">Bound source before parsing</td></tr><tr><td style="text-align: left;"><code class="inline">:min_schedule_interval_ms</code></td><td style="text-align: left;">1,000</td><td style="text-align: left;">Reject excessive interval frequency</td></tr><tr><td style="text-align: left;"><code class="inline">:max_schedules</code></td><td style="text-align: left;">1,000</td><td style="text-align: left;">Bound armed timers per scheduler</td></tr><tr><td style="text-align: left;">Dispatch <code class="inline">timeout:</code></td><td style="text-align: left;">5,000 ms</td><td style="text-align: left;">Bound how long a caller waits</td></tr><tr><td style="text-align: left;"><code class="inline">while</code> iterations</td><td style="text-align: left;">10,000</td><td style="text-align: left;">Bound one loop</td></tr><tr><td style="text-align: left;">Event dispatch depth</td><td style="text-align: left;">10,000</td><td style="text-align: left;">Bound handoff/emit recursion</td></tr><tr><td style="text-align: left;">Retained dispatch trace</td><td style="text-align: left;">200 entries</td><td style="text-align: left;">Recent execution history</td></tr></tbody></table><p>The first three are application settings under <code class="inline">:anemos</code>. Set them in
+application configuration before starting/loading. Dispatch timeouts are call
+options, for example <code class="inline">Runtime.dispatch(:anemos, &quot;GO&quot;, %{}, timeout: 10_000)</code>.
+A caller timeout is not cancellation or rollback of host work. The dispatcher
+is synchronous; slow host verbs delay other work. Put long-running operations
+behind host services that return an acknowledgement and later emit completion
+events.</p><p>Use <code class="inline">Runtime.describe/1</code>, <code class="inline">Runtime.explain/3</code>, and <code class="inline">Runtime.trace/2</code> as
+described next to distinguish a healthy interpreter from a policy that is
+loaded but unable to do useful work.</p><p><a href="11-troubleshooting.html">Next: Finding and fixing problems</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="09-embedding.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+9. Embedding and extending Anemos
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="11-troubleshooting.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+11. Finding and fixing problems
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/10-operation.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

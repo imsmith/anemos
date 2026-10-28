@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Language and API reference — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>Language and API reference</h1>
+
+<a href="reference.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/reference.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>This reference summarizes Anemos 0.1.0 as implemented. Read the chapters for
+motivation, worked examples, and behavioral qualifications. Templates below
+use angle brackets for placeholders and square-bracketed English descriptions
+for optional material; those markers are not literal DSL syntax.</p><h2 id="source-structure" class="section-heading"><a href="#source-structure" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Source structure</span></h2><p>A source contains zero or more declarations. Supported top-level declarations
+are <code class="inline">rule</code>, <code class="inline">condition</code>, <code class="inline">capability</code>, <code class="inline">data</code>, <code class="inline">query</code>, and <code class="inline">signed_by</code>.
+Statements do not run at source level. Declaration names should be lowercase
+identifiers. Use one context boundary per rule/condition.</p><pre><code class="text">signed_by :&lt;signer&gt;
+
+rule &lt;name&gt; {
+  [version &quot;&lt;version&gt;&quot;]
+  [signed_by :&lt;signer&gt;]
+  [scope local | global | mesh]
+  [context &lt;path&gt;]
+  &lt;when/at blocks and inline data/query declarations&gt;
+}
+
+condition &lt;name&gt; {
+  [context &lt;path&gt;]
+  &lt;when/at blocks&gt;
+  [if &lt;predicate&gt; {}]
+}
+
+capability &lt;name&gt; {
+  [context &lt;path&gt;]
+  on demand { &lt;statements&gt; }
+}</code></pre><p><code class="inline">version</code> and rule <code class="inline">scope</code> are metadata. They do not enforce package version
+selection, distribute rules across a mesh, or replace context access checks.
+<code class="inline">signed_by</code> identifies source signers to the configured load authority; it
+does not contain a signature. Metadata belongs before a rule's body statements.</p><p>Braced contexts and bare dotted contexts are supported:</p><pre><code class="text">context &quot;building.garage&quot; { &lt;trigger blocks&gt; }
+context building.garage</code></pre><p>A quoted context currently expects a braced body. Use the bare dotted form
+for a context line without a body.</p><h2 id="lexical-conventions" class="section-heading"><a href="#lexical-conventions" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Lexical conventions</span></h2><table><thead><tr><th style="text-align: left;">Construct</th><th style="text-align: left;">Form</th></tr></thead><tbody><tr><td style="text-align: left;">Comment to end of line</td><td style="text-align: left;"><code class="inline">; comment</code> or <code class="inline"># comment</code></td></tr><tr><td style="text-align: left;">String</td><td style="text-align: left;"><code class="inline">&quot;text&quot;</code>; escapes <code class="inline">\&quot;</code>, <code class="inline">\\</code>, <code class="inline">\n</code>, <code class="inline">\t</code></td></tr><tr><td style="text-align: left;">Integer / float</td><td style="text-align: left;"><code class="inline">42</code>, <code class="inline">3.5</code>; negative through subtraction or host data</td></tr><tr><td style="text-align: left;">Boolean</td><td style="text-align: left;"><code class="inline">true</code>, <code class="inline">false</code></td></tr><tr><td style="text-align: left;">Symbol</td><td style="text-align: left;"><code class="inline">:name</code>, <code class="inline">:dotted.name</code>; runtime string value</td></tr><tr><td style="text-align: left;">Identifier</td><td style="text-align: left;">Lowercase initial; letters, digits, <code class="inline">_</code>, <code class="inline">-</code>, <code class="inline">.</code> afterward</td></tr><tr><td style="text-align: left;">Module / event name</td><td style="text-align: left;"><code class="inline">DEVICE</code>, <code class="inline">FILE_CREATED</code>, <code class="inline">CONDITION_ready</code></td></tr><tr><td style="text-align: left;">Variable</td><td style="text-align: left;"><code class="inline">?name</code>, <code class="inline">@name</code>, <code class="inline">$name</code>; letters/digits/underscores</td></tr><tr><td style="text-align: left;">Command qualification</td><td style="text-align: left;"><code class="inline">MODULE::verb</code></td></tr><tr><td style="text-align: left;">Block</td><td style="text-align: left;"><code class="inline">{ ... }</code></td></tr><tr><td style="text-align: left;">Command / triple</td><td style="text-align: left;"><code class="inline">[ ... ]</code></td></tr></tbody></table><p>Newlines and spaces do not delimit statements by themselves; keywords and
+expression boundaries do. Semicolons start comments. For readability, put
+one statement per line and spaces around infix operators. Only lowercase
+booleans are literals. There is no <code class="inline">nil</code> literal, single-quoted string form,
+general map literal, or general square-bracket list literal.</p><p>Recognized keyword tokens are:</p><pre><code class="text">rule when if at on it let set emit demand condition capability flow context
+else elseif while for each every foreach do return done nextevent nextrule
+log show list graph trace explain exists infer assert unless until as with
+by that import export version signed_by scope state effect stream to channel
+service self interval then filter map reduce data query source expect
+transclude dynamic subscribe periodic memberof global</code></pre><p>Recognition as a keyword does not mean a construct is implemented. See feature
+status below, particularly <code class="inline">flow</code>, <code class="inline">import</code>, <code class="inline">export</code>, <code class="inline">it</code>, and destinations.</p><h2 id="bindings-and-lookup" class="section-heading"><a href="#bindings-and-lookup" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Bindings and lookup</span></h2><table><thead><tr><th style="text-align: left;">Write</th><th style="text-align: left;">Read</th><th style="text-align: left;">Scope/lifetime</th></tr></thead><tbody><tr><td style="text-align: left;">Host payload/context field</td><td style="text-align: left;"><code class="inline">?name</code></td><td style="text-align: left;">Current dispatch's <code class="inline">context_data</code></td></tr><tr><td style="text-align: left;"><code class="inline">let name = expression</code></td><td style="text-align: left;"><code class="inline">@name</code></td><td style="text-align: left;">Current handler evaluation</td></tr><tr><td style="text-align: left;"><code class="inline">set name = expression</code></td><td style="text-align: left;"><code class="inline">$name</code></td><td style="text-align: left;">Named rule across firings</td></tr><tr><td style="text-align: left;"><code class="inline">for name in collection</code></td><td style="text-align: left;"><code class="inline">@name</code></td><td style="text-align: left;">Current iteration; removed afterward</td></tr><tr><td style="text-align: left;">Pipeline <code class="inline">filter ?name</code> / <code class="inline">map ?name</code></td><td style="text-align: left;"><code class="inline">?name</code></td><td style="text-align: left;">Current pipeline element</td></tr><tr><td style="text-align: left;">Pipeline <code class="inline">reduce acc initial ?name</code></td><td style="text-align: left;"><code class="inline">$acc</code>, <code class="inline">?name</code></td><td style="text-align: left;">Reduction accumulator and element</td></tr></tbody></table><p><code class="inline">?name</code> resolution: context data, then a visible named query, then a visible
+dataset, then <code class="inline">nil</code>. Local data/query scope is the named rule, and local
+definitions shadow global definitions. Query expected-input resolution:
+<code class="inline">let</code>, then <code class="inline">set</code>, then string-keyed context data. A missing expected input
+is an error.</p><p>Only boolean <code class="inline">false</code> and <code class="inline">nil</code> are falsey. <code class="inline">exists expression</code> is true for
+any non-<code class="inline">nil</code> value, including false. The compiler catches references to an
+<code class="inline">@</code>/<code class="inline">$</code> name with no possible binder anywhere in the declaration; it does
+not prove execution-path initialization.</p><h2 id="triggers" class="section-heading"><a href="#triggers" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Triggers</span></h2><pre><code class="text">when &lt;EVENT&gt; [for &lt;duration&gt;] [unless &lt;expr&gt; | until &lt;expr&gt;] {
+  &lt;statements&gt;
+}
+when (&lt;EVENT&gt; AND &lt;EVENT&gt; ...) { &lt;statements&gt; }
+when (&lt;EVENT&gt; OR &lt;EVENT&gt; ...) { &lt;statements&gt; }
+
+at &lt;time-spec&gt; [unless &lt;expr&gt; | until &lt;expr&gt;] { &lt;statements&gt; }</code></pre><p>Use homogeneous compound event groups. Compound reports start false and are
+replaced by incoming reports. <code class="inline">state: false</code>/<code class="inline">nil</code> makes a report false;
+absent <code class="inline">state</code> makes it true. A compound rule can fire repeatedly while the
+combination remains true; a condition acts only on a false-to-true transition.</p><p>Supported time specifications:</p><table><thead><tr><th style="text-align: left;">Form</th><th style="text-align: left;">Behavior</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">13:00</code>, <code class="inline">TIME_1300</code></td><td style="text-align: left;">Next occurrence, once</td></tr><tr><td style="text-align: left;"><code class="inline">interval(5min)</code></td><td style="text-align: left;">Repeating elapsed interval</td></tr><tr><td style="text-align: left;"><code class="inline">09:00 every day</code></td><td style="text-align: left;">Daily</td></tr><tr><td style="text-align: left;"><code class="inline">09:00 every weekday</code></td><td style="text-align: left;">Monday–Friday</td></tr><tr><td style="text-align: left;"><code class="inline">09:00 every monday</code></td><td style="text-align: left;">Weekly, named day</td></tr><tr><td style="text-align: left;"><code class="inline">DATE_2099.04.15</code></td><td style="text-align: left;">One calendar date</td></tr><tr><td style="text-align: left;"><code class="inline">DAY_friday</code></td><td style="text-align: left;">Next named day, once</td></tr><tr><td style="text-align: left;"><code class="inline">NLD_tomorrow</code></td><td style="text-align: left;">Resolved relative date, once</td></tr></tbody></table><p>Compact duration suffixes: <code class="inline">ms</code>, <code class="inline">s</code>, <code class="inline">min</code>, <code class="inline">h</code>, <code class="inline">d</code>. Use nonnegative whole
+amounts. Zero dwell is immediate; intervals must meet the configured minimum.
+NLD expressions: <code class="inline">today</code>, <code class="inline">tomorrow</code>, <code class="inline">yesterday</code>, <code class="inline">next.&lt;weekday&gt;</code>, <code class="inline">next.week</code>,
+<code class="inline">next.month</code>, <code class="inline">next.year</code>, <code class="inline">end.of.month</code>, <code class="inline">end.of.week</code>.
+See <a href="07-time.html">time semantics and limitations</a>, including local time,
+past-date refusal, captured dwell context, and unscoped scheduler events.</p><h2 id="handler-statements" class="section-heading"><a href="#handler-statements" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Handler statements</span></h2><pre><code class="text">let &lt;name&gt; = &lt;expression&gt;
+set &lt;name&gt; = &lt;expression&gt;
+log &lt;expression&gt;
+[MODULE::verb &lt;arguments&gt;]
+
+if &lt;expression&gt; [unless &lt;guard&gt;] { &lt;statements&gt; }
+  elseif &lt;expression&gt; { &lt;statements&gt; }
+  else { &lt;statements&gt; }
+
+while &lt;expression&gt; { &lt;statements&gt; }
+for &lt;name&gt; in &lt;expression&gt; { &lt;statements&gt; }
+each &lt;name&gt; in &lt;expression&gt; { &lt;statements&gt; }
+every &lt;name&gt; in &lt;expression&gt; { &lt;statements&gt; }
+foreach MODULE::verb { &lt;statements using @item&gt; }
+
+return
+done
+nextevent &lt;EVENT&gt; [with { key: &lt;expr&gt;, other: &lt;expr&gt; }]
+nextrule &lt;rule-name&gt; [with { key: &lt;expr&gt;, other: &lt;expr&gt; }]
+
+demand &lt;capability-name&gt; [--requisite | --required | --optional | --sufficient]
+emit [state | effect | stream] [MODULE::verb &lt;arguments&gt;]
+  [to channel(&lt;path&gt;)] [as :&lt;label&gt;]
+
+show &lt;subject&gt;
+explain &lt;subject&gt;
+list &lt;subject&gt;
+graph &lt;expression&gt;
+trace &lt;expression&gt;
+infer &lt;expression&gt;
+exists &lt;expression&gt;
+assert &lt;expression&gt;
+
+let [:subject -&gt; :predicate -&gt; :object]</code></pre><p><code class="inline">else if</code> is an alternative to <code class="inline">elseif</code>. Commands accept whitespace-separated
+arguments and optional commas/parenthesized argument syntax. For computed
+arguments, bind intermediate expressions with <code class="inline">let</code> for clarity. For example:</p><pre><code class="anemos">rule calculated-command {
+  when NUMBER {
+    let next_value = ?value + 1
+    [MATH::double @next_value]
+  }
+}</code></pre><p><code class="inline">return</code>/<code class="inline">done</code> stop this handler, not all event listeners. <code class="inline">return value</code>
+does not provide a return value in the current evaluator. <code class="inline">nextevent</code>
+broadcasts by event; <code class="inline">nextrule</code> selects by named rule. Both preserve context,
+overlay <code class="inline">with</code> data on the original payload, and enforce receiving context.</p><p>Inspection subjects may be module/event names, expressions, or catalogue
+names <code class="inline">rules</code>, <code class="inline">conditions</code>, <code class="inline">modules</code>, <code class="inline">events</code>, <code class="inline">policies</code>, <code class="inline">schedules</code>.
+<code class="inline">assert</code> requires an expression; use <code class="inline">assert exists DEVICE</code> to test a module
+registration rather than asserting a bare name.</p><h2 id="expressions-and-pipelines" class="section-heading"><a href="#expressions-and-pipelines" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Expressions and pipelines</span></h2><pre><code class="text">&lt;literal or variable&gt;
+[MODULE::verb &lt;arguments&gt;]
+(&lt;expression&gt;)
+(&lt;value&gt; &lt;value&gt; ...)
+&lt;unary-operator&gt; &lt;expression&gt;
+&lt;expression&gt; &lt;binary-operator&gt; &lt;expression&gt;
+&lt;expression&gt; memberof(&lt;dataset-name&gt;, &lt;dataset-name&gt;, ...)
+
+&lt;collection&gt; |&gt; filter ?item (&lt;predicate&gt;)
+&lt;collection&gt; |&gt; map ?item (&lt;expression&gt;)
+&lt;collection&gt; |&gt; reduce accumulator &lt;initial&gt; ?item (&lt;expression using $accumulator&gt;)
+&lt;collection&gt; |&gt; [MODULE::verb &lt;extra-arguments&gt;]</code></pre><p>The final form prepends the collection as one command argument and returns
+the host command's value. Pipeline collection functions wrap a scalar as one
+element and treat <code class="inline">nil</code> as empty. A bare pipeline is an expression, not a
+standalone handler statement: bind it or use it as another statement's value.</p><h3 id="operator-precedence" class="section-heading"><a href="#operator-precedence" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Operator precedence</span></h3><p>Lowest binding power first. Binary operators associate to the left. Unary
+operators bind above binary operators, and grouping parentheses override
+precedence.</p><table><thead><tr><th style="text-align: left;">Level</th><th style="text-align: left;">Operators</th></tr></thead><tbody><tr><td style="text-align: left;">0</td><td style="text-align: left;"><code class="inline">|&gt;</code></td></tr><tr><td style="text-align: left;">1</td><td style="text-align: left;"><code class="inline">in</code>, <code class="inline">notin</code>, <code class="inline">contains</code>, <code class="inline">starts_with</code>, <code class="inline">ends_with</code>, <code class="inline">matches_glob</code>, <code class="inline">matches_regex</code>, <code class="inline">memberof</code></td></tr><tr><td style="text-align: left;">2</td><td style="text-align: left;"><code class="inline">OR</code>, <code class="inline">or</code>, <code class="inline">||</code></td></tr><tr><td style="text-align: left;">3</td><td style="text-align: left;"><code class="inline">AND</code>, <code class="inline">and</code>, <code class="inline">&amp;&amp;</code></td></tr><tr><td style="text-align: left;">4</td><td style="text-align: left;">Bitwise <code class="inline">|</code></td></tr><tr><td style="text-align: left;">5</td><td style="text-align: left;">Bitwise <code class="inline">^</code></td></tr><tr><td style="text-align: left;">6</td><td style="text-align: left;">Bitwise <code class="inline">&amp;</code></td></tr><tr><td style="text-align: left;">7</td><td style="text-align: left;"><code class="inline">==</code>, <code class="inline">!=</code>, <code class="inline">===</code>, <code class="inline">!==</code>, <code class="inline">eq</code>, <code class="inline">ne</code></td></tr><tr><td style="text-align: left;">8</td><td style="text-align: left;"><code class="inline">&lt;</code>, <code class="inline">&lt;=</code>, <code class="inline">&gt;</code>, <code class="inline">&gt;=</code>, <code class="inline">lt</code>, <code class="inline">le</code>, <code class="inline">gt</code>, <code class="inline">ge</code></td></tr><tr><td style="text-align: left;">9</td><td style="text-align: left;"><code class="inline">&lt;&lt;</code>, <code class="inline">&gt;&gt;</code></td></tr><tr><td style="text-align: left;">10</td><td style="text-align: left;"><code class="inline">+</code>, <code class="inline">-</code></td></tr><tr><td style="text-align: left;">11</td><td style="text-align: left;"><code class="inline">*</code>, <code class="inline">/</code>, <code class="inline">%</code></td></tr><tr><td style="text-align: left;">Above binary</td><td style="text-align: left;">Unary <code class="inline">not</code>, <code class="inline">!</code>, <code class="inline">~</code></td></tr></tbody></table><p>Uppercase <code class="inline">IN</code> is accepted in expression membership position as well. Other
+word comparisons use the lowercase spellings listed. <code class="inline">matches_glob</code> is in the
+precedence table but not implemented at evaluation time.</p><p><code class="inline">AND</code> compounds non-boolean values, dropping <code class="inline">true</code> and absorbing the first
+falsey operand. <code class="inline">OR</code>/<code class="inline">||</code> chooses the first truthy value, or the first operand
+when all are falsey. <code class="inline">&amp;&amp;</code> returns the falsey left value or the right value.
+All are eager, including host calls in operands. See <a href="03-values-and-expressions.html#logical-operators-also-carry-values">Chapter 3</a>
+for shape examples and mixed-value rules.</p><h2 id="data-and-queries" class="section-heading"><a href="#data-and-queries" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Data and queries</span></h2><pre><code class="text">data &lt;name&gt; {
+  &lt;simple values&gt;
+}
+
+data &lt;name&gt; {
+  [source &lt;resource.path&gt;]
+  &lt;format-keyword&gt; { &lt;handler body&gt; }
+  [transclude to shape(&lt;shape.path&gt;) with &lt;transducer.path&gt; as &lt;binding&gt;]
+}
+
+data &lt;name&gt; {
+  dynamic { subscribe &lt;protocol&gt; &quot;&lt;uri&gt;&quot; [periodic &lt;spec&gt;] }
+}
+
+query &lt;name&gt; {
+  [expect :input, :other_input]
+  &lt;engine-keyword&gt; { &lt;handler body&gt; }
+  return ?output
+}</code></pre><p>Top-level data/query declarations are global. Inline declarations are local
+to the named rule unless written <code class="inline">data global &lt;name&gt;</code> or <code class="inline">query global &lt;name&gt;</code>.
+Only simple sets work without a host data handler. Format/engine bodies are
+token-reconstructed text, not arbitrary raw source. <code class="inline">source</code> is metadata;
+dynamic protocol handlers implement fetching/subscription. <code class="inline">periodic</code> does
+not itself provide polling. Query access through <code class="inline">?name</code> executes the query;
+it does not cache it.</p><p>Triple assertions work as facts; query pattern evaluation is partial. See
+<a href="08-data.html#facts-and-triple-patterns">Chapter 8</a> before using patterns as values.</p><h2 id="command-line-reference" class="section-heading"><a href="#command-line-reference" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Command-line reference</span></h2><pre><code class="makeup sh" translate="no"><span class="">mix anemos.run path/to/policy.rule --event EVENT_NAME [options]
+</span></code></pre><table><thead><tr><th style="text-align: left;">Option</th><th style="text-align: left;">Meaning</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">--event NAME</code>, <code class="inline">-e NAME</code></td><td style="text-align: left;">Required event to dispatch</td></tr><tr><td style="text-align: left;"><code class="inline">--context PATH</code>, <code class="inline">-c PATH</code></td><td style="text-align: left;">Caller path for listener boundaries</td></tr><tr><td style="text-align: left;"><code class="inline">--context-data KEY=VALUE</code></td><td style="text-align: left;">Repeatable string-valued payload fields</td></tr><tr><td style="text-align: left;"><code class="inline">--stub-modules</code></td><td style="text-align: left;">Opt into bundled demonstration module doubles</td></tr><tr><td style="text-align: left;"><code class="inline">--help</code>, <code class="inline">-h</code></td><td style="text-align: left;">Usage</td></tr></tbody></table><p>The bundled example doubles cover <code class="inline">EVENT</code>, example <code class="inline">FILE</code>, <code class="inline">INFRA</code>, <code class="inline">PDF</code>,
+<code class="inline">SECRET</code>, and <code class="inline">STRING</code>. They do no external work. The one-shot path normally
+registers only development <code class="inline">DEVICE</code> and <code class="inline">FILE</code> stubs. A persistent runtime
+starts with <code class="inline">POLICY</code> and host registrations, not the one-shot stub defaults.</p><p>The CLI dispatches once and exits. Exit <code class="inline">1</code> covers usage/read/load/parse/
+compile/operation errors. Exit <code class="inline">0</code> means no reported operation errors, not
+that a required action occurred. Context-data parsing splits only the first
+<code class="inline">=</code>; a key without <code class="inline">=</code> receives an empty string.</p><h2 id="host-api-quick-reference" class="section-heading"><a href="#host-api-quick-reference" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Host API quick reference</span></h2><p><code class="inline">rt</code> below is the host-controlled runtime atom, usually <code class="inline">:anemos</code>.</p><table><thead><tr><th style="text-align: left;">Call</th><th style="text-align: left;">Result / purpose</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">Anemos.run(source, event: name, ...)</code></td><td style="text-align: left;"><code class="inline">{:ok, results}</code> or <code class="inline">{:error, reason}</code>; one-shot</td></tr><tr><td style="text-align: left;"><code class="inline">Anemos.run_report(source, event: name, ...)</code></td><td style="text-align: left;">Detailed one-shot report or load error</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.start_link(name: rt, ...)</code></td><td style="text-align: left;">Start supervised runtime</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.register(rt, module)</code></td><td style="text-align: left;">Register a macro-defined module by its embedded name</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.register(rt, &quot;NAME&quot;, module)</code></td><td style="text-align: left;">Register explicit command name</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.register_data_model(rt, handler)</code></td><td style="text-align: left;">Register format/query handler by <code class="inline">keyword/0</code></td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.put_context(rt, &quot;key&quot;, value)</code></td><td style="text-align: left;">Write context store; currently not merged into dispatch lookup</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.connect(rt, connector)</code></td><td style="text-align: left;">Replace current channel connector</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.load(rt, source, policy: id, ...)</code></td><td style="text-align: left;"><code class="inline">:ok</code>, <code class="inline">{:partial, failures}</code>, or <code class="inline">{:error, reason}</code></td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.unload(rt, id)</code></td><td style="text-align: left;">Remove a named policy</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.policies(rt)</code></td><td style="text-align: left;">Loaded policy ownership information</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.dispatch(rt, name, context, opts)</code></td><td style="text-align: left;"><code class="inline">{:ok, results}</code>; inspect individual errors</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.dispatch(rt, event_struct_or_map)</code></td><td style="text-align: left;">Dispatch through <a href="Anemos.Event.html"><code class="inline">Anemos.Event</code></a></td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.condition_state(rt, &quot;name&quot;)</code></td><td style="text-align: left;"><code class="inline">true</code>, <code class="inline">false</code>, or absent <code class="inline">nil</code></td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.describe(rt)</code></td><td style="text-align: left;">Runtime inventory, state, and schedules</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.explain(rt, name, context)</code></td><td style="text-align: left;">Reachability without guard/body evaluation</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.trace(rt, limit)</code></td><td style="text-align: left;">Newest-first recent dispatch history</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.Watcher.status(watcher)</code></td><td style="text-align: left;">Last deployment status by file</td></tr><tr><td style="text-align: left;"><code class="inline">Runtime.Watcher.scan(watcher)</code></td><td style="text-align: left;">Force one scan</td></tr></tbody></table><p><code class="inline">Runtime</code> abbreviates <a href="Anemos.Runtime.html"><code class="inline">Anemos.Runtime</code></a>. All calls are Elixir, not DSL syntax.
+Public API module documentation gives specs and additional options.</p><p>One-shot options: <code class="inline">event:</code>, <code class="inline">context:</code>, <code class="inline">context_path:</code>, <code class="inline">context_data:</code>,
+<code class="inline">modules:</code>, <code class="inline">authorization:</code>. Runtime startup options: <code class="inline">name:</code>, <code class="inline">modules:</code>,
+<code class="inline">watch:</code>, <code class="inline">keyring:</code>, <code class="inline">unsigned_policy:</code>. Load options: <code class="inline">policy:</code>,
+<code class="inline">authorization:</code>. Dispatch accepts <code class="inline">timeout:</code> in its fourth argument.</p><p>String dispatch context uses <code class="inline">%{context_path: path, context_data: payload}</code>.
+Map-protocol events use <code class="inline">%{name: name, context: path, payload: payload}</code>.
+Use string keys within payloads.</p><h3 id="extension-contracts" class="section-heading"><a href="#extension-contracts" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Extension contracts</span></h3><table><thead><tr><th style="text-align: left;">Interface</th><th style="text-align: left;">Required operations</th><th style="text-align: left;">Optional / notes</th></tr></thead><tbody><tr><td style="text-align: left;"><a href="Anemos.Runtime.Module.html"><code class="inline">Anemos.Runtime.Module</code></a></td><td style="text-align: left;"><code class="inline">handle_verb/3</code></td><td style="text-align: left;"><code class="inline">arg_schema/1</code>, <code class="inline">describe/1</code>; macro <code class="inline">use Anemos.Module</code></td></tr><tr><td style="text-align: left;"><a href="Anemos.Event.html"><code class="inline">Anemos.Event</code></a></td><td style="text-align: left;"><code class="inline">name/1</code>, <code class="inline">context/1</code>, <code class="inline">payload/1</code></td><td style="text-align: left;">Protocol for application event values</td></tr><tr><td style="text-align: left;"><a href="Anemos.Channel.html"><code class="inline">Anemos.Channel</code></a></td><td style="text-align: left;"><code class="inline">publish/2</code></td><td style="text-align: left;">Receives envelope; host owns delivery guarantees</td></tr><tr><td style="text-align: left;"><a href="Anemos.DataModel.html"><code class="inline">Anemos.DataModel</code></a></td><td style="text-align: left;"><code class="inline">keyword/0</code>, <code class="inline">parse/1</code>, <code class="inline">eval/2</code>, <code class="inline">transduce/3</code></td><td style="text-align: left;">Return <code class="inline">{:error, :not_supported}</code> for unsupported transformations</td></tr><tr><td style="text-align: left;"><a href="Anemos.Subscribable.html"><code class="inline">Anemos.Subscribable</code></a></td><td style="text-align: left;"><code class="inline">subscribe/3</code>, <code class="inline">unsubscribe/1</code>, <code class="inline">periodic?/0</code>, <code class="inline">interval/1</code></td><td style="text-align: left;">Adapter owns actual feed/polling</td></tr><tr><td style="text-align: left;"><a href="Anemos.Runtime.LoadAuthority.html"><code class="inline">Anemos.Runtime.LoadAuthority</code></a></td><td style="text-align: left;"><code class="inline">authorize/1</code></td><td style="text-align: left;">Receives <code class="inline">LoadRequest</code>; default permissive</td></tr></tbody></table><h2 id="feature-status" class="section-heading"><a href="#feature-status" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Feature status</span></h2><p>These distinctions are part of the documentation contract, not implied
+promises that unfinished syntax will acquire a particular future meaning.</p><table><thead><tr><th style="text-align: left;">Feature</th><th style="text-align: left;">Current behavior</th><th style="text-align: left;">Practical guidance</th></tr></thead><tbody><tr><td style="text-align: left;">Rules, context boundaries</td><td style="text-align: left;">Implemented; one extracted context per declaration</td><td style="text-align: left;">Use one explicit scope</td></tr><tr><td style="text-align: left;"><code class="inline">let</code>, <code class="inline">set</code>, expressions, branches</td><td style="text-align: left;">Implemented</td><td style="text-align: left;">Initialize persistent state inside a handler</td></tr><tr><td style="text-align: left;"><code class="inline">put_context/3</code></td><td style="text-align: left;">Stores values separately; ordinary dispatch does not resolve them</td><td style="text-align: left;">Merge defaults into event <code class="inline">context_data</code> in the host</td></tr><tr><td style="text-align: left;">Command statements / values</td><td style="text-align: left;">Implemented with different execution timing</td><td style="text-align: left;">Read Chapter 2 before depending on side-effect order</td></tr><tr><td style="text-align: left;">Explicit collection iteration / pipelines</td><td style="text-align: left;">Implemented</td><td style="text-align: left;">Supply lists; use explicit loop sources</td></tr><tr><td style="text-align: left;">Bare <code class="inline">each item</code> / <code class="inline">every item</code></td><td style="text-align: left;">Parses but has no iterable and does no work</td><td style="text-align: left;">Use <code class="inline">each item in ?items</code> or <code class="inline">for</code></td></tr><tr><td style="text-align: left;">Pipeline <code class="inline">emit</code></td><td style="text-align: left;">Descriptors discarded; no reliable per-item dispatch</td><td style="text-align: left;">Use a <code class="inline">for</code> with command statements</td></tr><tr><td style="text-align: left;"><code class="inline">until</code></td><td style="text-align: left;">Latch can be lost; ignored on <code class="inline">if</code>; fresh guard on conditions</td><td style="text-align: left;">Use explicit persistent state with <code class="inline">unless</code></td></tr><tr><td style="text-align: left;">Conditions</td><td style="text-align: left;">Trigger/predicate state and rising-edge actions implemented</td><td style="text-align: left;">One transition body per condition; no condition dwell</td></tr><tr><td style="text-align: left;">Capability demand</td><td style="text-align: left;">Each demand is its own stack; later statements continue</td><td style="text-align: left;">Do not use as an authorization gate</td></tr><tr><td style="text-align: left;">Capability body operations</td><td style="text-align: left;">Returned as results, not recursively executed</td><td style="text-align: left;">Expression host calls execute; do not infer queued execution</td></tr><tr><td style="text-align: left;"><code class="inline">return value</code></td><td style="text-align: left;">Parses; value ignored</td><td style="text-align: left;">Use bare return or explicit handoff</td></tr><tr><td style="text-align: left;"><code class="inline">nextevent</code></td><td style="text-align: left;">Broadcasts to all eligible event subscribers</td><td style="text-align: left;">Choose event names accordingly</td></tr><tr><td style="text-align: left;"><code class="inline">nextrule</code></td><td style="text-align: left;">Calls every compiled handler with target name</td><td style="text-align: left;">Prefer one-action target rules</td></tr><tr><td style="text-align: left;"><code class="inline">at</code> in scoped rules</td><td style="text-align: left;">Timer events have no context, so boundary denies</td><td style="text-align: left;">Schedule scoped events in host</td></tr><tr><td style="text-align: left;"><code class="inline">at</code> persistent bindings</td><td style="text-align: left;">Generated time handlers have separate names/state</td><td style="text-align: left;">Use host-scheduled ordinary events to share <code class="inline">when</code> state</td></tr><tr><td style="text-align: left;">Local calendar schedules</td><td style="text-align: left;">Implemented with local naive time</td><td style="text-align: left;">Externalize zone/DST/durable scheduling requirements</td></tr><tr><td style="text-align: left;">Simple datasets / <code class="inline">memberof</code></td><td style="text-align: left;">Exact membership implemented</td><td style="text-align: left;">CIDRs are strings, not subnet matchers</td></tr><tr><td style="text-align: left;">Format data / queries / transclusion</td><td style="text-align: left;">Host handlers required</td><td style="text-align: left;">Register before loading; inspect failures</td></tr><tr><td style="text-align: left;">Embedded engine text</td><td style="text-align: left;">Reconstructed tokens, not original bytes</td><td style="text-align: left;">Keep handler grammar compatible</td></tr><tr><td style="text-align: left;">Dynamic feeds</td><td style="text-align: left;">Subscription/update/cancellation implemented</td><td style="text-align: left;">Host supplies adapters and polling</td></tr><tr><td style="text-align: left;">Triple assertions / <code class="inline">graph</code></td><td style="text-align: left;">Implemented</td><td style="text-align: left;">Shared runtime fact store</td></tr><tr><td style="text-align: left;">Triple queries in expressions</td><td style="text-align: left;">Descriptor values, not bound rows</td><td style="text-align: left;">Use host matching/query services</td></tr><tr><td style="text-align: left;"><code class="inline">matches_glob</code></td><td style="text-align: left;">Parsed; evaluator falls back to false</td><td style="text-align: left;">Use <code class="inline">matches_regex</code> or a host matcher</td></tr><tr><td style="text-align: left;"><code class="inline">++</code>, <code class="inline">~&amp;</code>, <code class="inline">~|</code></td><td style="text-align: left;">Tokenized, not working binary expression operators</td><td style="text-align: left;">Use implemented operators or host verbs</td></tr><tr><td style="text-align: left;">Unary minus</td><td style="text-align: left;">Not parsed</td><td style="text-align: left;">Use subtraction, such as <code class="inline">0 - 5</code></td></tr><tr><td style="text-align: left;">Interpolated symbols / labels</td><td style="text-align: left;">Parsed text is not dynamically resolved</td><td style="text-align: left;">Use fixed labels and explicit payloads</td></tr><tr><td style="text-align: left;"><code class="inline">to service(...)</code>, <code class="inline">to self</code></td><td style="text-align: left;">Parsed destination forms lack channel delivery handling</td><td style="text-align: left;">Use <code class="inline">to channel(...)</code></td></tr><tr><td style="text-align: left;">General <code class="inline">emit value</code></td><td style="text-align: left;">Not implemented; command form required</td><td style="text-align: left;">Emit a host command's result</td></tr><tr><td style="text-align: left;">Rule <code class="inline">version</code>, <code class="inline">scope</code></td><td style="text-align: left;">Descriptive metadata</td><td style="text-align: left;">Do not infer version enforcement/distribution</td></tr><tr><td style="text-align: left;"><code class="inline">signed_by</code></td><td style="text-align: left;">Enforced only through an appropriate load authority</td><td style="text-align: left;">Configure signed verification explicitly</td></tr><tr><td style="text-align: left;"><code class="inline">flow</code>, <code class="inline">import</code>, <code class="inline">export</code>, modal <code class="inline">it</code></td><td style="text-align: left;">Reserved/design vocabulary, no working feature</td><td style="text-align: left;">Compose implemented rules and host services</td></tr></tbody></table><p><a href="glossary.html">Glossary and index</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="12-workshop.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+12. A complete application: workshop temperature alerts
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="glossary.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+Glossary and subject index
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/reference.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

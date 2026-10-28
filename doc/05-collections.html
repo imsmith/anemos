@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>5. Collections and pipelines — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>5. Collections and pipelines</h1>
+
+<a href="05-collections.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/05-collections.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>Batch work brings two questions: how to perform an action for every item, and
+how to turn a collection into another value. Loops answer the first question;
+pipelines are often clearer for the second.</p><p>The examples below receive lists from the host API. CLI <code class="inline">--context-data</code>
+cannot construct a typed list from a string.</p><h2 id="iterate-with-for" class="section-heading"><a href="#iterate-with-for" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Iterate with <code class="inline">for</code></span></h2><pre><code class="anemos">rule print-items {
+  when BATCH {
+    for item in ?items {
+      log @item
+    }
+  }
+}</code></pre><p>Given <code class="inline">%{&quot;items&quot; =&gt; [&quot;alpha&quot;, &quot;beta&quot;]}</code>, this logs <code class="inline">&quot;alpha&quot;</code>, then
+<code class="inline">&quot;beta&quot;</code>. The loop variable is an <code class="inline">@</code> binding. Each iteration replaces that
+temporary binding, and the evaluator removes it after the iteration. Avoid
+reusing the name of an outer <code class="inline">let</code>; the current loop cleanup does not restore
+an outer binding of the same name.</p><p><code class="inline">set</code> changes inside the loop survive into the next iteration and the next
+event. A local binding with another name can also pass through the loop's
+evaluation; braces do not create general-purpose lexical scopes. Choose loop
+variables that make their role and lifetime obvious.</p><p>A missing iterable yields no iterations. A non-list value is wrapped as a
+single item. Maps and sets are not automatically traversed as collections of
+entries: have the host return a list when you intend item-by-item work.</p><p>There is no <code class="inline">break</code> or <code class="inline">continue</code>. A <code class="inline">return</code> inside the loop exits the whole
+handler. To skip an item, guard that iteration's work with an <code class="inline">if</code>.</p><h2 id="loop-aliases" class="section-heading"><a href="#loop-aliases" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Loop aliases</span></h2><p><code class="inline">each item in ?items { ... }</code> and <code class="inline">every item in ?items { ... }</code> are aliases
+for explicit <code class="inline">for</code> iteration. The shorter forms <code class="inline">each item { ... }</code> and
+<code class="inline">every item { ... }</code> parse but currently have no iterable, so they perform
+no work. They do not infer a payload field. Always give an explicit source.</p><p><code class="inline">foreach FILE::list { ... }</code> invokes the module verb and iterates its returned
+list as <code class="inline">@item</code>. The module must be registered. Prefer explicit <code class="inline">for item in [FILE::list]</code> when you need to see the collection expression directly.</p><h2 id="repeat-with-while" class="section-heading"><a href="#repeat-with-while" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Repeat with <code class="inline">while</code></span></h2><pre><code class="anemos">rule countdown {
+  when START {
+    set remaining = 3
+    while $remaining &gt; 0 {
+      log $remaining
+      set remaining = $remaining - 1
+    }
+    log &quot;finished&quot;
+  }
+}</code></pre><p>This logs <code class="inline">3</code>, <code class="inline">2</code>, <code class="inline">1</code>, and <code class="inline">&quot;finished&quot;</code>. The condition is evaluated before
+each iteration. Ensure the body changes something that makes it false.
+The interpreter stops repeating at 10,000 iterations; hitting that safety
+limit is not a useful successful outcome. Bound the work yourself.</p><p>For a known collection, use <code class="inline">for</code>. It describes intent more directly and
+avoids a counter whose only job is controlling a loop.</p><h2 id="filter-map-reduce" class="section-heading"><a href="#filter-map-reduce" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Filter, map, reduce</span></h2><p>The pipe operator <code class="inline">|&gt;</code> passes the value on its left into the stage on its
+right. A pipeline is an expression; bind or log its answer.</p><pre><code class="anemos">rule summarize {
+  when BATCH {
+    let total = ?values
+      |&gt; filter ?n (?n &gt; 0)
+      |&gt; map ?n (?n * 2)
+      |&gt; reduce sum 0 ?n ($sum + ?n)
+    log @total
+  }
+}</code></pre><p>For <code class="inline">[-1, 2, -3, 4, 5]</code>, follow the values through the stages:</p><table><thead><tr><th style="text-align: left;">Stage</th><th style="text-align: left;">Answer</th></tr></thead><tbody><tr><td style="text-align: left;">Input</td><td style="text-align: left;"><code class="inline">[-1, 2, -3, 4, 5]</code></td></tr><tr><td style="text-align: left;"><code class="inline">filter</code></td><td style="text-align: left;"><code class="inline">[2, 4, 5]</code></td></tr><tr><td style="text-align: left;"><code class="inline">map</code></td><td style="text-align: left;"><code class="inline">[4, 8, 10]</code></td></tr><tr><td style="text-align: left;"><code class="inline">reduce</code></td><td style="text-align: left;"><code class="inline">22</code></td></tr></tbody></table><p><code class="inline">filter ?n (predicate)</code> evaluates its predicate with the current element
+available as <code class="inline">?n</code>. It retains elements whose predicates are truthy.
+<code class="inline">map ?n (expression)</code> replaces each element with the expression's answer.
+These variables are <code class="inline">?</code> references, unlike a <code class="inline">for</code> loop's <code class="inline">@item</code>.</p><p><code class="inline">reduce sum 0 ?n (expression)</code> starts an accumulator called <code class="inline">sum</code> at <code class="inline">0</code>.
+For each element, the body reads the current accumulator as <code class="inline">$sum</code> and the
+element as <code class="inline">?n</code>, then returns the next accumulator. This accumulator belongs
+to the reduction. It does not by itself create persistent rule state named
+<code class="inline">sum</code>.</p><p>Empty-list filtering and mapping return an empty list. Reducing an empty
+list returns the initial accumulator. The collection built-ins wrap a scalar
+as a singleton list and treat missing <code class="inline">nil</code> as an empty list.</p><h2 id="pass-a-collection-to-a-host-command" class="section-heading"><a href="#pass-a-collection-to-a-host-command" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Pass a collection to a host command</span></h2><pre><code class="anemos">rule submit-batch {
+  when BATCH {
+    let accepted = ?values |&gt; filter ?n (?n &gt; 0)
+    let receipt = @accepted |&gt; [QUEUE::submit &quot;normal&quot;]
+    log @receipt
+  }
+}</code></pre><p>The pipeline prepends its collection to the explicit command arguments.
+<code class="inline">QUEUE::submit</code> receives <code class="inline">[accepted_list, &quot;normal&quot;]</code>; it is called once
+for the collection, not once per element. Its returned value becomes the
+pipeline answer. <code class="inline">QUEUE</code> is supplied by the host.</p><p>The parser also accepts <code class="inline">|&gt; emit [MODULE::verb ...]</code>. In this version that
+form constructs descriptors that are discarded rather than reliably
+dispatching one operation per item. Use an explicit <code class="inline">for</code> loop with a command
+statement for side effects:</p><pre><code class="anemos">rule submit-each {
+  when BATCH {
+    for item in ?items {
+      [QUEUE::submit @item &quot;normal&quot;]
+    }
+  }
+}</code></pre><p>Remember the operation model from Chapter 2: these standalone commands are
+queued during handler evaluation, then executed. A host verb used inside a
+pipeline expression runs during evaluation.</p><h2 id="exercise" class="section-heading"><a href="#exercise" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Exercise</span></h2><p>Change the summarizing pipeline to retain values greater than <code class="inline">2</code>, then
+multiply by <code class="inline">3</code> and reduce from <code class="inline">10</code>. What does the same input produce?</p><p>Answer: <code class="inline">[4, 5]</code> becomes <code class="inline">[12, 15]</code>, which reduces from <code class="inline">10</code> to <code class="inline">37</code>.</p><p><a href="06-conditions-and-capabilities.html">Next: Conditions and capabilities</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="04-control-flow.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+4. Decisions and control flow
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="06-conditions-and-capabilities.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+6. Conditions and capabilities
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/05-collections.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

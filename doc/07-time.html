@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>7. Time and duration — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>7. Time and duration</h1>
+
+<a href="07-time.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/07-time.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>There are two different reasons to wait. “The door has remained open for five
+minutes” depends on reports of a continuing state. “Check the door every five
+minutes” depends only on a clock. Anemos expresses the first with a dwell
+duration on <code class="inline">when</code>, and the second with an <code class="inline">at</code> schedule.</p><p>Both require a running interpreter. The command-line runner and <a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a>
+are one-shot tools; they are not services that stay alive to deliver future
+timers. Use the supervised runtime from Chapter 9.</p><h2 id="a-duration-is-an-amount-and-a-unit" class="section-heading"><a href="#a-duration-is-an-amount-and-a-unit" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A duration is an amount and a unit</span></h2><p>Use compact suffixes with no intervening space:</p><table><thead><tr><th style="text-align: left;">Unit</th><th style="text-align: left;">Meaning</th><th style="text-align: left;">Example</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">ms</code></td><td style="text-align: left;">Milliseconds</td><td style="text-align: left;"><code class="inline">250ms</code></td></tr><tr><td style="text-align: left;"><code class="inline">s</code></td><td style="text-align: left;">Seconds</td><td style="text-align: left;"><code class="inline">30s</code></td></tr><tr><td style="text-align: left;"><code class="inline">min</code></td><td style="text-align: left;">Minutes</td><td style="text-align: left;"><code class="inline">5min</code></td></tr><tr><td style="text-align: left;"><code class="inline">h</code></td><td style="text-align: left;">Hours</td><td style="text-align: left;"><code class="inline">2h</code></td></tr><tr><td style="text-align: left;"><code class="inline">d</code></td><td style="text-align: left;">Days of 24 hours</td><td style="text-align: left;"><code class="inline">1d</code></td></tr></tbody></table><p>The duration converter also recognizes the long names <code class="inline">seconds</code>, <code class="inline">minutes</code>,
+<code class="inline">hours</code>, and <code class="inline">days</code>; use the compact spellings in source because tokenization
+of the longer forms is not uniformly reliable. Amounts are whole numbers.
+Durations are special trigger/schedule syntax, not a general arithmetic unit
+system.</p><h2 id="wait-for-a-reported-state-to-persist" class="section-heading"><a href="#wait-for-a-reported-state-to-persist" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Wait for a reported state to persist</span></h2><pre><code class="anemos">rule door-left-open {
+  when DOOR_OPEN for 5min {
+    log &quot;Door has remained open for five minutes&quot;
+  }
+}</code></pre><p>The first truthy <code class="inline">DOOR_OPEN</code> report arms a timer. Repeated truthy reports do
+not restart it. A falsey <code class="inline">state</code> report cancels it. If the deadline arrives
+without cancellation, the body runs once. Continued true reports after that
+do not repeatedly fire it; a false report must reset it before a new true
+report can arm another dwell.</p><p>The host should dispatch both changes under the same event name:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">dispatch</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;DOOR_OPEN&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="p" data-group-id="group-2">%{</span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;state&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="no">true</span><span class="p" data-group-id="group-3">}</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="c1"># Later, if the door closes:</span><span class="w">
+</span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">dispatch</span><span class="p" data-group-id="group-4">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;DOOR_OPEN&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="p" data-group-id="group-5">%{</span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-6">%{</span><span class="s">&quot;state&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="no">false</span><span class="p" data-group-id="group-6">}</span><span class="p" data-group-id="group-5">}</span><span class="p" data-group-id="group-4">)</span></code></pre><p>Sending a different event called <code class="inline">DOOR_CLOSED</code> does not cancel the
+<code class="inline">DOOR_OPEN</code> timer. A dwell assumes the last report continues to hold; it
+cannot detect a failed sensor that simply stops reporting.</p><p>The timer uses the event context captured when it was armed. Do not assume
+later true reports replace its payload. Its state belongs to the named rule
+and trigger, not independently to every device that can reach that rule.
+Give independent monitored entities independent state ownership.</p><p>Compound <code class="inline">AND</code>/<code class="inline">OR</code> triggers may have dwell durations too. The remembered
+compound state determines whether the timer remains eligible. Use <code class="inline">for 0s</code>
+for immediate behavior; it is compiled as no dwell. A condition's <code class="inline">when ... for</code> duration is not implemented as a condition dwell timer; use a rule when
+duration is essential.</p><h2 id="run-at-a-time-or-interval" class="section-heading"><a href="#run-at-a-time-or-interval" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Run at a time or interval</span></h2><pre><code class="anemos">rule housekeeping {
+  at interval(5min) {
+    log &quot;Periodic check&quot;
+  }
+}</code></pre><p>An interval repeats while the runtime is alive, with the first firing after
+the interval. The default minimum interval is 1,000 milliseconds. A request
+below that floor is rejected rather than silently slowed down.</p><pre><code class="anemos">rule lunch {
+  at 13:00 {
+    log &quot;Lunch&quot;
+  }
+}</code></pre><p>A bare clock time schedules a single future occurrence: today if that time
+is still ahead, otherwise tomorrow. It is not automatically daily. For
+recurrence, say so:</p><pre><code class="anemos">rule calendar {
+  at 09:00 every day { log &quot;Morning&quot; }
+  at 11:00 every weekday { log &quot;Standup&quot; }
+  at 09:30 every monday { log &quot;Weekly planning&quot; }
+}</code></pre><p><code class="inline">weekday</code> means Monday through Friday. Named weekdays are lowercase. Valid
+clock times use a two-digit hour and minute, <code class="inline">00:00</code> through <code class="inline">23:59</code>.
+Invalid times can parse and still fail when the runtime tries to arm them;
+always inspect load results.</p><h2 id="dates-and-natural-language-dates" class="section-heading"><a href="#dates-and-natural-language-dates" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Dates and natural-language dates</span></h2><p>Equivalent prefixed forms and relative dates are available:</p><pre><code class="anemos">rule reminders {
+  at TIME_1300 { log &quot;At one o'clock&quot; }
+  at DATE_2099.04.15 { log &quot;On the specified date&quot; }
+  at DAY_friday { log &quot;At the next Friday&quot; }
+  at NLD_tomorrow { log &quot;Tomorrow&quot; }
+  at NLD_next.wednesday { log &quot;Next Wednesday&quot; }
+  at NLD_end.of.month { log &quot;End of month&quot; }
+}</code></pre><p><code class="inline">DAY_friday</code> is a one-shot next-weekday occurrence, not a weekly recurrence.
+The supported <code class="inline">NLD_</code> expressions are <code class="inline">today</code>, <code class="inline">tomorrow</code>, <code class="inline">yesterday</code>,
+<code class="inline">next.monday</code> through <code class="inline">next.sunday</code>, <code class="inline">next.week</code>, <code class="inline">next.month</code>, <code class="inline">next.year</code>,
+<code class="inline">end.of.month</code>, and <code class="inline">end.of.week</code>. They are resolved when a schedule is armed;
+they are not a general natural-language parser. A resolution in the past,
+including many uses of <code class="inline">today</code> or <code class="inline">yesterday</code>, is refused as inert.</p><p>Date and day forms target <code class="inline">00:00:01</code> on their date. Relative dates have these
+targets:</p><table><thead><tr><th style="text-align: left;">Expression</th><th style="text-align: left;">Target</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">today</code>, <code class="inline">tomorrow</code>, <code class="inline">yesterday</code></td><td style="text-align: left;">That day's <code class="inline">00:00:01</code></td></tr><tr><td style="text-align: left;"><code class="inline">next.&lt;weekday&gt;</code></td><td style="text-align: left;">Next occurrence, strictly after today, at <code class="inline">00:00:01</code></td></tr><tr><td style="text-align: left;"><code class="inline">next.week</code></td><td style="text-align: left;">Next Monday at <code class="inline">00:00:01</code></td></tr><tr><td style="text-align: left;"><code class="inline">next.month</code></td><td style="text-align: left;">First of next month at <code class="inline">00:00:01</code></td></tr><tr><td style="text-align: left;"><code class="inline">next.year</code></td><td style="text-align: left;">January 1 of next year at <code class="inline">00:00:01</code></td></tr><tr><td style="text-align: left;"><code class="inline">end.of.month</code></td><td style="text-align: left;">Last day of this month at <code class="inline">23:59:59</code></td></tr><tr><td style="text-align: left;"><code class="inline">end.of.week</code></td><td style="text-align: left;">Next Sunday at <code class="inline">23:59:59</code>; on Sunday, the following Sunday</td></tr></tbody></table><p>Calendar calculations use the machine's local naive date and time; there is
+no per-policy time-zone setting. Do not infer daylight-saving, cross-zone, or
+missed-run guarantees. If those guarantees matter, let an external scheduler
+deliver a named event under a documented time-zone policy.</p><h2 id="context-and-scheduled-events" class="section-heading"><a href="#context-and-scheduled-events" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Context and scheduled events</span></h2><p>The built-in scheduler dispatches synthetic <code class="inline">AT_*</code> events with an empty
+context. A context-scoped listener therefore refuses those events. An <code class="inline">at</code>
+inside a scoped rule can load and arm successfully yet never reach its body.
+For scoped timed work, have the host schedule an ordinary event and supply
+the correct context, or use a deliberately unscoped scheduling rule whose
+host operation has the appropriate authorization.</p><p>Schedules with identical specifications share one synthetic event and one
+timer. Several listeners can consume that event. Different enclosing rule
+names keep their action handlers distinct; recurrence is part of schedule
+identity. Avoid duplicate identical <code class="inline">at</code> blocks in one named rule.</p><p>Each <code class="inline">at</code> body also has a generated handler name, distinct from its enclosing
+rule's ordinary <code class="inline">when</code> handlers. Its <code class="inline">$</code> bindings therefore do not share the
+ordinary rule's persistent state automatically. For timed work that must
+consume the same event-driven state, have the host dispatch a scheduled
+ordinary event to a <code class="inline">when</code> block in that rule.</p><h2 id="observe-scheduling-failures" class="section-heading"><a href="#observe-scheduling-failures" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Observe scheduling failures</span></h2><p><a href="Anemos.Runtime.html#load/3"><code class="inline">Anemos.Runtime.load/3</code></a> returns <code class="inline">{:partial, failures}</code> if rules loaded but
+one or more schedules could not be armed. A past date, unsupported relative
+date, interval below the floor, or schedule cap can cause this. The failure's
+<code class="inline">field</code> identifies the synthetic event. <code class="inline">Runtime.describe/1</code> reports loaded
+schedules and their last firing times.</p><p>One-shot firing records and supported timer state survive scheduler/dispatcher
+worker restarts within the runtime. They are not durable delivery records
+across a VM restart. External effects are not guaranteed exactly once.</p><p><a href="08-data.html">Next: Datasets, queries, and facts</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="06-conditions-and-capabilities.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+6. Conditions and capabilities
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="08-data.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+8. Datasets, queries, and facts
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/07-time.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

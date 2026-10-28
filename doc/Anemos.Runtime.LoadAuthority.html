@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.LoadAuthority — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-behaviour" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />LoadAuthority</span> <small>behaviour</small>
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.LoadAuthority.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L29" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>The trust boundary on loading policy (A-12).</p><p><a href="Anemos.Runtime.html#load/3"><code class="inline">Anemos.Runtime.load/3</code></a> takes an arbitrary string, compiles it to
+closures, and installs it into a live dispatcher. Whoever controls that
+string controls every verb the host has registered — including, per the
+worked example in <a href="Anemos.Module.html"><code class="inline">Anemos.Module</code></a>, the one that unlocks credentials.
+Under the multi-tenant decision that makes loading <em>the</em> privileged
+operation of the runtime, and this module is where the privilege is
+checked.</p><h2 id="module-what-the-gate-actually-consists-of" class="section-heading"><a href="#module-what-the-gate-actually-consists-of" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">What the gate actually consists of</span></h2><p>Three things, and it is worth being precise about which of them is a
+boundary and which is hygiene:</p><ol><li><p><strong>Loading is no longer reachable from the generic action surface.</strong>
+The runtime's <code class="inline">act</code> callback used to accept <code class="inline">%{action: :load, ...}</code>, so
+anything that could reach the Comn action dispatcher could install
+policy. It no longer does, and <code class="inline">choices/0</code> no longer advertises it.
+This is a real reduction in reachability.</p></li><li><p><strong>Loading names its authority.</strong> <code class="inline">load/3</code> consults the module
+configured as <code class="inline">config :anemos, :load_authority</code>, handing it an
+<a href="Anemos.Runtime.LoadRequest.html"><code class="inline">Anemos.Runtime.LoadRequest</code></a>. That is what makes a load
+<em>distinguishable</em> — an embedder can point the authority at a token, a
+mTLS peer identity, a keyring, or a flat refusal, and every load in
+the system goes through it. In-VM this is an API boundary, not a
+sandbox: a caller who already has the BEAM can call the dispatcher
+directly. The boundary that matters is the one between the runtime and
+whatever accepts policy from outside it, and this is the seam that
+boundary attaches to.</p></li><li><p><strong>A ceiling no authority can waive.</strong> <code class="inline">config :anemos, :max_policy_bytes</code> (default 1 MiB) is checked before the source is
+parsed, and is checked whether the authority permits or not. An
+authority is an authorization decision; a resource ceiling is not
+something an authorization decision should be able to lift.</p></li></ol><h2 id="module-the-default-is-permissive-and-says-so" class="section-heading"><a href="#module-the-default-is-permissive-and-says-so" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">The default is permissive, and says so</span></h2><p><a href="Anemos.Runtime.LoadAuthority.Permissive.html"><code class="inline">Anemos.Runtime.LoadAuthority.Permissive</code></a> grants everything, which
+preserves the contract every current embedder was written against. It is
+named rather than implicit precisely so that &quot;we never configured an
+authority&quot; is a visible fact — <a href="#configured/0"><code class="inline">configured/0</code></a> and
+the runtime's <code class="inline">recon</code> callback both report it — rather than an absence nobody
+notices. An operator running multi-tenant is expected to replace it.</p><h2 id="module-writing-one" class="section-heading"><a href="#module-writing-one" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Writing one</span></h2><pre><code class="makeup elixir" translate="no"><span class="c1"># in a module declaring @behaviour Anemos.Runtime.LoadAuthority</span><span class="w">
+</span><span class="na">@impl</span><span class="w"> </span><span class="no">true</span><span class="w">
+</span><span class="kd">def</span><span class="w"> </span><span class="nf">authorize</span><span class="p" data-group-id="group-1">(</span><span class="p" data-group-id="group-2">%{</span><span class="ss">authorization</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="ss">tenant</span><span class="p">:</span><span class="w"> </span><span class="n">t</span><span class="p" data-group-id="group-3">}</span><span class="p">,</span><span class="w"> </span><span class="ss">signers</span><span class="p">:</span><span class="w"> </span><span class="n">signers</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span><span class="w"> </span><span class="k" data-group-id="group-4">do</span><span class="w">
+  </span><span class="k">if</span><span class="w"> </span><span class="nc">Enum</span><span class="o">.</span><span class="n">all?</span><span class="p" data-group-id="group-5">(</span><span class="n">signers</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nc">MyApp.Keyring</span><span class="o">.</span><span class="n">trusted?</span><span class="p" data-group-id="group-6">(</span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="ni">&amp;1</span><span class="p" data-group-id="group-6">)</span><span class="p" data-group-id="group-5">)</span><span class="w"> </span><span class="k" data-group-id="group-7">do</span><span class="w">
+    </span><span class="ss">:ok</span><span class="w">
+  </span><span class="k" data-group-id="group-7">else</span><span class="w">
+    </span><span class="p" data-group-id="group-8">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="ss">:untrusted_signer</span><span class="p" data-group-id="group-8">}</span><span class="w">
+  </span><span class="k" data-group-id="group-7">end</span><span class="w">
+</span><span class="k" data-group-id="group-4">end</span><span class="w">
+
+</span><span class="kd">def</span><span class="w"> </span><span class="nf">authorize</span><span class="p" data-group-id="group-9">(</span><span class="c">_request</span><span class="p" data-group-id="group-9">)</span><span class="p">,</span><span class="w"> </span><span class="ss">do</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-10">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="ss">:unauthenticated</span><span class="p" data-group-id="group-10">}</span></code></pre><p>Refuse by default and permit explicitly, not the other way round: an
+authority whose fallthrough clause returns <code class="inline">:ok</code> is not an authority.</p><h2 id="module-where-a-05-slotted-in" class="section-heading"><a href="#module-where-a-05-slotted-in" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Where A-05 slotted in</span></h2><p><a href="#authorize/1"><code class="inline">authorize/1</code></a> runs <em>after</em> the source is parsed, which is the only reason
+<code class="inline">LoadRequest.signers</code> can be populated at all. Signature verification is
+therefore an authority implementation — it needs the signer names, the
+source bytes to verify against, and a keyring, and it has all three. It
+landed as <a href="Anemos.Runtime.LoadAuthority.Signed.html"><code class="inline">Anemos.Runtime.LoadAuthority.Signed</code></a> and required no change to
+<code class="inline">load/3</code>, to <code class="inline">LoadRequest</code>, or to this behaviour, which is the evidence
+the seam was in the right place.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-types summary">
+  <h3>
+    <a href="#types">Types</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#t:verdict/0" data-no-tooltip="" translate="no">verdict()</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>An authority's verdict.</p></div>
+
+    </div>
+
+</div>
+<div class="summary-callbacks summary">
+  <h3>
+    <a href="#callbacks">Callbacks</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#c:authorize/1" data-no-tooltip="" translate="no">authorize(request)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Decides whether <code class="inline">request</code> may be installed into the runtime. Refuse by default.</p></div>
+
+    </div>
+
+</div>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#authorize/1" data-no-tooltip="" translate="no">authorize(request)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Asks the configured authority to authorize <code class="inline">request</code>.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#check_size/1" data-no-tooltip="" translate="no">check_size(source)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Enforces the ceiling. Runs before the source is parsed and regardless of
+the authority.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#configured/0" data-no-tooltip="" translate="no">configured()</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the configured authority module.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#gate/3" data-no-tooltip="" translate="no">gate(runtime, source, opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>The gate. Checks the ceiling, parses, and authorizes; returns the AST.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#max_bytes/0" data-no-tooltip="" translate="no">max_bytes()</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the configured source-size ceiling in bytes.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#signers/1" data-no-tooltip="" translate="no">signers(arg1)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Collects the <code class="inline">signed_by</code> names an AST declares, from both placements.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="types" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#types">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Types</span>
+    </h2>
+
+    <div class="types-list">
+<section class="detail" id="t:verdict/0">
+
+  <div class="detail-header">
+    <a href="#t:verdict/0" class="detail-link" data-no-tooltip="" aria-label="Link to this type">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">verdict()</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L119" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@type</span> verdict() :: :ok | {:error, <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>() | <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>() | <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>An authority's verdict.</p><p><code class="inline">:ok</code> permits the load. <code class="inline">{:error, reason}</code> refuses it; <code class="inline">reason</code> is logged
+and named in the caller's error, so it must not carry a credential.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+  <section id="callbacks" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#callbacks">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Callbacks</span>
+    </h2>
+
+    <div class="callbacks-list">
+<section class="detail" id="c:authorize/1">
+
+  <div class="detail-header">
+    <a href="#c:authorize/1" class="detail-link" data-no-tooltip="" aria-label="Link to this callback">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">authorize(request)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L122" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@callback</span> authorize(request :: <a href="Anemos.Runtime.LoadRequest.html#t:t/0">Anemos.Runtime.LoadRequest.t</a>()) :: <a href="#t:verdict/0">verdict</a>()</pre>
+
+      </div>
+
+<p>Decides whether <code class="inline">request</code> may be installed into the runtime. Refuse by default.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="authorize/1">
+
+  <div class="detail-header">
+    <a href="#authorize/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">authorize(request)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L191" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> authorize(<a href="Anemos.Runtime.LoadRequest.html#t:t/0">Anemos.Runtime.LoadRequest.t</a>()) :: <a href="#t:verdict/0">verdict</a>()</pre>
+
+      </div>
+
+<p>Asks the configured authority to authorize <code class="inline">request</code>.</p>
+  </section>
+</section>
+<section class="detail" id="check_size/1">
+
+  <div class="detail-header">
+    <a href="#check_size/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">check_size(source)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L176" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> check_size(<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) :: :ok | {:error, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>Enforces the ceiling. Runs before the source is parsed and regardless of
+the authority.</p>
+  </section>
+</section>
+<section class="detail" id="configured/0">
+
+  <div class="detail-header">
+    <a href="#configured/0" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">configured()</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L163" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> configured() :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">module</a>()</pre>
+
+      </div>
+
+<p>Returns the configured authority module.</p><h2 id="configured/0-examples" class="section-heading"><a href="#configured/0-examples" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Examples</span></h2><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">configured</span><span class="p" data-group-id="group-1">(</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime.LoadAuthority.Permissive</span></code></pre>
+  </section>
+</section>
+<section class="detail" id="gate/3">
+
+    <span id="gate/2"></span>
+
+  <div class="detail-header">
+    <a href="#gate/3" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">gate(runtime, source, opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L259" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> gate(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) ::
+  {:ok, <a href="Anemos.AST.Program.html#t:t/0">Anemos.AST.Program.t</a>()} | {:error, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>The gate. Checks the ceiling, parses, and authorizes; returns the AST.</p><p><strong>This is the only supported way to obtain an AST for the compiler.</strong>
+That property is the point of the function, and it is stronger than any
+amount of documentation asking callers not to skip the boundary. A
+caller that parses on its own and compiles the result has reimplemented
+a subset of loading and skipped the authority — which is precisely what
+<a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a> did (A-59), and the same shape as A-39, where <code class="inline">nextrule</code>
+reimplemented a subset of dispatch and skipped the context filter. Both
+were fixed by making one path the only path. Two assemblies of the same
+<code class="inline">LoadRequest</code> would reintroduce it at the next field added to the
+struct, so there is one.</p><h2 id="gate/3-order-and-why-it-is-that-order" class="section-heading"><a href="#gate/3-order-and-why-it-is-that-order" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Order, and why it is that order</span></h2><ol><li><strong>Ceiling first</strong>, before the parser is handed anything. Bounding
+what an untrusted caller can make the parser allocate is the entire
+point of having a ceiling; checking it after the parse would be
+checking it after the damage.</li><li><strong>Parse second.</strong> This is what makes <code class="inline">signers</code> exist at all.</li><li><strong>Authority third</strong> — after the parse, because <code class="inline">LoadRequest.signers</code>
+is the A-05 seam and cannot be populated any earlier; before the
+compile, because compiling is what turns text into closures and
+nothing unauthorized should get that far. Compiling is the caller's
+job, and it happens on the AST this function returns.</li></ol><h2 id="gate/3-runtime" class="section-heading"><a href="#gate/3-runtime" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><code class="inline">runtime</code></span></h2><p>Names which runtime the load is destined for, so an authority can decide
+per tenant. <a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a> passes <code class="inline">:standalone</code>: it builds a throwaway
+dispatcher and tears it down again, so it is not loading into any named
+runtime and does not claim to be. An authority keying on <code class="inline">runtime</code>
+therefore sees the standalone path as its own thing and can refuse it
+outright — the correct default for a host that only means to permit
+loads into a runtime it named.</p><h2 id="gate/3-options" class="section-heading"><a href="#gate/3-options" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Options</span></h2><ul><li><code class="inline">:authorization</code> — passed through as <code class="inline">LoadRequest.authorization</code>. A
+token, a peer identity, whatever the configured authority checks.</li></ul><h2 id="gate/3-return-values" class="section-heading"><a href="#gate/3-return-values" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Return values</span></h2><p><code class="inline">{:ok, ast}</code> when the load may proceed. <code class="inline">{:error, reason}</code> otherwise:
+a refusal — by the ceiling or by the authority — is a
+<a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html"><code class="inline">Comn.Errors.ErrorStruct</code></a> with code <code class="inline">anemos.runtime/load_denied</code>, while
+a parse failure keeps whatever shape <a href="Anemos.Parser.html#parse/1"><code class="inline">Anemos.Parser.parse/1</code></a> returned.
+The two are worth telling apart: one is a boundary decision, the other
+is a broken rule file.</p><h2 id="gate/3-examples" class="section-heading"><a href="#gate/3-examples" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Examples</span></h2><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">gate</span><span class="p" data-group-id="group-2">(</span><span class="ss">:demo</span><span class="p">,</span><span class="w"> </span><span class="s">~s(rule r { when EV { log &quot;hi&quot; } })</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-3">[</span><span class="p" data-group-id="group-3">]</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">length</span><span class="p" data-group-id="group-4">(</span><span class="n">ast</span><span class="o">.</span><span class="n">declarations</span><span class="p" data-group-id="group-4">)</span><span class="w">
+</span><span class="mi">1</span><span class="w">
+
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Application</span><span class="o">.</span><span class="n">put_env</span><span class="p" data-group-id="group-5">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">:max_policy_bytes</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p" data-group-id="group-5">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-6">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="n">err</span><span class="p" data-group-id="group-6">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">gate</span><span class="p" data-group-id="group-7">(</span><span class="ss">:demo</span><span class="p">,</span><span class="w"> </span><span class="s">~s(rule r { when EV { log &quot;hi&quot; } })</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-8">[</span><span class="p" data-group-id="group-8">]</span><span class="p" data-group-id="group-7">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Application</span><span class="o">.</span><span class="n">delete_env</span><span class="p" data-group-id="group-9">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="ss">:max_policy_bytes</span><span class="p" data-group-id="group-9">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">err</span><span class="o">.</span><span class="n">code</span><span class="w">
+</span><span class="s">&quot;anemos.runtime/load_denied&quot;</span></code></pre>
+  </section>
+</section>
+<section class="detail" id="max_bytes/0">
+
+  <div class="detail-header">
+    <a href="#max_bytes/0" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">max_bytes()</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L169" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> max_bytes() :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pos_integer</a>()</pre>
+
+      </div>
+
+<p>Returns the configured source-size ceiling in bytes.</p>
+  </section>
+</section>
+<section class="detail" id="signers/1">
+
+  <div class="detail-header">
+    <a href="#signers/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">signers(arg1)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/load_authority.ex#L354" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> signers(<a href="Anemos.AST.Program.html#t:t/0">Anemos.AST.Program.t</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: [<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>() | <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()]</pre>
+
+      </div>
+
+<p>Collects the <code class="inline">signed_by</code> names an AST declares, from both placements.</p><p>Source-level <code class="inline">signed_by</code> (A-60) is the one that describes what a detached
+signature actually covers, and the only one available to a source carrying no
+<code class="inline">rule</code>. Rule-level <code class="inline">signed_by</code> is still read: it names a signer the whole
+source must carry, which is what it always did, and dropping it would silently
+weaken every policy already written against it.</p><p>The two are unioned and de-duplicated. All named signers are required — see
+<a href="Anemos.Runtime.LoadAuthority.Signed.html"><code class="inline">Anemos.Runtime.LoadAuthority.Signed</code></a> on why that is conjunctive — so which
+placement a name arrived by cannot change the decision.</p><p>Empty when nothing in the source claims a signer, which is itself a fact
+an authority may want to refuse on.</p><h2 id="signers/1-examples" class="section-heading"><a href="#signers/1-examples" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Examples</span></h2><p>Source level, on a file that declares no rule at all — the case rule-only
+syntax made impossible:</p><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;signed_by :operator</span><span class="se">\n</span><span class="s">condition c { when EV { log </span><span class="se">\&quot;</span><span class="s">x</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">signers</span><span class="p" data-group-id="group-3">(</span><span class="n">ast</span><span class="p" data-group-id="group-3">)</span><span class="w">
+</span><span class="p" data-group-id="group-4">[</span><span class="s">&quot;operator&quot;</span><span class="p" data-group-id="group-4">]</span></code></pre><p>Both placements union, and a name declared twice is counted once:</p><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;signed_by :operator</span><span class="se">\n</span><span class="s">rule r { signed_by :auditor</span><span class="se">\n</span><span class="s">when EV { log </span><span class="se">\&quot;</span><span class="s">x</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Enum</span><span class="o">.</span><span class="n">sort</span><span class="p" data-group-id="group-3">(</span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">signers</span><span class="p" data-group-id="group-4">(</span><span class="n">ast</span><span class="p" data-group-id="group-4">)</span><span class="p" data-group-id="group-3">)</span><span class="w">
+</span><span class="p" data-group-id="group-5">[</span><span class="s">&quot;auditor&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;operator&quot;</span><span class="p" data-group-id="group-5">]</span><span class="w">
+
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-6">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-6">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-7">(</span><span class="s">&quot;signed_by :op</span><span class="se">\n</span><span class="s">rule r { signed_by :op</span><span class="se">\n</span><span class="s">when EV { log </span><span class="se">\&quot;</span><span class="s">x</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-7">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">signers</span><span class="p" data-group-id="group-8">(</span><span class="n">ast</span><span class="p" data-group-id="group-8">)</span><span class="w">
+</span><span class="p" data-group-id="group-9">[</span><span class="s">&quot;op&quot;</span><span class="p" data-group-id="group-9">]</span></code></pre><p>A source claiming nothing answers <code class="inline">[]</code>, which is what <code class="inline">:unsigned_policy</code>
+acts on:</p><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;rule r { when EV { log </span><span class="se">\&quot;</span><span class="s">x</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Anemos.Runtime.LoadAuthority</span><span class="o">.</span><span class="n">signers</span><span class="p" data-group-id="group-3">(</span><span class="n">ast</span><span class="p" data-group-id="group-3">)</span><span class="w">
+</span><span class="p" data-group-id="group-4">[</span><span class="p" data-group-id="group-4">]</span></code></pre>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

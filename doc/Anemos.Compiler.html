@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Compiler — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Compiler</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Compiler.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/compiler.ex#L94" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>Walks the AST produced by <a href="Anemos.Parser.html"><code class="inline">Anemos.Parser</code></a> and produces <code class="inline">%Anemos.CompiledRule{}</code>,
+<code class="inline">%Anemos.CompiledCondition{}</code>, and <code class="inline">%Anemos.CompiledCapability{}</code> structs with
+executable closures. No code generation, no Module.create.</p><h2 id="module-boolean-comparison-a-46" class="section-heading"><a href="#module-boolean-comparison-a-46" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Boolean comparison (A-46)</span></h2><p><code class="inline">true</code> and <code class="inline">false</code> are boolean literals. <code class="inline">?flag == true</code> compares against the
+boolean <code class="inline">true</code>, not the string <code class="inline">&quot;true&quot;</code>.</p><p><strong>Comparison does not coerce.</strong> <code class="inline">?flag == &quot;true&quot;</code> still means <em>the string</em>
+<code class="inline">&quot;true&quot;</code> and keeps working for a host whose payload is string-valued; it does
+not match a payload carrying the boolean. The two are different values and
+<code class="inline">==</code> says so.</p><p>Coercion was rejected because the operand types are not knowable at compile
+time. Context data arrives from arbitrary host payloads, so a rule making
+<code class="inline">&quot;true&quot; == true</code> answer <code class="inline">true</code> would also have to make <code class="inline">&quot;1&quot;</code>, <code class="inline">&quot;yes&quot;</code> and
+<code class="inline">&quot;TRUE&quot;</code> answer something, and the choice would be invisible to the policy
+author. Making the mismatch a <em>compile</em> error was rejected for the same
+reason: the parser sees a literal on one side and an unresolved <code class="inline">?var</code> on the
+other, and cannot know what the host will send.</p><p>What is not acceptable is the silent wrong answer that A-46 reported. So a
+comparison in which one side is a boolean and the other is the string
+<code class="inline">&quot;true&quot;</code> or <code class="inline">&quot;false&quot;</code> logs a warning at the moment it is evaluated, naming
+both operands, and then answers as the values dictate — <code class="inline">==</code> false, <code class="inline">!=</code>
+true. The author gets told the shapes disagree rather than reading a guard
+that never fires.</p><h2 id="module-and-compounds-it-does-not-merge-a-73" class="section-heading"><a href="#module-and-compounds-it-does-not-merge-a-73" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><code class="inline">AND</code> compounds; it does not merge (A-73)</span></h2><p><code class="inline">AND</code> is two operators sharing a spelling, and which one you get is decided
+by the operands.</p><p>Over booleans it is logical conjunction and means what it has always meant:
+<code class="inline">if ?x eq 1 AND ?y eq 2</code> fires only when both comparisons hold.</p><p>Over anything else it <strong>compounds</strong> — <code class="inline">let update = (A) AND (B)</code> means &quot;let
+<code class="inline">update</code> have the value <code class="inline">A</code> <em>and</em> the value <code class="inline">B</code>&quot;, not &quot;let <code class="inline">update</code> have the
+value <code class="inline">A</code>-combined-with-<code class="inline">B</code>&quot;. The binding is a collection of both operands:</p><pre><code class="makeup elixir" translate="no"><span class="n">let</span><span class="w"> </span><span class="n">update</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p" data-group-id="group-1">(</span><span class="ss">:h</span><span class="w"> </span><span class="nc">IN</span><span class="w"> </span><span class="nc">A</span><span class="w"> </span><span class="s">&quot;1.1.1.1&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w"> </span><span class="nc">AND</span><span class="w"> </span><span class="p" data-group-id="group-2">(</span><span class="ss">:h</span><span class="w"> </span><span class="nc">IN</span><span class="w"> </span><span class="nc">AAAA</span><span class="w"> </span><span class="s">&quot;::1&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+
+</span><span class="na">@update</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="p" data-group-id="group-3">[</span><span class="p" data-group-id="group-4">[</span><span class="s">&quot;h&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;A&quot;</span><span class="p">,</span><span class="w">    </span><span class="s">&quot;1.1.1.1&quot;</span><span class="p" data-group-id="group-4">]</span><span class="p">,</span><span class="w">
+            </span><span class="p" data-group-id="group-5">[</span><span class="s">&quot;h&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;AAAA&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;::1&quot;</span><span class="p" data-group-id="group-5">]</span><span class="p" data-group-id="group-3">]</span></code></pre><p>The defect this replaced was <code class="inline">l &amp;&amp; r</code>, which in Elixir <em>answers <code class="inline">r</code></em>
+whenever <code class="inline">l</code> is truthy. Over non-boolean operands the left one was evaluated
+and silently thrown away, so <code class="inline">priv/examples/ddns.rule</code> read as &quot;update both
+records&quot; and updated one.</p><h3 id="module-why-the-spine-is-flattened-before-evaluation" class="section-heading"><a href="#module-why-the-spine-is-flattened-before-evaluation" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Why the spine is flattened before evaluation</span></h3><p>A parenthesised triple pattern evaluates to a <strong>list</strong> —
+<code class="inline">[&quot;h&quot;, &quot;IN&quot;, &quot;A&quot;, &quot;1.2.3.4&quot;]</code> — so a compound of triples is a list of lists,
+and a <em>runtime</em> rule such as &quot;if the left operand is already a list, append
+to it&quot; cannot tell a triple from an already-compounded pair. It would turn
+<code class="inline">[&quot;h&quot;, &quot;IN&quot;, &quot;A&quot;, &quot;x&quot;] AND C</code> into <code class="inline">[&quot;h&quot;, &quot;IN&quot;, &quot;A&quot;, &quot;x&quot;, C]</code>.</p><p><code class="inline">AND</code> is left-associative, so <code class="inline">(A) AND (B) AND (C)</code> parses as
+<code class="inline">((A AND B) AND C)</code> and naive nesting yields <code class="inline">[[A, B], C]</code> rather than
+<code class="inline">[A, B, C]</code>.</p><p>Both problems are the same problem — runtime values are ambiguous where the
+AST spine is not. So <code class="inline">flatten_and_spine/1</code> collects the whole chain of
+<code class="inline">%AST.BinaryOp{op: :and}</code> nodes into one operand list <em>before</em> any of them
+is evaluated, and the decision is taken once over the whole list. There is
+no runtime wrapper struct and no marker tuple: a compound is an ordinary
+list by the time it reaches a binding, because it flows on into calls like
+<code class="inline">[INFRA::ddns_update ...]</code> as an argument and host code must not have to
+understand an Anemos-internal type.</p><h3 id="module-mixed-operands" class="section-heading"><a href="#module-mixed-operands" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Mixed operands</span></h3><p>Not settled by the A-73 decision; chosen here, and stated so it can be
+overruled cheaply. <code class="inline">true</code> is the <strong>identity of conjunction</strong>, and a falsey
+operand is <strong>absorbing</strong>:</p><ul><li>Any operand that is <code class="inline">false</code> or <code class="inline">nil</code> answers that value for the whole
+<code class="inline">AND</code>, and nothing is compounded. This keeps every truthiness guard
+working — <code class="inline">if ?missing AND ?present</code> stays false rather than becoming
+the truthy list <code class="inline">[nil, &quot;here&quot;]</code>.</li><li><code class="inline">true</code> operands are dropped from the compound, since &quot;the value <code class="inline">true</code>
+and the value <code class="inline">X</code>&quot; carries nothing <code class="inline">X</code> does not. <code class="inline">true AND (A)</code> is <code class="inline">A</code>;
+<code class="inline">true AND true</code> is <code class="inline">true</code>.</li></ul><p>Both alternatives were worse. Compounding <code class="inline">true</code> in would put a boolean in
+the middle of a DNS payload; making the mix a compile error is not available
+for the same reason it was not available to A-46 — operand types are not
+knowable at compile time, since a <code class="inline">?var</code> is whatever the host sent.</p><h3 id="module-is-unchanged" class="section-heading"><a href="#module-is-unchanged" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><code class="inline">&amp;&amp;</code> is unchanged</span></h3><p><code class="inline">&amp;&amp;</code> remains purely logical <code class="inline">l &amp;&amp; r</code>, which also leaves an author a way to
+ask for the old answer-the-right-operand behaviour deliberately.</p><h2 id="module-or-is-alternation-made-explicit" class="section-heading"><a href="#module-or-is-alternation-made-explicit" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><code class="inline">OR</code> is alternation, made explicit</span></h2><p><code class="inline">AND</code> answers <em>every</em> operand; <code class="inline">OR</code> answers the <em>first available</em> one. That
+was already roughly true — Elixir's <code class="inline">||</code> answers its left operand whenever
+that operand is truthy — so this is not a change of meaning the way <code class="inline">AND</code>
+was. What changes is that the algebra is now stated and applied over the
+whole spine at once instead of pairwise:</p><pre><code class="makeup elixir" translate="no"><span class="n">let</span><span class="w"> </span><span class="n">pick</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sc">?m</span><span class="n">issing</span><span class="w"> </span><span class="nc">OR</span><span class="w"> </span><span class="sc">?p</span><span class="n">resent</span><span class="w">            </span><span class="c1"># &quot;here&quot;</span><span class="w">
+</span><span class="n">let</span><span class="w"> </span><span class="n">pick</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sc">?a</span><span class="w"> </span><span class="nc">OR</span><span class="w"> </span><span class="sc">?b</span><span class="w"> </span><span class="nc">OR</span><span class="w"> </span><span class="sc">?c</span><span class="w">                  </span><span class="c1"># the first one the host sent</span></code></pre><p><code class="inline">false</code> and <code class="inline">nil</code> are the <strong>identity</strong> of disjunction and drop out. The first
+operand carrying a value answers. When every operand is falsey there is
+nothing to choose between them, so the <em>first</em> one answers — pairwise <code class="inline">||</code>
+returned the <em>last</em>, and that single case is the whole observable behaviour
+change.</p><p><code class="inline">true</code> answers only when it is the first available operand. Strict duality
+with <code class="inline">AND</code>, where a falsey operand is absorbing wherever it sits, would make
+<code class="inline">(A) OR true</code> answer <code class="inline">true</code>; it answers <code class="inline">A</code>. Alternation is ordered, and a
+fallback that discarded the value it was a fallback for would make <code class="inline">OR</code>
+useless in value position.</p><p><code class="inline">:or</code> and <code class="inline">:||</code> flatten into one spine. Unlike <code class="inline">AND</code> and <code class="inline">&amp;&amp;</code> there is no
+divergence in meaning to preserve between the two spellings, because <code class="inline">OR</code> is
+only becoming explicit about what <code class="inline">||</code> was already doing.</p><p>Evaluation stays eager over the whole spine: A-56 forbids short-circuiting,
+since an operand may be a <code class="inline">[MODULE::verb]</code> call whose side effect is the
+point, and that holds whether or not its value turns out to be reachable.</p><h2 id="module-expression-position-invokes-modules-a-56" class="section-heading"><a href="#module-expression-position-invokes-modules-a-56" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Expression position invokes modules (A-56)</span></h2><p>A <code class="inline">[MODULE::verb]</code> written where a <em>value</em> is expected — <code class="inline">if [FILE::extension] eq &quot;pdf&quot;</code>, <code class="inline">let x = [PDF::title]</code>, <code class="inline">emit [EVENT::fire]</code>,
+an argument of another call — is dispatched at the moment the expression is
+evaluated, and the verb's return value <em>is</em> the value of the expression.
+It is not also emitted as a separate operation; the call happens once.</p><p><strong>Evaluating an expression therefore has side effects, and that is
+deliberate, not an oversight.</strong> It follows directly from the decision that a
+module call must have a usable return value: the value can only be had by
+making the call, and the call is host code that may write to a device, a
+file or a socket. The consequences bind anyone changing this module:</p><ul><li><strong>Do not reorder expression evaluation.</strong> Operand order is the order
+the calls happen in.</li><li><strong>Do not memoise or common-subexpression it.</strong> Two occurrences of the
+same call are two calls. A call in a <code class="inline">while</code> condition is one call per
+iteration, including the final iteration that ends the loop. A call in
+a <code class="inline">for</code> body is one call per element.</li><li><strong>Do not short-circuit around it.</strong> <code class="inline">and</code>/<code class="inline">or</code> here resolve both
+operands before combining them, so both sides' calls happen.</li></ul><p>Dispatch goes through <a href="Anemos.Runtime.Dispatcher.html#invoke_verb/5"><code class="inline">Anemos.Runtime.Dispatcher.invoke_verb/5</code></a>, which is
+the same function the statement path uses. That is the whole point of it
+being shared: argument-schema validation, bounds, allow-lists and path
+confinement (A-11) apply to a call in expression position exactly as they
+do to one written as a statement. Calling <code class="inline">handle_verb/3</code> from here
+instead would have been a fourth way to reach host code around a check.</p><p>The registry arrives in the evaluation context as <code class="inline">:registry</code>, and the
+context to hand host code as <code class="inline">:_verb_context</code> — the same shape by which
+<code class="inline">:data_store</code> already arrives for <code class="inline">memberof()</code>. Those keys are authority
+for <em>evaluation</em>; they are not in <code class="inline">:_verb_context</code> and must never be
+forwarded to a verb.</p><h3 id="module-when-the-verb-fails" class="section-heading"><a href="#module-when-the-verb-fails" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">When the verb fails</span></h3><p>A failed call in expression position <strong>aborts the rule body</strong> and appends a
+<code class="inline">%{type: :verb_error, error: error}</code> operation, which the dispatcher turns
+into <code class="inline">{:error, error}</code> in the results list — the same place a
+statement-position failure lands.</p><p>Substituting <code class="inline">nil</code> and carrying on was rejected. That is precisely the
+A-25 shape: a guard comparing <code class="inline">nil</code> is merely false, so a <code class="inline">SECRET::unlock</code>
+that refused and an unlocked secret that did not match would be
+indistinguishable, and the rule would take its <code class="inline">else</code> branch as though it
+had asked a question and got an answer. There is no value that honestly
+represents &quot;the call did not happen&quot;, so evaluation stops instead of
+inventing one.</p><p>Aborting is also why operations the body computed <em>before</em> the failure are
+kept: they are returned along with the error rather than discarded, so the
+results list shows how far the rule got.</p><p>Condition bodies and capability bodies are given the same two keys and
+dispatch the same way. A condition <em>predicate</em> is the one place with no
+channel for an error — its answer is a boolean and nothing else — so a
+failure there is logged and the condition answers false.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#compile/1" data-no-tooltip="" translate="no">compile(program)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Compile an AST into an <code class="inline">%Anemos.CompilationResult{}</code> containing compiled rules,
+conditions, and capabilities.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="compile/1">
+
+  <div class="detail-header">
+    <a href="#compile/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">compile(program)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/compiler.ex#L349" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> compile(<a href="Anemos.AST.Program.html#t:t/0">Anemos.AST.Program.t</a>()) ::
+  {:ok, <a href="Anemos.CompilationResult.html#t:t/0">Anemos.CompilationResult.t</a>()} | {:error, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>Compile an AST into an <code class="inline">%Anemos.CompilationResult{}</code> containing compiled rules,
+conditions, and capabilities.</p><p>Each rule with <code class="inline">when</code> blocks produces one <code class="inline">CompiledRule</code> per event subscription.
+The handler closure takes <code class="inline">(event_name, context, persistent_bindings)</code> and
+returns <code class="inline">{:ok, [operation], updated_persistent_bindings}</code>.
+Persistent bindings hold <code class="inline">set</code> values that survive across firings.</p><p>Supported statement types: <code class="inline">let</code>, <code class="inline">set</code>, <code class="inline">log</code>, <code class="inline">emit</code>, <code class="inline">demand</code>, <code class="inline">if</code>,
+<code class="inline">while</code>, <code class="inline">for</code>/<code class="inline">each</code>/<code class="inline">every</code>/<code class="inline">foreach</code>, <code class="inline">return</code>, <code class="inline">done</code>, <code class="inline">nextevent</code>,
+<code class="inline">nextrule</code>, <code class="inline">context</code>, commands (<code class="inline">[MODULE::verb ...]</code>), and triple patterns.
+Guard modifiers (<code class="inline">unless</code>, <code class="inline">until</code>) on <code class="inline">when</code>, <code class="inline">if</code>, and <code class="inline">at</code> blocks.</p><h2 id="compile/1-nextevent-and-nextrule-carry-arguments" class="section-heading"><a href="#compile/1-nextevent-and-nextrule-carry-arguments" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><code class="inline">nextevent</code> and <code class="inline">nextrule</code> carry arguments</span></h2><p>Both take an optional <code class="inline">with { key: expr }</code> block. The pairs are resolved
+against the <em>sending</em> body's bindings and merged into the target's event
+context, so the target reads them as <code class="inline">?key</code> exactly as it would read a real
+event payload. Merged, not replaced: the target still sees the event that got
+it there.</p><p>One resolver (<code class="inline">resolve_block_args/3</code>) and one merge
+(the dispatcher's <code class="inline">with_block_args</code> helper) serve both statements. A
+second path that mostly does what the first does, minus a check, is the shape
+that accounted for four separate defects on this branch (A-39, A-59, and two
+others), and a symmetry feature is where it gets introduced.</p><h2 id="compile/1-examples" class="section-heading"><a href="#compile/1-examples" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Examples</span></h2><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;rule r { when EV { log </span><span class="se">\&quot;</span><span class="s">hi</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-3">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-4">%{</span><span class="ss">rules</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-5">[</span><span class="n">compiled</span><span class="p" data-group-id="group-5">]</span><span class="p" data-group-id="group-4">}</span><span class="p" data-group-id="group-3">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Compiler</span><span class="o">.</span><span class="n">compile</span><span class="p" data-group-id="group-6">(</span><span class="n">ast</span><span class="p" data-group-id="group-6">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">compiled</span><span class="o">.</span><span class="n">name</span><span class="w">
+</span><span class="s">&quot;r&quot;</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">compiled</span><span class="o">.</span><span class="n">subscriptions</span><span class="w">
+</span><span class="p" data-group-id="group-7">[</span><span class="s">&quot;EV&quot;</span><span class="p" data-group-id="group-7">]</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-8">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-9">[</span><span class="p" data-group-id="group-10">%{</span><span class="ss">type</span><span class="p">:</span><span class="w"> </span><span class="ss">:log</span><span class="p">,</span><span class="w"> </span><span class="ss">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;hi&quot;</span><span class="p" data-group-id="group-10">}</span><span class="p" data-group-id="group-9">]</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-11">%{</span><span class="p" data-group-id="group-11">}</span><span class="p" data-group-id="group-8">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compiled</span><span class="o">.</span><span class="n">handler</span><span class="o">.</span><span class="p" data-group-id="group-12">(</span><span class="s">&quot;EV&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-13">%{</span><span class="p" data-group-id="group-13">}</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-14">%{</span><span class="p" data-group-id="group-14">}</span><span class="p" data-group-id="group-12">)</span><span class="w">
+
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-15">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-15">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-16">(</span><span class="s">&quot;rule r { when EV { set i = 0 while $i &lt; 3 { set i = $i + 1 } log $i } }&quot;</span><span class="p" data-group-id="group-16">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-17">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-18">%{</span><span class="ss">rules</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-19">[</span><span class="n">compiled</span><span class="p" data-group-id="group-19">]</span><span class="p" data-group-id="group-18">}</span><span class="p" data-group-id="group-17">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Compiler</span><span class="o">.</span><span class="n">compile</span><span class="p" data-group-id="group-20">(</span><span class="n">ast</span><span class="p" data-group-id="group-20">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-21">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-22">[</span><span class="p" data-group-id="group-23">%{</span><span class="ss">type</span><span class="p">:</span><span class="w"> </span><span class="ss">:log</span><span class="p">,</span><span class="w"> </span><span class="ss">value</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p" data-group-id="group-23">}</span><span class="p" data-group-id="group-22">]</span><span class="p">,</span><span class="w"> </span><span class="bp">_</span><span class="p" data-group-id="group-21">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compiled</span><span class="o">.</span><span class="n">handler</span><span class="o">.</span><span class="p" data-group-id="group-24">(</span><span class="s">&quot;EV&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-25">%{</span><span class="p" data-group-id="group-25">}</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-26">%{</span><span class="p" data-group-id="group-26">}</span><span class="p" data-group-id="group-24">)</span></code></pre><p><code class="inline">AND</code> answers every operand and <code class="inline">OR</code> the first available one, which is easier
+to read as code than as prose:</p><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-2">(</span><span class="s">~S|rule r { when EV { let x = (:h IN A &quot;1&quot;) AND (:h IN AAAA &quot;2&quot;) log @x } }|</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-3">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-4">%{</span><span class="ss">rules</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-5">[</span><span class="n">compiled</span><span class="p" data-group-id="group-5">]</span><span class="p" data-group-id="group-4">}</span><span class="p" data-group-id="group-3">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Compiler</span><span class="o">.</span><span class="n">compile</span><span class="p" data-group-id="group-6">(</span><span class="n">ast</span><span class="p" data-group-id="group-6">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-7">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-8">[</span><span class="p" data-group-id="group-9">%{</span><span class="ss">type</span><span class="p">:</span><span class="w"> </span><span class="ss">:log</span><span class="p">,</span><span class="w"> </span><span class="ss">value</span><span class="p">:</span><span class="w"> </span><span class="n">value</span><span class="p" data-group-id="group-9">}</span><span class="p" data-group-id="group-8">]</span><span class="p">,</span><span class="w"> </span><span class="bp">_</span><span class="p" data-group-id="group-7">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compiled</span><span class="o">.</span><span class="n">handler</span><span class="o">.</span><span class="p" data-group-id="group-10">(</span><span class="s">&quot;EV&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-11">%{</span><span class="p" data-group-id="group-11">}</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-12">%{</span><span class="p" data-group-id="group-12">}</span><span class="p" data-group-id="group-10">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">value</span><span class="w">
+</span><span class="p" data-group-id="group-13">[</span><span class="p" data-group-id="group-14">[</span><span class="s">&quot;h&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;A&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p" data-group-id="group-14">]</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-15">[</span><span class="s">&quot;h&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;AAAA&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;2&quot;</span><span class="p" data-group-id="group-15">]</span><span class="p" data-group-id="group-13">]</span><span class="w">
+
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-16">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p" data-group-id="group-16">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-17">(</span><span class="s">~S|rule r { when EV { let x = (:h IN A &quot;1&quot;) OR (:h IN AAAA &quot;2&quot;) log @x } }|</span><span class="p" data-group-id="group-17">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-18">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-19">%{</span><span class="ss">rules</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-20">[</span><span class="n">compiled</span><span class="p" data-group-id="group-20">]</span><span class="p" data-group-id="group-19">}</span><span class="p" data-group-id="group-18">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Compiler</span><span class="o">.</span><span class="n">compile</span><span class="p" data-group-id="group-21">(</span><span class="n">ast</span><span class="p" data-group-id="group-21">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-22">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-23">[</span><span class="p" data-group-id="group-24">%{</span><span class="ss">type</span><span class="p">:</span><span class="w"> </span><span class="ss">:log</span><span class="p">,</span><span class="w"> </span><span class="ss">value</span><span class="p">:</span><span class="w"> </span><span class="n">value</span><span class="p" data-group-id="group-24">}</span><span class="p" data-group-id="group-23">]</span><span class="p">,</span><span class="w"> </span><span class="bp">_</span><span class="p" data-group-id="group-22">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compiled</span><span class="o">.</span><span class="n">handler</span><span class="o">.</span><span class="p" data-group-id="group-25">(</span><span class="s">&quot;EV&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-26">%{</span><span class="p" data-group-id="group-26">}</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-27">%{</span><span class="p" data-group-id="group-27">}</span><span class="p" data-group-id="group-25">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">value</span><span class="w">
+</span><span class="p" data-group-id="group-28">[</span><span class="s">&quot;h&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;A&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p" data-group-id="group-28">]</span></code></pre>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

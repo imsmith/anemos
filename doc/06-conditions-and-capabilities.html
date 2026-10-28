@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>6. Conditions and capabilities — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>6. Conditions and capabilities</h1>
+
+<a href="06-conditions-and-capabilities.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/06-conditions-and-capabilities.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>Some automation is about a change in a continuing situation rather than each
+individual message. Other automation needs a named piece of work that is
+requested explicitly. Conditions and capabilities give these ideas names.</p><h2 id="combine-reports-in-a-rule" class="section-heading"><a href="#combine-reports-in-a-rule" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Combine reports in a rule</span></h2><p>A compound trigger remembers the last report of each operand:</p><pre><code class="anemos">rule ready-to-work {
+  when (NETWORK_UP AND STORAGE_READY) {
+    log &quot;Both prerequisites are available&quot;
+  }
+}</code></pre><p>The operands start false. An arriving event reports true unless its payload
+contains a <code class="inline">state</code> field whose value is boolean <code class="inline">false</code> or <code class="inline">nil</code>. A report
+stands until another report of the same event replaces it. Missing <code class="inline">state</code>
+means true; the string <code class="inline">&quot;false&quot;</code> means true too.</p><table><thead><tr><th style="text-align: left;">Incoming report</th><th style="text-align: left;">Remembered network</th><th style="text-align: left;">Remembered storage</th><th style="text-align: left;">Body runs?</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">NETWORK_UP</code>, no state field</td><td style="text-align: left;">true</td><td style="text-align: left;">false</td><td style="text-align: left;">No</td></tr><tr><td style="text-align: left;"><code class="inline">STORAGE_READY</code>, no state field</td><td style="text-align: left;">true</td><td style="text-align: left;">true</td><td style="text-align: left;">Yes</td></tr><tr><td style="text-align: left;"><code class="inline">NETWORK_UP</code>, <code class="inline">state: true</code></td><td style="text-align: left;">true</td><td style="text-align: left;">true</td><td style="text-align: left;">Yes</td></tr><tr><td style="text-align: left;"><code class="inline">STORAGE_READY</code>, <code class="inline">state: false</code></td><td style="text-align: left;">true</td><td style="text-align: left;">false</td><td style="text-align: left;">No</td></tr></tbody></table><p>A compound rule is evaluated on every operand report. It can run repeatedly
+while the combined state is true. <code class="inline">OR</code> instead requires at least one true
+remembered operand. Each listener keeps only reports admitted by its own
+context. Use a single homogeneous <code class="inline">AND</code> or <code class="inline">OR</code> group; nested mixed event
+algebra is not a general expression language for triggers.</p><p>A plain <code class="inline">when EVENT</code> means the event arrived. Do not expect a plain trigger
+to filter a false <code class="inline">state</code> report the same way a compound state expression
+does. Branch explicitly when a payload value matters.</p><h2 id="name-a-continuing-condition" class="section-heading"><a href="#name-a-continuing-condition" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Name a continuing condition</span></h2><p>If you want to react once when readiness becomes true, use a condition:</p><pre><code class="anemos">condition ready {
+  when (NETWORK_UP AND STORAGE_READY) {
+    log &quot;Readiness became true&quot;
+  }
+}
+
+rule start-work {
+  when CONDITION_ready {
+    log &quot;Start the work&quot;
+  }
+}</code></pre><p>The condition begins false. On a false-to-true transition, it evaluates its
+side-effect body and generates <code class="inline">CONDITION_ready</code>. A true-to-true evaluation
+does neither. A report that makes the compound false resets the condition;
+a later true transition can generate another notification.</p><p>In a persistent runtime, use <code class="inline">Anemos.Runtime.condition_state(runtime, &quot;ready&quot;)</code>
+to read its current boolean. <code class="inline">nil</code> means no condition of that name is loaded.
+The DSL has no general built-in <code class="inline">?ready</code> lookup of condition state: <code class="inline">?name</code>
+resolves context, queries, and datasets. Consume <code class="inline">CONDITION_ready</code>, or have
+the host expose the current state when other rules need to read it.</p><h2 id="predicates-refine-a-condition" class="section-heading"><a href="#predicates-refine-a-condition" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Predicates refine a condition</span></h2><p>A top-level <code class="inline">if</code> in a condition is a predicate that must hold in addition to
+the trigger:</p><pre><code class="anemos">condition hot {
+  when READING {
+    log &quot;Entered the hot state&quot;
+  }
+  if ?temperature &gt; 30 {}
+}</code></pre><p>Readings <code class="inline">29</code>, <code class="inline">31</code>, <code class="inline">32</code>, <code class="inline">28</code>, <code class="inline">33</code> cause two false-to-true transitions:
+one at <code class="inline">31</code> and another at <code class="inline">33</code>. The top-level <code class="inline">if</code> body is not an additional
+action block. Put transition actions inside the trigger body. An <code class="inline">if</code> nested
+inside that body controls actions, not the condition's truth.</p><p>A condition with no <code class="inline">when</code> or <code class="inline">at</code> trigger cannot become true. Unrelated
+events do not reset a condition. A single-event condition's truth is based
+on its trigger and predicates, so use an explicit predicate if a report's
+payload should turn it false. A compound condition uses remembered reports.</p><p>For predictable action selection, use one trigger body per condition. The
+current compiler combines all <code class="inline">when</code>/<code class="inline">at</code> bodies into one transition body;
+separate bodies are not independently selected by which trigger matched.
+Condition guards are evaluated from event context, without persistent local
+binding state. <code class="inline">until</code> there is a fresh exclusion test, not a permanent latch.</p><p>Conditions may declare a context just as rules do. Only admitted events
+affect their reports and state. Generated transition dispatch retains the
+originating event context, so a receiving rule must also be reachable there.</p><h2 id="define-work-to-perform-on-demand" class="section-heading"><a href="#define-work-to-perform-on-demand" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Define work to perform on demand</span></h2><pre><code class="anemos">capability audit-request {
+  context building
+  on demand {
+    log ?request_id
+  }
+}
+
+rule process-request {
+  context building.garage
+  when REQUEST {
+    demand audit-request
+    log &quot;Request received&quot;
+  }
+}</code></pre><p>A capability is passive until demanded. Its <code class="inline">on demand</code> body can read event
+data. Its declared context restricts who may demand it: the <strong>demanding
+declaration's</strong> context must lie inside the capability's context. In this
+example <code class="inline">building.garage</code> is inside <code class="inline">building</code>. A caller event arriving from
+<code class="inline">building.garage.sensor</code> does not rescue a demanding rule that declares no
+context; the rule itself must present an eligible scope.</p><p>An unscoped capability can be demanded from any scope. A nonexistent capability
+and a context denial are errors under every demand flag, including <code class="inline">--optional</code>.
+Optional means tolerance of execution failure, not tolerance of a misspelled
+name or a crossed boundary.</p><h2 id="demand-flags-and-the-current-integration-limit" class="section-heading"><a href="#demand-flags-and-the-current-integration-limit" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Demand flags and the current integration limit</span></h2><p>The demand evaluator defines a stack protocol:</p><table><thead><tr><th style="text-align: left;">Flag</th><th style="text-align: left;">Stack meaning</th></tr></thead><tbody><tr><td style="text-align: left;">Bare or <code class="inline">--requisite</code></td><td style="text-align: left;">Failure ends the stack immediately</td></tr><tr><td style="text-align: left;"><code class="inline">--required</code></td><td style="text-align: left;">Remember failure and evaluate the remaining stack</td></tr><tr><td style="text-align: left;"><code class="inline">--optional</code></td><td style="text-align: left;">Tolerate execution failure</td></tr><tr><td style="text-align: left;"><code class="inline">--sufficient</code></td><td style="text-align: left;">Success ends the stack successfully</td></tr></tbody></table><p>However, <strong>policy dispatch currently evaluates each <code class="inline">demand</code> statement as its
+own one-element stack</strong>. A failed demand appears in the operation results;
+it does not stop later queued commands or demands. <code class="inline">--sufficient</code> does not
+skip later policy statements. The distinction between <code class="inline">--required</code> and
+<code class="inline">--requisite</code> therefore does not create a multi-statement gate in a rule.</p><p>There is a second limit: standalone operations returned by a capability body
+are reported, but are not recursively executed by the demand path. An
+expression-position host call inside that body executes while the body is
+evaluated. A standalone <code class="inline">[MODULE::verb ...]</code> inside it is only a returned
+operation descriptor on this path. A body error operation is likewise not
+the same as a failed stack result.</p><p>These limits make <code class="inline">demand</code> unsuitable as a security gate in this version.
+For an actual authorization decision, have a host verb return a boolean,
+bind it, and branch before producing protected operations:</p><pre><code class="anemos">rule authorized-request {
+  when REQUEST {
+    let allowed = [AUTH::allowed ?principal]
+    if @allowed == true {
+      [WORK::perform ?job]
+    }
+  }
+}</code></pre><p>The host supplies <code class="inline">AUTH</code> and <code class="inline">WORK</code>. A failed value-position authorization
+call aborts evaluation, and only boolean <code class="inline">true</code> takes the branch. This makes
+the required decision explicit without depending on incomplete stack wiring.</p><h2 id="exercise" class="section-heading"><a href="#exercise" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Exercise</span></h2><p>Send <code class="inline">A=true</code>, <code class="inline">B=true</code>, <code class="inline">A=true</code>, <code class="inline">B=false</code>, <code class="inline">B=true</code> to both a rule with
+<code class="inline">when (A AND B)</code> and a condition with that trigger. How often does each act?</p><p>Answer: the rule acts three times (reports 2, 3, and 5). The condition
+transitions to true twice (reports 2 and 5).</p><p><a href="07-time.html">Next: Time and duration</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="05-collections.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+5. Collections and pipelines
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="07-time.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+7. Time and duration
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/06-conditions-and-capabilities.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

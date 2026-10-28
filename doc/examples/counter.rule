@@ -1,0 +1,12 @@
+rule count-motion {
+  when MOTION {
+    if not exists $count {
+      set count = 0
+    }
+    set count = $count + 1
+    log $count
+  }
+  when RESET {
+    set count = 0
+  }
+}

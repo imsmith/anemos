@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>8. Datasets, queries, and facts — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>8. Datasets, queries, and facts</h1>
+
+<a href="08-data.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/08-data.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>Payloads are convenient for values that arrive with an event. Reusable
+reference data belongs in a dataset. Computed lookups belong in a query.
+Subject–predicate–object facts belong in the triple store. Each has a
+different access model; this chapter keeps those models explicit.</p><h2 id="a-named-dataset" class="section-heading"><a href="#a-named-dataset" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A named dataset</span></h2><pre><code class="anemos">data allowed_users {
+  alice
+  bob
+  &quot;Grace Hopper&quot;
+}
+
+rule check-user {
+  when LOGIN {
+    if ?user memberof(allowed_users) {
+      log &quot;Allowed&quot;
+    } else {
+      log &quot;Denied&quot;
+    }
+  }
+}</code></pre><p>The simple data block creates a set. Duplicate entries collapse. Membership
+is exact; there is no case folding or substring matching. Quoted strings can
+contain spaces. The simple-list parser represents numeric entries as strings,
+so an entry <code class="inline">42</code> matches host <code class="inline">&quot;42&quot;</code>, not integer <code class="inline">42</code>.</p><p><code class="inline">memberof(first, second)</code> tests the union of named datasets. A value need be
+in only one. A referenced dataset that was never registered is an error,
+<code class="inline">anemos.runtime/unknown_dataset</code>, rather than an empty set. This matters for
+policies whose decisions depend on successful data loading.</p><p>Bare address/CIDR entries are accepted, but membership remains exact. A set
+containing <code class="inline">192.0.2.0/24</code> does not automatically contain <code class="inline">192.0.2.7</code>. Supply
+a host network-membership verb if you need subnet semantics.</p><h2 id="scope-and-name-resolution" class="section-heading"><a href="#scope-and-name-resolution" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Scope and name resolution</span></h2><p>A top-level data block is global within this runtime. A data block directly
+inside a rule or its context wrapper is local to that named rule:</p><pre><code class="anemos">rule restricted-login {
+  data allowed_users {
+    alice
+  }
+  when LOGIN {
+    if ?user memberof(allowed_users) {
+      log &quot;Local member&quot;
+    }
+    log ?allowed_users
+  }
+}</code></pre><p>Another rule cannot read this local block. A local definition wins over a
+global definition of the same name when looked up from its rule. Inside a
+rule, <code class="inline">data global allowed_users { ... }</code> explicitly installs global data.
+Queries use the same local/global convention.</p><p>These declarations are extracted and registered when the policy loads.
+Putting a data declaration inside a runtime branch does not make it
+conditional data creation. Keep declarations directly in the rule body or
+context wrapper, where extraction is supported.</p><p><code class="inline">?allowed_users</code> reads the visible stored dataset if context data and a query
+of that name do not take precedence. A simple list dataset is a host
+<a href="https://elixir.hexdocs.pm/MapSet.html"><code class="inline">MapSet</code></a>, not necessarily a list suitable for a <code class="inline">for</code> loop. Have a host
+module return a list when enumeration is needed.</p><h2 id="structured-data-belongs-to-a-handler" class="section-heading"><a href="#structured-data-belongs-to-a-handler" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Structured data belongs to a handler</span></h2><p>Anemos supplies a plug-in boundary for formats. It does not bundle parsers
+for every format named in design sketches. The host registers a handler
+implementing <a href="Anemos.DataModel.html"><code class="inline">Anemos.DataModel</code></a>:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">register_data_model</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="nc">MyApp.Words</span><span class="p" data-group-id="group-1">)</span></code></pre><p>After registration, its keyword can appear in a format block:</p><pre><code class="anemos">data crew {
+  words { alice bob }
+}
+
+rule check-crew {
+  when LOGIN {
+    if ?user memberof(crew) { log &quot;Crew member&quot; }
+  }
+}</code></pre><p>This policy requires a host handler registered under <code class="inline">&quot;words&quot;</code>. The runtime
+asks the handler to parse the block body, evaluate the parsed representation,
+and optionally transform it. A missing or failed handler makes the data
+declaration inert and appears in the load's partial failures.</p><p>Format and query engine bodies are reconstructed from DSL tokens, not passed
+through as arbitrary byte-for-byte source. Whitespace, comments, and quoting
+can change. Do not assume an arbitrary JSON, SQL, XML, or EDN document can be
+pasted unchanged merely because you registered a handler with that name.
+The handler must accept the representation Anemos delivers. Chapter 9 supplies
+a complete deliberately simple handler.</p><p>An optional <code class="inline">source resource.path</code> records provenance metadata. It is not an
+automatic fetch. A <code class="inline">transclude</code> clause requests a handler transformation:</p><pre><code class="anemos">data crew {
+  words { alice bob }
+  transclude to shape(resource.schema.crew)
+    with resource.transducer.upcase as loud_crew
+}</code></pre><p>The original dataset remains <code class="inline">crew</code>; the transformed result is registered
+as <code class="inline">loud_crew</code>. The language keyword is <code class="inline">transclude</code>; the handler callback is
+<code class="inline">transduce/3</code>. A handler must explicitly implement the requested transformation.</p><h2 id="queries-name-a-computation" class="section-heading"><a href="#queries-name-a-computation" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Queries name a computation</span></h2><pre><code class="anemos">query greet {
+  expect :name
+  greeter { hello }
+  return ?line
+}
+
+rule welcome {
+  when ARRIVAL {
+    let name = ?visitor
+    log ?greet
+  }
+}</code></pre><p>The host must register a <code class="inline">greeter</code> data-model handler. Reading <code class="inline">?greet</code>
+executes the query. For each <code class="inline">expect</code> name, Anemos looks for a local <code class="inline">let</code>,
+then a persistent <code class="inline">set</code>, then event/context data, using string keys. Several
+expectations are comma-separated: <code class="inline">expect :name, :tenant</code>.</p><p>The engine's evaluated result must be a map binding the returned name, here
+<code class="inline">&quot;line&quot;</code>. That field becomes the value of <code class="inline">?greet</code>. Reading the query again
+executes it again; it is not an automatic cache. Missing input, missing engine,
+failed evaluation, and missing return binding are errors that abort the
+calling handler's evaluation.</p><p>Queries do not make arbitrary dataset or condition names into query engines.
+The engine keyword identifies registered host code, and its syntax and answer
+shape are part of that host's contract. Event data called <code class="inline">greet</code> shadows
+this query, so avoid colliding field names.</p><h2 id="live-datasets" class="section-heading"><a href="#live-datasets" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Live datasets</span></h2><p>A dynamic data block subscribes through a host-supplied protocol adapter:</p><pre><code class="anemos">data live_users {
+  dynamic {
+    subscribe directory &quot;directory://users&quot;
+  }
+}</code></pre><p><code class="inline">directory</code> is a registered protocol string, not a built-in network service.
+An adapter implements <a href="Anemos.Subscribable.html"><code class="inline">Anemos.Subscribable</code></a>; the dispatcher API registers it:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime.Dispatcher</span><span class="o">.</span><span class="n">register_subscribable</span><span class="p" data-group-id="group-1">(</span><span class="w">
+  </span><span class="ss">:&quot;anemos.dispatcher&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;directory&quot;</span><span class="p">,</span><span class="w"> </span><span class="nc">MyApp.DirectoryFeed</span><span class="p" data-group-id="group-1">)</span></code></pre><p>The dataset starts empty after a successful subscription. Each pushed value
+replaces it; a pushed list is converted to a set. Updates do not automatically
+dispatch a policy event. If reacting immediately to changes matters, arrange
+for your adapter/application to dispatch one as well.</p><p>The syntax also accepts <code class="inline">periodic &lt;spec&gt;</code>, but the current dispatcher does not
+implement a general polling loop from that clause. Let the adapter own polling
+and lifecycle. A missing protocol handler is reported as a partial load
+failure. Unloading the owning policy cancels its live subscriptions.</p><h2 id="facts-and-triple-patterns" class="section-heading"><a href="#facts-and-triple-patterns" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Facts and triple patterns</span></h2><p>Anemos can accumulate triples: a subject, predicate, and object.</p><pre><code class="anemos">rule record-facts {
+  when SETUP {
+    let [:alice -&gt; :worksOn -&gt; :project1]
+    let [:bob -&gt; :worksOn -&gt; :project1]
+    graph :alice
+  }
+}</code></pre><p><code class="inline">let [subject -&gt; predicate -&gt; object]</code> asserts a fact. It is a special
+statement, not an ordinary named binding. Duplicate assertions do not create
+duplicate facts. <code class="inline">graph :alice</code> inspects facts involving that identifier.
+The triple store is shared within the runtime; context does not create
+independent named graphs or access isolation for facts.</p><p>The parser also accepts query patterns such as:</p><pre><code class="text">[?person :worksOn ?project]
+[:alice :worksOn :project1]</code></pre><p>Here <code class="inline">?person</code> and <code class="inline">?project</code> are pattern variables, not ordinary payload
+lookups. However, ordinary DSL value evaluation currently produces a query
+descriptor rather than a bound result collection. <code class="inline">log [?person :worksOn ?project]</code> logs the descriptor; it does not bind <code class="inline">?person</code> for subsequent
+statements. Standalone triple AST statements are not a complete query path
+either. Use <code class="inline">graph</code> for policy-level inspection or a host query/module for
+programmatic fact matching. The lower-level <code class="inline">TripleStore.match/4</code> API returns
+binding maps and can support such a host implementation.</p><p>Do not base a policy decision on a triple descriptor's truthiness: a map is
+truthy even if the intended query would match no facts. The reference records
+this as a partial feature rather than promising a full fact-query language.</p><p><a href="09-embedding.html">Next: Embedding and extending Anemos</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="07-time.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+7. Time and duration
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="09-embedding.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+9. Embedding and extending Anemos
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/08-data.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

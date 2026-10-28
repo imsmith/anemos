@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>11. Finding and fixing problems — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>11. Finding and fixing problems</h1>
+
+<a href="11-troubleshooting.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/11-troubleshooting.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>When a policy does nothing, start by asking which stage had enough information
+to decide. Did the source load? Was there a subscriber? Was it reachable?
+Did a guard suppress evaluation? Did an operation fail? These are different
+problems and need different fixes.</p><h2 id="diagnose-a-one-shot-run" class="section-heading"><a href="#diagnose-a-one-shot-run" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Diagnose a one-shot run</span></h2><p><a href="Anemos.html#run_report/2"><code class="inline">Anemos.run_report/2</code></a> adds reachability and error information to one-shot
+execution:</p><pre><code class="makeup elixir" translate="no"><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">report</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos</span><span class="o">.</span><span class="n">run_report</span><span class="p" data-group-id="group-2">(</span><span class="n">source</span><span class="p">,</span><span class="w">
+  </span><span class="ss">event</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;MOTION&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">context_path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;garage.sensor&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">%{</span><span class="s">&quot;maintenance&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="no">false</span><span class="p" data-group-id="group-3">}</span><span class="p" data-group-id="group-2">)</span><span class="w">
+
+</span><span class="nc">Map</span><span class="o">.</span><span class="n">take</span><span class="p" data-group-id="group-4">(</span><span class="n">report</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-5">[</span><span class="ss">:event</span><span class="p">,</span><span class="w"> </span><span class="ss">:subscribed</span><span class="p">,</span><span class="w"> </span><span class="ss">:reachable</span><span class="p">,</span><span class="w"> </span><span class="ss">:errors</span><span class="p" data-group-id="group-5">]</span><span class="p" data-group-id="group-4">)</span></code></pre><p><code class="inline">subscribed</code> counts matching compiled handlers. <code class="inline">reachable</code> counts those
+admitted by the arriving context. <code class="inline">operations</code> reports work produced;
+<code class="inline">results</code> and <code class="inline">errors</code> distinguish successful results from operation failures.
+A load/parse/compile failure returns <code class="inline">{:error, reason}</code> instead of a report.</p><p>Interpret an empty operation list in this order:</p><ol><li><code class="inline">subscribed == 0</code>: compare the exact event name to <code class="inline">when</code> clauses.</li><li><code class="inline">reachable == 0</code>: compare the caller's context path to the declared boundary.</li><li>Otherwise, inspect guards, branch inputs, and intentionally empty bodies.</li></ol><p>A handler containing only <code class="inline">let</code>/<code class="inline">set</code>, or an expression call whose answer is
+unused, can execute without producing a visible operation. “No operations”
+does not necessarily mean “no code ran.”</p><p>The CLI reports these broad cases and exits <code class="inline">1</code> for usage, read, load, parse,
+compile, or operation errors. It exits <code class="inline">0</code> when dispatch completes without
+reported operation errors, even if nothing subscribed or every branch was
+skipped. An assertion with <code class="inline">held: false</code> is not an operation error either.
+Use explicit result assertions in a host test when successful behavior
+requires particular work to have happened.</p><h2 id="ask-what-the-runtime-holds" class="section-heading"><a href="#ask-what-the-runtime-holds" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Ask what the runtime holds</span></h2><pre><code class="makeup elixir" translate="no"><span class="n">snapshot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">describe</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="n">snapshot</span><span class="o">.</span><span class="n">rules</span><span class="w">
+</span><span class="n">snapshot</span><span class="o">.</span><span class="n">conditions</span><span class="w">
+</span><span class="n">snapshot</span><span class="o">.</span><span class="n">schedules</span></code></pre><p>The snapshot reports policies, rules, current persistent bindings and dwell
+state, conditions, capabilities, datasets, schedules, and module names. It is
+an observation of a live system, not an atomic transaction over all workers.
+Bindings are returned as values; wrapped secrets remain wrapped.</p><p>To ask what an event would reach without executing it:</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">explain</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;MOTION&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="p" data-group-id="group-2">%{</span><span class="ss">context_path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;garage.sensor&quot;</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span></code></pre><p>Rule outcomes include <code class="inline">:fires</code>, <code class="inline">:context_mismatch</code>, <code class="inline">:not_true</code> for a false
+compound state, and <code class="inline">{:dwell, milliseconds}</code>. <code class="inline">:fires</code> means the dispatch
+path is eligible. Explain does not evaluate guards, branches, or host calls,
+so it cannot promise particular side effects.</p><p><code class="inline">Anemos.Runtime.trace(:anemos, 20)</code> returns recent dispatches newest first.
+Entries contain time, event, context path, rule steps, condition transitions,
+result kinds, and duration. Handoffs and labeled emits appear in the steps.
+The trace retains the last 200 dispatches. It summarizes most operation
+values; log messages are deliberately retained as log text.</p><h2 id="inspect-from-a-policy" class="section-heading"><a href="#inspect-from-a-policy" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Inspect from a policy</span></h2><pre><code class="anemos">rule inspect-system {
+  when DEBUG {
+    list rules
+    list conditions
+    list modules
+    list events
+    list policies
+    list schedules
+    show DEVICE
+    explain DEVICE
+    list DEVICE
+    explain MOTION
+    show ?payload
+    infer ?payload
+    trace ?payload
+    exists ?optional_value
+  }
+}</code></pre><p><code class="inline">show</code> asks what something is. <code class="inline">explain</code> asks what it can do or who listens.
+<code class="inline">list</code> asks for choices. A registered module answers through its description
+or Comn callbacks; an unregistered event name can be inspected for listeners.
+Policy-level catalogues and listener answers are limited to the asking rule's
+own named policy. Anonymous loads share one inspection scope. Modules remain
+visible across policies, and fact inspection uses the shared triple store.
+Use the host's <code class="inline">Runtime.describe/1</code> for the runtime-wide inventory.
+For a value expression, the operations report its value or inferred kind.
+Answers are in dispatch results, with a <code class="inline">value</code> field, rather than necessarily
+printed to the terminal as prose.</p><p><code class="inline">trace ?payload</code> is a DSL value-inspection operation. It differs from the
+host API <code class="inline">Runtime.trace/2</code>, which retrieves dispatch history. Treat explicit
+value inspection as intentional disclosure, just as you treat <code class="inline">log</code>. Wrap
+credentials in the host before they enter policy values.</p><h2 id="common-symptoms" class="section-heading"><a href="#common-symptoms" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Common symptoms</span></h2><table><thead><tr><th style="text-align: left;">Symptom</th><th style="text-align: left;">Likely cause and next action</th></tr></thead><tbody><tr><td style="text-align: left;"><code class="inline">mix: command not found</code></td><td style="text-align: left;">Activate the toolchain in <code class="inline">.tool-versions</code>; check the terminal's <code class="inline">PATH</code></td></tr><tr><td style="text-align: left;">No subscriber</td><td style="text-align: left;">Exact-name mismatch, no loaded policy, or statements placed outside a trigger</td></tr><tr><td style="text-align: left;">Subscriber but no reachable rule</td><td style="text-align: left;">Missing/wrong <code class="inline">context_path</code>; with map shorthand use outer <code class="inline">context</code></td></tr><tr><td style="text-align: left;"><code class="inline">?value</code> is missing</td><td style="text-align: left;">Wrong payload shape/key, wrong sigil, or absent field; use string payload keys</td></tr><tr><td style="text-align: left;"><code class="inline">@name</code>/<code class="inline">$name</code> compile error</td><td style="text-align: left;">No matching <code class="inline">let</code>/<code class="inline">set</code> in the declaration; inspect the suggested sigil</td></tr><tr><td style="text-align: left;">Numeric comparison behaves oddly</td><td style="text-align: left;">CLI supplied a string; use typed host data and inspect with <code class="inline">infer</code></td></tr><tr><td style="text-align: left;">A boolean guard always runs/skips</td><td style="text-align: left;"><code class="inline">&quot;false&quot;</code> is truthy; compare explicit values or fix producer types</td></tr><tr><td style="text-align: left;"><code class="inline">unknown_module</code></td><td style="text-align: left;">Register the module before calling it; a persistent runtime does not inherit one-shot defaults</td></tr><tr><td style="text-align: left;"><code class="inline">unknown_verb</code></td><td style="text-align: left;">Inspect module choices and check spelling and registration</td></tr><tr><td style="text-align: left;"><code class="inline">invalid_argument</code></td><td style="text-align: left;">Match arity/types/schema; a path argument may have failed confinement</td></tr><tr><td style="text-align: left;"><code class="inline">unknown_dataset</code></td><td style="text-align: left;">Dataset name/scope mismatch, failed initialization, or missing handler</td></tr><tr><td style="text-align: left;"><code class="inline">query_missing_binding</code></td><td style="text-align: left;">An expected input is absent from <code class="inline">let</code>, <code class="inline">set</code>, and string-keyed context data</td></tr><tr><td style="text-align: left;"><code class="inline">unknown_data_model</code></td><td style="text-align: left;">Register the query engine under its declared keyword</td></tr><tr><td style="text-align: left;"><code class="inline">query_failed</code></td><td style="text-align: left;">Engine parse/evaluation failed or omitted the named return binding</td></tr><tr><td style="text-align: left;">Load says <code class="inline">partial</code></td><td style="text-align: left;">Inspect every failure; some declarations installed but will not work</td></tr><tr><td style="text-align: left;">Timer armed but scoped body never runs</td><td style="text-align: left;">Built-in scheduled events have no context; use a scoped host event</td></tr><tr><td style="text-align: left;">Demand failed but later work happened</td><td style="text-align: left;">Current demand dispatch does not gate later operations</td></tr><tr><td style="text-align: left;">Fact query yields a map instead of rows</td><td style="text-align: left;">Value-position triple query is a descriptor in this version</td></tr><tr><td style="text-align: left;">Caller times out</td><td style="text-align: left;">Slow synchronous verb or excessive work; a timeout does not cancel it</td></tr></tbody></table><p>Structured errors are <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html"><code class="inline">Comn.Errors.ErrorStruct</code></a> values. Their stable <code class="inline">code</code>
+identifies the category; <code class="inline">field</code> often names the declaration or argument.
+The message explains the immediate problem. Request/trace IDs support
+operator correlation. For readable author-facing output, use
+<code class="inline">Mix.Tasks.Anemos.Run.describe(error)</code> rather than dumping the full struct.
+Do not copy arbitrary raw host errors into user messages if they can contain
+credentials or sensitive payloads.</p><h2 id="recipe-ignore-incomplete-messages" class="section-heading"><a href="#recipe-ignore-incomplete-messages" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Recipe: ignore incomplete messages</span></h2><pre><code class="anemos">rule process-complete-reading {
+  when READING {
+    if not exists ?temperature { return }
+    if ?enabled != true { return }
+    log ?temperature
+  }
+}</code></pre><p>This explicitly requires a present temperature and a boolean true flag.
+It does not validate the temperature's numeric type; put that validation in
+the event ingress or a host schema/verb if arithmetic follows.</p><h2 id="recipe-one-event-updates-state-another-consumes-it" class="section-heading"><a href="#recipe-one-event-updates-state-another-consumes-it" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Recipe: one event updates state, another consumes it</span></h2><pre><code class="anemos">rule remember-mode {
+  when MODE_CHANGED {
+    set mode = ?mode
+  }
+  when REQUEST {
+    if $mode == &quot;active&quot; {
+      log &quot;Processing is enabled&quot;
+    } else {
+      log &quot;Processing is disabled&quot;
+    }
+  }
+}</code></pre><p>Before the first mode event, <code class="inline">$mode</code> is <code class="inline">nil</code>, so the disabled branch runs.
+The state is shared by both handlers because they belong to one named rule.</p><h2 id="recipe-two-stage-processing-with-explicit-payload" class="section-heading"><a href="#recipe-two-stage-processing-with-explicit-payload" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Recipe: two-stage processing with explicit payload</span></h2><pre><code class="anemos">rule receive-job {
+  when SUBMITTED {
+    if not exists ?job_id { return }
+    nextevent VALIDATED with { job_id: ?job_id, checked: true }
+  }
+}
+
+rule record-job {
+  when VALIDATED {
+    if ?checked == true {
+      log ?job_id
+    }
+  }
+}</code></pre><p>The second rule receives the overlay and any remaining original fields.
+For a real trust boundary, do not treat an arbitrary <code class="inline">checked</code> payload field
+as proof of authorization: the host controls which producers can send each
+event and context. This recipe demonstrates data handoff, not authentication.</p><h2 id="test-policies-as-programs" class="section-heading"><a href="#test-policies-as-programs" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Test policies as programs</span></h2><p>Start an isolated runtime, load named source, dispatch typed events, and
+assert the results that matter. Check operation errors even when the outer
+dispatch tuple is <code class="inline">{:ok, ...}</code>. For stateful logic, test a sequence including
+reset/false reports rather than one happy event. For timers, observe delivery
+with bounded waits instead of assuming millisecond-exact scheduling.</p><p>Run the manual's checks from the repository root:</p><pre><code class="makeup sh" translate="no"><span class="">mix test test/anemos/manual_test.exs
+</span><span class="">mix run docs/manual/examples/walkthrough.exs
+</span><span class="">mix run docs/manual/examples/data_models.exs
+</span><span class="">mix run docs/manual/examples/workshop.exs
+</span></code></pre><p>Use <code class="inline">mix check</code> for the repository's formatting, strict Credo, and full test
+suite. <a href="https://ex-doc.hexdocs.pm/0.40.4/Mix.Tasks.Docs.html"><code class="inline">mix docs</code></a> builds the manual alongside module API documentation.</p><p><a href="12-workshop.html">Next: A complete workshop application</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="10-operation.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+10. Deploying and operating policies
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="12-workshop.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+12. A complete application: workshop temperature alerts
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/11-troubleshooting.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

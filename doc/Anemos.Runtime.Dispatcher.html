@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.Dispatcher — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />Dispatcher</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.Dispatcher.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>GenServer holding compiled rules indexed by subscription.</p><p>Dispatches events to matching rules, executes resulting operations
+via the ModuleRegistry. Also routes synthetic <code class="inline">CONDITION_&lt;name&gt;</code> events
+when conditions transition.</p><p>Handled operation types: <code class="inline">:command</code>, <code class="inline">:log</code>, <code class="inline">:emit</code>, <code class="inline">:demand</code>,
+<code class="inline">:assert_triple</code>, <code class="inline">:triple_query</code>, <code class="inline">:nextevent</code>, <code class="inline">:nextrule</code>.</p><h2 id="module-owns-no-process-lifecycles" class="section-heading"><a href="#module-owns-no-process-lifecycles" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Owns no process lifecycles</span></h2><p>The dispatcher <code class="inline">start_link</code>s nothing. Condition servers, capability
+servers, the triple store, the data store and the subscribable registry
+all live under <a href="Anemos.Runtime.StoreSupervisor.html"><code class="inline">Anemos.Runtime.StoreSupervisor</code></a>, and are resolved by
+child id at the head of every callback (<code class="inline">refresh_stores/1</code>). The
+dispatcher's own state is a <em>derived</em> view, rebuildable at any moment
+from <a href="Anemos.Runtime.PolicyStore.html"><code class="inline">Anemos.Runtime.PolicyStore</code></a> — which is what <code class="inline">init/1</code> does, so that
+a crash costs a dispatch cycle rather than every loaded policy.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#child_spec/1" data-no-tooltip="" translate="no">child_spec(init_arg)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns a specification to start this module under a supervisor.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#condition_state/2" data-no-tooltip="" translate="no">condition_state(dispatcher, condition_name)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the current boolean state of a named condition, or <code class="inline">nil</code> if not found.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#data_member?/3" data-no-tooltip="" translate="no">data_member?(dispatcher, name, value)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns true if <code class="inline">value</code> is a member of the named data block dataset.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#deploy/4" data-no-tooltip="" translate="no">deploy(dispatcher, id, compiled, fingerprints)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Deploys <code class="inline">compiled</code> as the policy <code class="inline">id</code>, over whatever was last deployed
+under that id.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#describe/1" data-no-tooltip="" translate="no">describe(dispatcher)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>See <a href="Anemos.Runtime.html#describe/1"><code class="inline">Anemos.Runtime.describe/1</code></a>. Everything but schedules and modules.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#dispatch/4" data-no-tooltip="" translate="no">dispatch(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Dispatches an event to all matching rules and conditions.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#explain/4" data-no-tooltip="" translate="no">explain(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>See <a href="Anemos.Runtime.html#explain/3"><code class="inline">Anemos.Runtime.explain/3</code></a>.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#invoke_verb/5" data-no-tooltip="" translate="no">invoke_verb(registry, mod_name, verb, args, context)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Resolves <code class="inline">mod_name</code> in <code class="inline">registry</code>, validates <code class="inline">args</code>, and invokes <code class="inline">verb</code>.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#load/2" data-no-tooltip="" translate="no">load(dispatcher, compiled)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Loads compiled rules, conditions, and capabilities into a running dispatcher.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#policies/1" data-no-tooltip="" translate="no">policies(dispatcher)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>The loaded policies in load order, each with the names it declares. A load
+that named no policy has <code class="inline">id: nil</code>.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#register_data_model/2" data-no-tooltip="" translate="no">register_data_model(dispatcher, handler_module)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Registers an <a href="Anemos.DataModel.html"><code class="inline">Anemos.DataModel</code></a> handler under the keyword it answers from
+<code class="inline">keyword/0</code>. That keyword then names a format in a <code class="inline">data</code> block and an
+engine in a <code class="inline">query</code> block.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#register_subscribable/3" data-no-tooltip="" translate="no">register_subscribable(dispatcher, protocol, handler_module)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Registers a <code class="inline">Subscribable</code> handler module for the given protocol string.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#rules/1" data-no-tooltip="" translate="no">rules(dispatcher)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the names of the rules currently loaded, without duplicates.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#start_link/1" data-no-tooltip="" translate="no">start_link(opts)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Starts a dispatcher.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#topology/1" data-no-tooltip="" translate="no">topology(dispatcher)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the store supervisor and policy store this dispatcher reads from.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#undeploy/2" data-no-tooltip="" translate="no">undeploy(dispatcher, id)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Removes the policy <code class="inline">id</code> and everything it declared.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#unload/2" data-no-tooltip="" translate="no">unload(dispatcher, rule_names)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Unloads the named rules.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#verb_context/2" data-no-tooltip="" translate="no">verb_context(context, source)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Builds the context a host verb sees: the event context plus <code class="inline">:_rule_source</code>,
+<code class="inline">:_runtime</code> (the runtime's name, when run under one) and, added at the
+call, <code class="inline">:_module</code> (the name the verb was addressed by).</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="child_spec/1">
+
+  <div class="detail-header">
+    <a href="#child_spec/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">child_spec(init_arg)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L23" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Returns a specification to start this module under a supervisor.</p><p>See <a href="https://elixir.hexdocs.pm/Supervisor.html"><code class="inline">Supervisor</code></a>.</p>
+  </section>
+</section>
+<section class="detail" id="condition_state/2">
+
+  <div class="detail-header">
+    <a href="#condition_state/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">condition_state(dispatcher, condition_name)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L184" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> condition_state(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">boolean</a>() | nil</pre>
+
+      </div>
+
+<p>Returns the current boolean state of a named condition, or <code class="inline">nil</code> if not found.</p>
+  </section>
+</section>
+<section class="detail" id="data_member?/3">
+
+  <div class="detail-header">
+    <a href="#data_member?/3" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">data_member?(dispatcher, name, value)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L192" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> data_member?(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">boolean</a>()</pre>
+
+      </div>
+
+<p>Returns true if <code class="inline">value</code> is a member of the named data block dataset.</p>
+  </section>
+</section>
+<section class="detail" id="deploy/4">
+
+  <div class="detail-header">
+    <a href="#deploy/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">deploy(dispatcher, id, compiled, fingerprints)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L142" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> deploy(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="Anemos.CompilationResult.html#t:t/0">Anemos.CompilationResult.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()) ::
+  :ok
+  | {:error, [<a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()]}
+  | {:refused, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>Deploys <code class="inline">compiled</code> as the policy <code class="inline">id</code>, over whatever was last deployed
+under that id.</p><p>Afterwards the dispatcher holds what <code class="inline">compiled</code> declares and nothing the
+previous version declared that it does not. A rule or condition whose
+fingerprint is unchanged keeps its state; see the <code class="inline">{:deploy, ...}</code>
+callback.</p><p>Answers what <a href="#load/2"><code class="inline">load/2</code></a> would. A policy that declares a name another policy
+holds is not loaded at all: <code class="inline">{:refused, error}</code>.</p><p>Schedules are not touched: the scheduler is not the dispatcher's to call.
+The caller follows with <a href="Anemos.Runtime.Scheduler.html#sync/1"><code class="inline">Anemos.Runtime.Scheduler.sync/1</code></a>.</p>
+  </section>
+</section>
+<section class="detail" id="describe/1">
+
+  <div class="detail-header">
+    <a href="#describe/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">describe(dispatcher)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L163" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> describe(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()</pre>
+
+      </div>
+
+<p>See <a href="Anemos.Runtime.html#describe/1"><code class="inline">Anemos.Runtime.describe/1</code></a>. Everything but schedules and modules.</p>
+  </section>
+</section>
+<section class="detail" id="dispatch/4">
+
+    <span id="dispatch/2"></span>
+
+    <span id="dispatch/3"></span>
+
+  <div class="detail-header">
+    <a href="#dispatch/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">dispatch(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L88" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> dispatch(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">timeout</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>()</pre>
+
+      </div>
+
+<p>Dispatches an event to all matching rules and conditions.</p><p>Returns a list of <code class="inline">{:ok, operation}</code> or <code class="inline">{:error, reason}</code> tuples.</p>
+  </section>
+</section>
+<section class="detail" id="explain/4">
+
+    <span id="explain/2"></span>
+
+    <span id="explain/3"></span>
+
+  <div class="detail-header">
+    <a href="#explain/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">explain(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L167" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> explain(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">timeout</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()</pre>
+
+      </div>
+
+<p>See <a href="Anemos.Runtime.html#explain/3"><code class="inline">Anemos.Runtime.explain/3</code></a>.</p>
+  </section>
+</section>
+<section class="detail" id="invoke_verb/5">
+
+  <div class="detail-header">
+    <a href="#invoke_verb/5" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">invoke_verb(registry, mod_name, verb, args, context)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L1948" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> invoke_verb(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>() | nil, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()) ::
+  <a href="Anemos.Runtime.Module.html#t:verb_result/0">Anemos.Runtime.Module.verb_result</a>()</pre>
+
+      </div>
+
+<p>Resolves <code class="inline">mod_name</code> in <code class="inline">registry</code>, validates <code class="inline">args</code>, and invokes <code class="inline">verb</code>.</p><p><strong>This is the only path from a <code class="inline">[MODULE::verb]</code> call to host code</strong>, and
+it is deliberately public so that it can be shared rather than copied.
+Both positions the language offers go through it:</p><ul><li>statement position — <code class="inline">execute_op/4</code>, on the operation list a rule
+handler returned;</li><li>expression position — <a href="Anemos.Compiler.html"><code class="inline">Anemos.Compiler</code></a>, from inside the compiled
+closure, where the call's return value becomes the value of the
+expression (A-56).</li></ul><p>Sharing it is the point. A second implementation would be the fourth
+instance of the defect shape A-39, A-59 and the duplicated <code class="inline">gate/3</code> all
+had: a caller reaching the same destination by a path that skipped a
+check. Here the checks are <a href="Anemos.Runtime.Module.html#schema_for/2"><code class="inline">Anemos.Runtime.Module.schema_for/2</code></a>, the
+<a href="Anemos.Runtime.ArgSchema.html"><code class="inline">Anemos.Runtime.ArgSchema</code></a> bounds and allow-lists, and
+<a href="Anemos.Runtime.PathGuard.html"><code class="inline">Anemos.Runtime.PathGuard</code></a> confinement — all of them A-11's, and all of
+them applied before <code class="inline">handle_verb/3</code> regardless of which position the call
+was written in.</p><p><code class="inline">context</code> is the <em>verb</em> context — the event context stamped with
+<code class="inline">:_rule_source</code>. It is not the closure's evaluation context: <code class="inline">:data_store</code>
+and <code class="inline">:registry</code> reach the closure and must not reach host verb code. See
+<a href="#verb_context/2"><code class="inline">verb_context/2</code></a>.</p><p>A <code class="inline">nil</code> registry answers <code class="inline">unknown_module</code> rather than raising. A compiled
+closure invoked outside a dispatcher — a unit test, an embedder calling
+<code class="inline">handler.(event, %{}, %{})</code> directly — has no registry to be given, so
+this is a reachable state and it fails closed with a message that says why
+rather than resolving to <code class="inline">nil</code> and letting a guard read false.</p>
+  </section>
+</section>
+<section class="detail" id="load/2">
+
+  <div class="detail-header">
+    <a href="#load/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">load(dispatcher, compiled)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L104" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> load(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="Anemos.CompilationResult.html#t:t/0">Anemos.CompilationResult.t</a>()) ::
+  :ok
+  | {:error, [<a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()]}
+  | {:refused, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>Loads compiled rules, conditions, and capabilities into a running dispatcher.</p><p>Declarations from different policies accumulate. A rule name that is
+already loaded is <strong>replaced</strong>, not appended — see the <code class="inline">{:load, _}</code>
+callback for why replacement rather than rejection.</p><p>A name held by a policy deployed under an identity is not replaced: the
+load is refused whole, <code class="inline">{:refused, error}</code>.</p>
+  </section>
+</section>
+<section class="detail" id="policies/1">
+
+  <div class="detail-header">
+    <a href="#policies/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">policies(dispatcher)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L159" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> policies(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()) :: [<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()]</pre>
+
+      </div>
+
+<p>The loaded policies in load order, each with the names it declares. A load
+that named no policy has <code class="inline">id: nil</code>.</p>
+  </section>
+</section>
+<section class="detail" id="register_data_model/2">
+
+  <div class="detail-header">
+    <a href="#register_data_model/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">register_data_model(dispatcher, handler_module)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L210" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> register_data_model(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">module</a>()) :: :ok</pre>
+
+      </div>
+
+<p>Registers an <a href="Anemos.DataModel.html"><code class="inline">Anemos.DataModel</code></a> handler under the keyword it answers from
+<code class="inline">keyword/0</code>. That keyword then names a format in a <code class="inline">data</code> block and an
+engine in a <code class="inline">query</code> block.</p>
+  </section>
+</section>
+<section class="detail" id="register_subscribable/3">
+
+  <div class="detail-header">
+    <a href="#register_subscribable/3" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">register_subscribable(dispatcher, protocol, handler_module)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L200" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> register_subscribable(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">module</a>()) :: :ok</pre>
+
+      </div>
+
+<p>Registers a <code class="inline">Subscribable</code> handler module for the given protocol string.</p>
+  </section>
+</section>
+<section class="detail" id="rules/1">
+
+  <div class="detail-header">
+    <a href="#rules/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">rules(dispatcher)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L178" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> rules(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()) :: [<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()]</pre>
+
+      </div>
+
+<p>Returns the names of the rules currently loaded, without duplicates.</p><p>A rule with several <code class="inline">when</code> blocks compiles to several rules sharing one
+name and is reported once.</p>
+  </section>
+</section>
+<section class="detail" id="start_link/1">
+
+  <div class="detail-header">
+    <a href="#start_link/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">start_link(opts)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L71" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Starts a dispatcher.</p><h2 id="start_link/1-options" class="section-heading"><a href="#start_link/1-options" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Options</span></h2><ul><li><code class="inline">:registry</code> — pid or name of a <code class="inline">ModuleRegistry</code> (required)</li><li><code class="inline">:store_supervisor</code> — pid or name of a <code class="inline">StoreSupervisor</code> (required)</li><li><code class="inline">:policy_store</code> — pid or name of a <code class="inline">PolicyStore</code> (required)</li><li><code class="inline">:rule_supervisor</code> — pid or name of a <code class="inline">RuleSupervisor</code> (optional)</li><li><code class="inline">:runtime</code> — the <a href="Anemos.Runtime.html"><code class="inline">Anemos.Runtime</code></a> name, handed to host verbs as
+<code class="inline">:_runtime</code> so a verb can address the runtime it runs in (optional)</li><li><code class="inline">:name</code> — process registration name (optional)</li></ul><p>Rules, conditions and capabilities are <em>not</em> passed here. They are read
+from the policy store, which is the only thing that survives a restart.
+Use <a href="Anemos.Runtime.Standalone.html#start_link/1"><code class="inline">Anemos.Runtime.Standalone.start_link/1</code></a> to wire up a dispatcher and
+its stores outside a full <a href="Anemos.Runtime.html"><code class="inline">Anemos.Runtime</code></a> tree.</p>
+  </section>
+</section>
+<section class="detail" id="topology/1">
+
+  <div class="detail-header">
+    <a href="#topology/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">topology(dispatcher)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L80" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> topology(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>()) :: %{store_supervisor: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>(), policy_store: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>()}</pre>
+
+      </div>
+
+<p>Returns the store supervisor and policy store this dispatcher reads from.</p>
+  </section>
+</section>
+<section class="detail" id="undeploy/2">
+
+  <div class="detail-header">
+    <a href="#undeploy/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">undeploy(dispatcher, id)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L150" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> undeploy(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) :: :ok | {:error, :not_loaded}</pre>
+
+      </div>
+
+<p>Removes the policy <code class="inline">id</code> and everything it declared.</p>
+  </section>
+</section>
+<section class="detail" id="unload/2">
+
+  <div class="detail-header">
+    <a href="#unload/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">unload(dispatcher, rule_names)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L121" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> unload(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), [<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()]) :: :ok</pre>
+
+      </div>
+
+<p>Unloads the named rules.</p><p>Removes them from the rule set and the index, cancels any dwell timer they
+have armed, drops their rule-scoped data blocks, and removes them from the
+policy store so a dispatcher restart does not bring them back. Rule names
+that are not loaded are ignored.</p><p>Rules only. Conditions, capabilities and global data blocks are not owned
+by a rule — a policy-level unload would need a policy identity, which
+<a href="Anemos.CompilationResult.html"><code class="inline">Anemos.CompilationResult</code></a> does not carry.</p>
+  </section>
+</section>
+<section class="detail" id="verb_context/2">
+
+  <div class="detail-header">
+    <a href="#verb_context/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">verb_context(context, source)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L1986" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> verb_context(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>(), {<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>() | nil}) :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>()</pre>
+
+      </div>
+
+<p>Builds the context a host verb sees: the event context plus <code class="inline">:_rule_source</code>,
+<code class="inline">:_runtime</code> (the runtime's name, when run under one) and, added at the
+call, <code class="inline">:_module</code> (the name the verb was addressed by).</p><p>One definition, used by <code class="inline">run_ops/5</code> for statement-position calls and by
+<code class="inline">dispatch_immediate/6</code> to precompute <code class="inline">:_verb_context</code> for expression-position
+ones, so the two positions cannot drift into showing host code different
+things. Note what it does <em>not</em> add: <code class="inline">:data_store</code> and <code class="inline">:registry</code> are
+closure-evaluation authority and stop at the closure.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

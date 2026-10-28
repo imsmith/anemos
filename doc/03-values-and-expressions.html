@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>3. Values and expressions — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>3. Values and expressions</h1>
+
+<a href="03-values-and-expressions.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/03-values-and-expressions.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>A policy spends much of its life naming values, testing them, and passing them
+to commands. This chapter gives those everyday operations precise meanings.</p><h2 id="literal-values" class="section-heading"><a href="#literal-values" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Literal values</span></h2><pre><code class="anemos">rule values {
+  when EXAMPLE {
+    log &quot;a string&quot;
+    log 42
+    log 3.5
+    log true
+    log false
+    log :garage.light
+    log eth0
+  }
+}</code></pre><p>Numbers are decimal integers or floats. Strings use double quotes and support
+<code class="inline">\&quot;</code>, <code class="inline">\\</code>, <code class="inline">\n</code>, and <code class="inline">\t</code>. Booleans are the lowercase words <code class="inline">true</code> and
+<code class="inline">false</code>. A missing external value is represented by host <code class="inline">nil</code>; writing the
+bare word <code class="inline">nil</code> in a policy does not create that value.</p><p>Colon-prefixed symbols such as <code class="inline">:garage.light</code>, bare identifiers such as
+<code class="inline">eth0</code>, and uppercase names in value position all evaluate to strings.
+Anemos symbols are not dynamically created Elixir atoms. For example,
+<code class="inline">:garage</code> and <code class="inline">&quot;garage&quot;</code> have the same runtime value. Prefer quoted strings
+for arbitrary text and symbols for stable labels or fact identifiers.</p><p>Unquoted addresses such as <code class="inline">192.0.2.1</code> and <code class="inline">2001:db8::1</code> have lexer support
+in appropriate positions; quote addresses passed as ordinary command data
+to avoid ambiguities with qualification and time syntax. Durations and time
+literals are described in Chapter 7.</p><p>The language has no general JSON-style map or square-bracket array literal.
+Square brackets are for commands and triple patterns. Collections normally
+come from event data, module results, pipelines, or value compounding. A
+parenthesized sequence such as <code class="inline">(:host IN A &quot;192.0.2.1&quot;)</code> is a list-valued
+pattern, explained below.</p><h2 id="names-and-punctuation" class="section-heading"><a href="#names-and-punctuation" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Names and punctuation</span></h2><p>Ordinary identifiers begin with a lowercase letter and may contain letters,
+digits, underscores, hyphens, and dots. Thus <code class="inline">garage-lights</code> is one name,
+not subtraction. Write spaces around arithmetic operators, especially <code class="inline">-</code>.
+Module/event names use uppercase forms such as <code class="inline">DEVICE</code> and <code class="inline">MOTION_DETECTED</code>;
+names like <code class="inline">CONDITION_ready</code> have a supported lowercase tail.</p><p>Variable references have a narrower spelling: after <code class="inline">?</code>, <code class="inline">@</code>, or <code class="inline">$</code>, use
+letters, digits, and underscores, with a letter or underscore first. Dots in
+<code class="inline">?user.name</code> are not a general map-navigation operator. Have the host expose
+flat keys such as <code class="inline">user_name</code>, or use a module/query to navigate structured data.</p><p>Data and query declarations may have hyphenated names; since sigil references
+cannot address those names as a whole, use underscore names when you intend
+to read a declaration through <code class="inline">?name</code>.</p><p>Keywords and operators are reserved in many positions. Give bindings simple,
+descriptive names such as <code class="inline">reading</code>, <code class="inline">enabled</code>, or <code class="inline">total</code>; avoid keywords
+such as <code class="inline">state</code>, <code class="inline">source</code>, <code class="inline">map</code>, and <code class="inline">query</code> as binding names.</p><h2 id="binding-and-reading" class="section-heading"><a href="#binding-and-reading" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Binding and reading</span></h2><pre><code class="anemos">rule temperature {
+  when READING {
+    let celsius = ?temperature
+    let fahrenheit = @celsius * 9 / 5 + 32
+    set latest = @fahrenheit
+    log $latest
+  }
+}</code></pre><p>With a numeric temperature of <code class="inline">20</code>, this logs <code class="inline">68.0</code>. <code class="inline">let</code> evaluates its
+right side once and binds a value for this handler. <code class="inline">set</code> updates persistent
+state. Write the plain binding name after the keyword; use its sigil when
+reading it. <code class="inline">let celsius</code> creates <code class="inline">@celsius</code>, not <code class="inline">$celsius</code> or <code class="inline">?celsius</code>.</p><p>The term <em>immutable</em> is used for <code class="inline">let</code> bindings to distinguish them from
+persistent mutable state. The current evaluator permits a later <code class="inline">let</code> with
+the same name to replace the local binding. Write single-assignment <code class="inline">let</code>
+code so the intended lifetime stays clear; use <code class="inline">set</code> for intentional updates.</p><p>The compiler rejects an <code class="inline">@name</code> or <code class="inline">$name</code> never bound anywhere in its
+declaration. This catches wrong sigils and typos. It does not prove a binding
+exists on every execution path. Reading <code class="inline">$count</code> before its first executed
+<code class="inline">set count</code> still yields <code class="inline">nil</code>.</p><p>For <code class="inline">?name</code>, lookup first checks the dispatch's context data, then a named query
+visible to the rule, then a visible data block. If none exists, it yields
+<code class="inline">nil</code>. Context data can shadow a query or dataset. Choose payload field names
+and declaration names accordingly.</p><h2 id="truth-and-comparison" class="section-heading"><a href="#truth-and-comparison" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Truth and comparison</span></h2><p>Only <code class="inline">false</code> and <code class="inline">nil</code> are falsey. Zero, empty strings, empty lists, and empty
+maps are truthy. Consequently <code class="inline">if ?items</code> is a presence/truthiness check, not
+an emptiness check. <code class="inline">exists</code> tests non-<code class="inline">nil</code>, so <code class="inline">exists ?flag</code> is true even
+when <code class="inline">?flag</code> is boolean false.</p><table><thead><tr><th style="text-align: left;">Operation</th><th style="text-align: left;">Spellings</th><th style="text-align: left;">Meaning</th></tr></thead><tbody><tr><td style="text-align: left;">Equality</td><td style="text-align: left;"><code class="inline">==</code>, <code class="inline">eq</code></td><td style="text-align: left;">Compare values; integer and equal float compare equal</td></tr><tr><td style="text-align: left;">Inequality</td><td style="text-align: left;"><code class="inline">!=</code>, <code class="inline">ne</code></td><td style="text-align: left;">Negated equality</td></tr><tr><td style="text-align: left;">Strict equality</td><td style="text-align: left;"><code class="inline">===</code>, <code class="inline">!==</code></td><td style="text-align: left;">Also distinguish integer from float</td></tr><tr><td style="text-align: left;">Order</td><td style="text-align: left;"><code class="inline">&lt;</code>, <code class="inline">&lt;=</code>, <code class="inline">&gt;</code>, <code class="inline">&gt;=</code>; <code class="inline">lt</code>, <code class="inline">le</code>, <code class="inline">gt</code>, <code class="inline">ge</code></td><td style="text-align: left;">Compare operands</td></tr><tr><td style="text-align: left;">Negation</td><td style="text-align: left;"><code class="inline">not</code>, <code class="inline">!</code></td><td style="text-align: left;">Boolean negation of truthiness</td></tr></tbody></table><p>Comparison does not convert strings to booleans or numbers: <code class="inline">&quot;1&quot; == 1</code> is
+false and <code class="inline">&quot;true&quot; == true</code> is false. Comparing a boolean to a boolean-shaped
+string with ordinary equality/inequality logs a mismatch warning. Relational
+comparison uses host term ordering for mixed types; ensure both operands have
+the expected type before relying on a numeric threshold.</p><p>Use <code class="inline">infer ?value</code> as an inspection statement when you are unsure what the
+host supplied. It reports a kind such as <code class="inline">string</code>, <code class="inline">number</code>, <code class="inline">list</code>, <code class="inline">map</code>,
+<code class="inline">secret</code>, or <code class="inline">nothing</code>.</p><h2 id="arithmetic-bitwise-and-string-operations" class="section-heading"><a href="#arithmetic-bitwise-and-string-operations" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Arithmetic, bitwise, and string operations</span></h2><p><code class="inline">+</code>, <code class="inline">-</code>, <code class="inline">*</code>, <code class="inline">/</code>, and <code class="inline">%</code> provide arithmetic. Division produces a float;
+remainder requires integers. <code class="inline">&amp;</code>, <code class="inline">|</code>, <code class="inline">^</code>, <code class="inline">&lt;&lt;</code>, <code class="inline">&gt;&gt;</code>, and unary <code class="inline">~</code> operate
+on integers. <code class="inline">^</code> is bitwise XOR, not exponentiation. Unary minus is not
+implemented; write <code class="inline">0 - 5</code> for a negative constant or receive a negative
+number from host data.</p><pre><code class="anemos">rule arithmetic {
+  when EXAMPLE {
+    log 2 + 3 * 4
+    log (2 + 3) * 4
+    log 5 % 2
+    log 5 &amp; 3
+    log 1 &lt;&lt; 3
+    log 0 - 5
+  }
+}</code></pre><p>The values are <code class="inline">14</code>, <code class="inline">20</code>, <code class="inline">1</code>, <code class="inline">1</code>, <code class="inline">8</code>, and <code class="inline">-5</code>.</p><p><code class="inline">contains</code>, <code class="inline">starts_with</code>, <code class="inline">ends_with</code>, and <code class="inline">matches_regex</code> test strings:</p><pre><code class="anemos">rule filenames {
+  when FILE_SEEN {
+    if ?path ends_with &quot;.pdf&quot; {
+      log &quot;PDF candidate&quot;
+    }
+    if ?name matches_regex &quot;^[a-z]+$&quot; {
+      log &quot;lowercase name&quot;
+    }
+  }
+}</code></pre><p>Regex patterns are strings, not slash-delimited literals. Escape backslashes
+for the string layer. Invalid regexes fail at evaluation time. <code class="inline">matches_glob</code>
+is recognized by the parser but has no working evaluator; use a regex or a
+host verb. <code class="inline">++</code> is tokenized but is not implemented string concatenation.
+General string interpolation is also not implemented. Build formatted text in
+a host module when a fixed message and separate value logs are insufficient.</p><p><code class="inline">in</code> and <code class="inline">notin</code> test list membership. <code class="inline">memberof(dataset)</code> checks a named
+dataset (Chapter 8). These operators bind unusually loosely: when combining
+membership with logical tests, parenthesize each test, for example
+<code class="inline">(?name in ?names) AND (?enabled == true)</code>.</p><h2 id="logical-operators-also-carry-values" class="section-heading"><a href="#logical-operators-also-carry-values" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Logical operators also carry values</span></h2><p>For boolean operands, <code class="inline">AND</code>/<code class="inline">and</code> and <code class="inline">OR</code>/<code class="inline">or</code> behave as conjunction and
+disjunction. With other values, <code class="inline">AND</code> compounds operands and <code class="inline">OR</code> chooses
+the first available one:</p><pre><code class="anemos">rule records {
+  when UPDATE {
+    let records = (:host IN A &quot;192.0.2.1&quot;) AND (:host IN AAAA &quot;2001:db8::1&quot;)
+    log @records
+    let selected = ?preferred OR ?fallback
+    log @selected
+  }
+}</code></pre><p>The first log value is the list:</p><pre><code class="makeup elixir" translate="no"><span class="p" data-group-id="group-1">[</span><span class="p" data-group-id="group-2">[</span><span class="s">&quot;host&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;A&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;192.0.2.1&quot;</span><span class="p" data-group-id="group-2">]</span><span class="p">,</span><span class="w">
+ </span><span class="p" data-group-id="group-3">[</span><span class="s">&quot;host&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;IN&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;AAAA&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;2001:db8::1&quot;</span><span class="p" data-group-id="group-3">]</span><span class="p" data-group-id="group-1">]</span></code></pre><p>Inside a parenthesized multi-value pattern, <code class="inline">IN</code> is data. The pattern is
+preserved as a list rather than evaluated as a membership test. Do not confuse
+this record-building form with ordinary <code class="inline">value in collection</code> expressions.</p><p>An <code class="inline">AND</code> chain preserves each non-boolean operand as one list element; it
+does not flatten a list operand's contents. <code class="inline">true</code> contributes no value. Any
+<code class="inline">false</code> or <code class="inline">nil</code> absorbs the chain and becomes its answer; the first such
+operand wins. With one non-boolean value and otherwise <code class="inline">true</code>, the answer is
+that value, not a singleton list. An all-true chain answers <code class="inline">true</code>.</p><p><code class="inline">OR</code> discards falsey choices and answers the first truthy operand. If all
+operands are falsey, it answers the first operand. <code class="inline">||</code> is the same alternation
+operator. <code class="inline">&amp;&amp;</code> retains its separate behavior: it answers its left operand if
+falsey, otherwise its right operand. It does not compound values.</p><p><strong>Evaluation is eager.</strong> Both operands of these operators are evaluated even
+when the answer can already be determined. <code class="inline">?cached OR [CACHE::fetch]</code> calls
+<code class="inline">CACHE::fetch</code> even when <code class="inline">?cached</code> has a value. Use an <code class="inline">if</code> when you need to
+avoid a call. A condition such as <code class="inline">false AND [DEVICE::set ...]</code> still invokes
+the value-position command.</p><h2 id="precedence" class="section-heading"><a href="#precedence" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Precedence</span></h2><p>Multiplication binds more tightly than addition, and comparisons more tightly
+than logical operators. Parentheses override precedence. Membership/string
+tests bind less tightly than logical operators; this differs from many familiar
+languages. The <a href="reference.html#operator-precedence">full precedence table</a> gives
+every level. Parenthesize mixed tests for readers as well as for the parser.</p><h2 id="exercises" class="section-heading"><a href="#exercises" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Exercises</span></h2><ol><li>What is <code class="inline">0 OR 7</code>? What is <code class="inline">false OR 7</code>?</li><li>What is <code class="inline">&quot;a&quot; AND &quot;b&quot; AND &quot;c&quot;</code>? What is <code class="inline">&quot;a&quot; &amp;&amp; &quot;b&quot;</code>?</li><li>How do you avoid calling <code class="inline">LOOKUP::read</code> when <code class="inline">?cached</code> exists?</li></ol><p>Answers: (1) <code class="inline">0</code> and <code class="inline">7</code>. (2) <code class="inline">[&quot;a&quot;, &quot;b&quot;, &quot;c&quot;]</code> and <code class="inline">&quot;b&quot;</code>.
+(3) Branch on <code class="inline">exists ?cached</code>; place the call only in the other branch.</p><p><a href="04-control-flow.html">Next: Decisions and control flow</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="02-execution-model.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+2. How policies run
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="04-control-flow.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+4. Decisions and control flow
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/03-values-and-expressions.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

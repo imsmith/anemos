@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.DataStore — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />DataStore</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.DataStore.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>GenServer holding named datasets for data blocks.</p><p>Entries are keyed by <code class="inline">{name, scope_tag}</code> where <code class="inline">scope_tag</code> is <code class="inline">:global</code>
+or <code class="inline">{:local, discriminator}</code>. Local entries shadow global entries in every
+lookup.</p><h2 id="module-what-a-scope-discriminator-is" class="section-heading"><a href="#module-what-a-scope-discriminator-is" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">What a scope discriminator is</span></h2><p>Any term. It is <em>not</em> required to be a pid, and in the interpreter it
+usually is not: rules do not run as separate processes — every rule body
+executes inside the dispatcher — so a pid discriminator would collapse
+every rule's inline <code class="inline">data</code> block into one scope. <a href="Anemos.Runtime.Dispatcher.html"><code class="inline">Anemos.Runtime.Dispatcher</code></a>
+therefore scopes rule-local blocks by rule <em>name</em>, and the compiled
+<code class="inline">memberof()</code> closure passes the same rule name as <code class="inline">:scope_hint</code>.</p><p>Every lookup takes that hint the same way. <a href="#get/3"><code class="inline">get/3</code></a> previously hardcoded
+<code class="inline">self()</code> while <a href="#member?/4"><code class="inline">member?/4</code></a> and <a href="#member_any?/4"><code class="inline">member_any?/4</code></a> honoured a <code class="inline">:scope_hint</code>,
+so <code class="inline">get</code> could not reach a rule-scoped entry at all — two lookup functions
+with two different scope models (A-24). The hint defaults to <code class="inline">self()</code>,
+which is what a host process registering data for itself wants.</p><h2 id="module-cleanup" class="section-heading"><a href="#module-cleanup" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Cleanup</span></h2><p>Two paths, because only one of them can exist for a given discriminator:</p><ul><li><p><strong>pid discriminators are monitored.</strong> When the process dies, every
+entry scoped to it is removed. This is automatic and needs no caller.</p></li><li><p><strong>every other discriminator must be dropped explicitly</strong>, with
+<a href="#drop_scope/2"><code class="inline">drop_scope/2</code></a> or <a href="#deregister/3"><code class="inline">deregister/3</code></a>. There is no process to watch, so
+there is nothing to make cleanup automatic — an unloaded policy's
+rule-scoped entries persist until something says to remove them, and
+before <a href="#drop_scope/2"><code class="inline">drop_scope/2</code></a> existed nothing could. Reloading a policy
+re-registered under the same key, so entries did not multiply, but
+they also never went away.</p></li></ul><h2 id="module-registering-a-dataset" class="section-heading"><a href="#module-registering-a-dataset" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Registering a dataset</span></h2><pre><code class="makeup elixir" translate="no"><span class="nc">DataStore</span><span class="o">.</span><span class="n">register</span><span class="p" data-group-id="group-1">(</span><span class="n">store</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;reserved-ips&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">:global</span><span class="p">,</span><span class="w">
+  </span><span class="nc">MapSet</span><span class="o">.</span><span class="n">new</span><span class="p" data-group-id="group-2">(</span><span class="p" data-group-id="group-3">[</span><span class="s">&quot;10.0.0.0/8&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;192.168.0.0/16&quot;</span><span class="p" data-group-id="group-3">]</span><span class="p" data-group-id="group-2">)</span><span class="p" data-group-id="group-1">)</span></code></pre><h2 id="module-membership-check-caller-s-local-scope-shadows-global" class="section-heading"><a href="#module-membership-check-caller-s-local-scope-shadows-global" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Membership check (caller's local scope shadows global)</span></h2><pre><code class="makeup elixir" translate="no"><span class="nc">DataStore</span><span class="o">.</span><span class="n">member?</span><span class="p" data-group-id="group-1">(</span><span class="n">store</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;reserved-ips&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;10.0.0.0/8&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="c1"># =&gt; true</span></code></pre><h2 id="module-union-membership-across-multiple-sets" class="section-heading"><a href="#module-union-membership-across-multiple-sets" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Union membership across multiple sets</span></h2><pre><code class="makeup elixir" translate="no"><span class="nc">DataStore</span><span class="o">.</span><span class="n">member_any?</span><span class="p" data-group-id="group-1">(</span><span class="n">store</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-2">[</span><span class="s">&quot;blocklist&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;denylist&quot;</span><span class="p" data-group-id="group-2">]</span><span class="p">,</span><span class="w"> </span><span class="n">ip</span><span class="p" data-group-id="group-1">)</span></code></pre><h2 id="module-fetch-full-dataset" class="section-heading"><a href="#module-fetch-full-dataset" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Fetch full dataset</span></h2><pre><code class="makeup elixir" translate="no"><span class="nc">DataStore</span><span class="o">.</span><span class="n">get</span><span class="p" data-group-id="group-1">(</span><span class="n">store</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;reserved-ips&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="c1"># =&gt; %MapSet{...}</span></code></pre>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#child_spec/1" data-no-tooltip="" translate="no">child_spec(init_arg)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns a specification to start this module under a supervisor.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#deregister/3" data-no-tooltip="" translate="no">deregister(store, name, scope_tag)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Removes a named entry for the given scope.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#drop_scope/2" data-no-tooltip="" translate="no">drop_scope(store, scope_tag)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Removes every entry registered under <code class="inline">scope_tag</code>.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#get/3" data-no-tooltip="" translate="no">get(store, name, opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns the full dataset for <code class="inline">name</code>, or <code class="inline">nil</code> if not found.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#member?/4" data-no-tooltip="" translate="no">member?(store, name, value, opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns true if <code class="inline">value</code> is a member of the named dataset.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#member_any?/4" data-no-tooltip="" translate="no">member_any?(store, names, value, opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Returns true if <code class="inline">value</code> is a member of any of the named datasets.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#register/5" data-no-tooltip="" translate="no">register(store, name, scope_tag, dataset, opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Registers (or replaces) a named dataset under a scope tag.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#start_link/1" data-no-tooltip="" translate="no">start_link(opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Starts a DataStore process.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#update/4" data-no-tooltip="" translate="no">update(store, name, scope_tag, dataset)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Replaces the dataset for an existing entry. Used by subscription callbacks.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="child_spec/1">
+
+  <div class="detail-header">
+    <a href="#child_spec/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">child_spec(init_arg)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L59" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+<p>Returns a specification to start this module under a supervisor.</p><p>See <a href="https://elixir.hexdocs.pm/Supervisor.html"><code class="inline">Supervisor</code></a>.</p>
+  </section>
+</section>
+<section class="detail" id="deregister/3">
+
+  <div class="detail-header">
+    <a href="#deregister/3" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">deregister(store, name, scope_tag)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L99" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> deregister(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: :ok</pre>
+
+      </div>
+
+<p>Removes a named entry for the given scope.</p>
+  </section>
+</section>
+<section class="detail" id="drop_scope/2">
+
+  <div class="detail-header">
+    <a href="#drop_scope/2" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">drop_scope(store, scope_tag)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L110" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> drop_scope(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: :ok</pre>
+
+      </div>
+
+<p>Removes every entry registered under <code class="inline">scope_tag</code>.</p><p>This is the cleanup path for scopes that cannot be monitored — a rule
+name, or any other non-pid discriminator. Idempotent.</p>
+  </section>
+</section>
+<section class="detail" id="get/3">
+
+    <span id="get/2"></span>
+
+  <div class="detail-header">
+    <a href="#get/3" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">get(store, name, opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L142" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> get(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>() | nil</pre>
+
+      </div>
+
+<p>Returns the full dataset for <code class="inline">name</code>, or <code class="inline">nil</code> if not found.</p><p>Checks local scope first (by <code class="inline">scope_hint</code> if provided, otherwise <code class="inline">self()</code>),
+then global — the same resolution <a href="#member?/4"><code class="inline">member?/4</code></a> performs.</p>
+  </section>
+</section>
+<section class="detail" id="member?/4">
+
+    <span id="member?/3"></span>
+
+  <div class="detail-header">
+    <a href="#member?/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">member?(store, name, value, opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L121" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> member?(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">boolean</a>()</pre>
+
+      </div>
+
+<p>Returns true if <code class="inline">value</code> is a member of the named dataset.</p><p>Checks local scope first (by <code class="inline">scope_hint</code> if provided, otherwise <code class="inline">self()</code>),
+then global. <a href="#get/3"><code class="inline">get/3</code></a> resolves scope identically.</p>
+  </section>
+</section>
+<section class="detail" id="member_any?/4">
+
+    <span id="member_any?/3"></span>
+
+  <div class="detail-header">
+    <a href="#member_any?/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">member_any?(store, names, value, opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L130" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> member_any?(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), [<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()], <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">boolean</a>()</pre>
+
+      </div>
+
+<p>Returns true if <code class="inline">value</code> is a member of any of the named datasets.</p>
+  </section>
+</section>
+<section class="detail" id="register/5">
+
+    <span id="register/4"></span>
+
+  <div class="detail-header">
+    <a href="#register/5" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">register(store, name, scope_tag, dataset, opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L91" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> register(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) :: :ok</pre>
+
+      </div>
+
+<p>Registers (or replaces) a named dataset under a scope tag.</p><p><code class="inline">scope_tag</code> is <code class="inline">:global</code> or <code class="inline">{:local, discriminator}</code> — see the moduledoc
+for what may be a discriminator and how each kind is cleaned up.</p><h2 id="register/5-options" class="section-heading"><a href="#register/5-options" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Options</span></h2><ul><li><code class="inline">:source</code> — string describing origin</li><li><code class="inline">:transcluded</code> — transcluded ref term</li><li><code class="inline">:subscription</code> — monitor ref for live feeds</li></ul>
+  </section>
+</section>
+<section class="detail" id="start_link/1">
+
+    <span id="start_link/0"></span>
+
+  <div class="detail-header">
+    <a href="#start_link/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">start_link(opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L73" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> start_link(<a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) :: <a href="https://elixir.hexdocs.pm/GenServer.html#t:on_start/0">GenServer.on_start</a>()</pre>
+
+      </div>
+
+<p>Starts a DataStore process.</p><h2 id="start_link/1-options" class="section-heading"><a href="#start_link/1-options" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Options</span></h2><ul><li><code class="inline">:name</code> — optional registration name</li></ul>
+  </section>
+</section>
+<section class="detail" id="update/4">
+
+  <div class="detail-header">
+    <a href="#update/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">update(store, name, scope_tag, dataset)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/data_store.ex#L153" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> update(<a href="https://elixir.hexdocs.pm/GenServer.html#t:server/0">GenServer.server</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: :ok</pre>
+
+      </div>
+
+<p>Replaces the dataset for an existing entry. Used by subscription callbacks.</p><p>No-op if the entry does not exist.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

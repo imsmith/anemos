@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>4. Decisions and control flow — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>4. Decisions and control flow</h1>
+
+<a href="04-control-flow.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/04-control-flow.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>An event selects a handler. Control flow decides how much of that handler is
+evaluated and where work goes next. Start with ordinary branches; add guards
+or handoffs when they make the policy's structure clearer.</p><h2 id="branch-on-a-value" class="section-heading"><a href="#branch-on-a-value" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Branch on a value</span></h2><pre><code class="anemos">rule classify-temperature {
+  when READING {
+    if ?temperature &gt;= 30 {
+      log &quot;hot&quot;
+    } elseif ?temperature &gt;= 20 {
+      log &quot;comfortable&quot;
+    } else {
+      log &quot;cool&quot;
+    }
+  }
+}</code></pre><p>The first true branch runs. Subsequent branches are skipped. A numeric
+temperature of <code class="inline">32</code> logs only <code class="inline">&quot;hot&quot;</code>; <code class="inline">22</code> logs only <code class="inline">&quot;comfortable&quot;</code>.
+<code class="inline">else if</code> is also accepted. <code class="inline">else</code> is optional. Blocks may contain nested
+decisions and any supported handler statements.</p><p>When a branch needs a value later, decide whether it should be local to this
+evaluation or retained for the next event. A <code class="inline">let</code> created only in one branch
+will be absent on a path that never executes that branch. Prefer assigning
+and consuming related values within the same branch.</p><h2 id="stop-a-handler-early" class="section-heading"><a href="#stop-a-handler-early" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Stop a handler early</span></h2><pre><code class="anemos">rule accept-reading {
+  when READING {
+    if not exists ?temperature {
+      log &quot;Missing temperature&quot;
+      return
+    }
+    log ?temperature
+  }
+}</code></pre><p><code class="inline">return</code> and <code class="inline">done</code> both stop the current handler immediately, including when
+they appear inside a loop or nested branch. Earlier queued operations and
+<code class="inline">set</code> updates are retained. Other independent rules listening for the event
+are still eligible to run.</p><p>Although <code class="inline">return &lt;expression&gt;</code> parses, the current evaluator discards the
+expression rather than supplying a function return value. Use a host module
+for value-returning computations, or an explicit handoff payload for another
+rule. A query's <code class="inline">return ?name</code> is a different construct (Chapter 8).</p><p><code class="inline">assert expression</code> is a useful related statement: it records whether an
+expression held and stops this handler if it did not. A failed assertion is
+an inspection result with <code class="inline">held: false</code>, not an ordinary module error. The
+CLI's absence of operation errors is therefore not proof that every assertion
+held. Inspect assertion results when using them as test expectations.</p><h2 id="skip-a-trigger-with-unless" class="section-heading"><a href="#skip-a-trigger-with-unless" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Skip a trigger with <code class="inline">unless</code></span></h2><pre><code class="anemos">rule notify-motion {
+  when MOTION unless ?maintenance {
+    log &quot;Motion notification&quot;
+  }
+}</code></pre><p>The guard is evaluated afresh for every firing. If the maintenance field is
+truthy, the body is skipped. A missing field is falsey, so the body runs.
+Use typed booleans in the host payload; the string <code class="inline">&quot;false&quot;</code> suppresses this
+rule just as any other nonempty string does.</p><p><code class="inline">unless</code> also works on <code class="inline">if</code> and <code class="inline">at</code> blocks. On an <code class="inline">if</code>, a true guard skips
+the whole construct, including its <code class="inline">else</code>. It does not choose the false branch.
+Guards run before the body's local <code class="inline">let</code> bindings exist. Read event data or
+previous persistent bindings there, not a value the body has yet to create.</p><h2 id="until-and-stopping-permanently" class="section-heading"><a href="#until-and-stopping-permanently" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><code class="inline">until</code> and stopping permanently</span></h2><p><code class="inline">when EVENT until expression</code> is intended to disable a trigger after the
+expression first becomes true. In the current runtime its latch is not
+reliably preserved after a later successful handler evaluation. <code class="inline">until</code> on
+<code class="inline">if</code> is ignored; it has no persistent branch lifetime. Do not rely on either
+form for irreversible completion.</p><p>For a reliable run-once policy, make the state explicit:</p><pre><code class="anemos">rule announce-once {
+  when READY unless $announced {
+    log &quot;Ready for work&quot;
+    set announced = true
+  }
+}</code></pre><p>Because <code class="inline">$announced</code> remains true, later <code class="inline">READY</code> events are skipped. This
+means once per retained rule state, not once forever: replacing the declaration
+with changed source or restarting the whole runtime resets it.</p><h2 id="hand-work-to-another-event" class="section-heading"><a href="#hand-work-to-another-event" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Hand work to another event</span></h2><pre><code class="anemos">rule begin-job {
+  when START {
+    let destination = ?path
+    nextevent PROCESS with { path: @destination, stage: &quot;processing&quot; }
+    log &quot;unreachable&quot;
+  }
+}
+
+rule process-job {
+  when PROCESS {
+    log ?path
+    log ?stage
+  }
+}</code></pre><p><code class="inline">nextevent</code> stops the sending handler and redispatches the target event.
+Current behavior broadcasts to <strong>all matching rules</strong>, including other named
+rules. It is not confined to other <code class="inline">when</code> blocks in the sending rule.
+Context filtering still applies, and the arriving context path is retained.</p><p>The optional <code class="inline">with</code> block resolves expressions in the sender's environment
+and overlays its fields on the originating payload. Unmentioned fields
+survive; a supplied field wins on a collision. The receiver reads <code class="inline">?path</code>
+and <code class="inline">?stage</code>. <code class="inline">@destination</code> itself is not shared with the receiver.</p><p>Keys are simple names followed by a colon; use comma-separated pairs for
+clarity. This block is a handoff argument form, not a general map literal.</p><h2 id="hand-work-to-a-named-rule" class="section-heading"><a href="#hand-work-to-a-named-rule" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Hand work to a named rule</span></h2><pre><code class="anemos">rule start-audit {
+  when START {
+    nextrule audit-job with { message: &quot;started&quot; }
+  }
+}
+
+rule audit-job {
+  when AUDIT {
+    log ?message
+  }
+}</code></pre><p><code class="inline">nextrule</code> selects by declaration name and invokes the target's compiled
+handlers without requiring the incoming event to match their subscriptions.
+A target with several <code class="inline">when</code> blocks can therefore run several handlers. Keep
+handoff targets narrow when you want one action. The target still obeys its
+context, guards, and dwell behavior. A missing target produces
+<code class="inline">anemos.runtime/unknown_rule</code>.</p><p>Both handoffs increase dispatch depth. Cycles eventually hit the runtime's
+recursion ceiling. Depth limiting prevents unbounded nested dispatch; it is
+not a replacement for a termination condition in your policy.</p><h2 id="choosing-a-control-construct" class="section-heading"><a href="#choosing-a-control-construct" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Choosing a control construct</span></h2><p>Use <code class="inline">if</code> for a decision within one event. Use <code class="inline">unless</code> for a whole-trigger
+exclusion. Use <code class="inline">return</code> or <code class="inline">done</code> for an early exit. Use <code class="inline">nextevent</code> when the
+next stage is an event that any suitable listener may consume. Use <code class="inline">nextrule</code>
+when you deliberately address a named policy component.</p><p>For application workflows that need durable steps, retries, or rollback,
+provide those guarantees in host services. Anemos handoffs are immediate
+in-process dispatch, not a persistent job queue.</p><p><a href="05-collections.html">Next: Collections and pipelines</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="03-values-and-expressions.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+3. Values and expressions
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="05-collections.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+5. Collections and pipelines
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/04-control-flow.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

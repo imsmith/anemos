@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>1. Your first policy — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>1. Your first policy</h1>
+
+<a href="01-first-policy.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/01-first-policy.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>Suppose a motion sensor reports activity in a garage. You want to write down
+what should happen when that report arrives. In Anemos, that instruction is a
+<em>rule</em>. One or more declarations saved together form a <em>policy</em>.</p><p>We will start by writing to the log. This lets us learn the language without
+installing a sensor or connecting a device controller. Later we will replace
+the log statement with a command supplied by the application.</p><h2 id="prepare-the-interpreter" class="section-heading"><a href="#prepare-the-interpreter" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Prepare the interpreter</span></h2><p>Use a checkout of this repository. Its <code class="inline">.tool-versions</code> specifies Erlang
+29.1.2 and Elixir 1.20.4 for OTP 29; <code class="inline">mix.exs</code> requires Elixir <code class="inline">~&gt; 1.20</code>.
+Install that toolchain using your usual environment manager and confirm that
+<code class="inline">elixir</code> and <code class="inline">mix</code> are on your terminal's path:</p><pre><code class="makeup sh" translate="no"><span class="">elixir --version
+</span><span class="">mix --version
+</span><span class="">mix deps.get
+</span><span class="">mix compile
+</span></code></pre><p>Mix is Elixir's build and task runner. You do not need to learn Elixir to use
+the policy runner. Dependencies are fetched from the declarations and lockfile
+in this checkout; a sibling checkout of <code class="inline">comn</code> is not needed.</p><h2 id="read-a-complete-rule" class="section-heading"><a href="#read-a-complete-rule" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Read a complete rule</span></h2><p>The file <a href="examples/hello.rule">hello.rule</a> contains:</p><pre><code class="anemos">rule welcome {
+  when MOTION {
+    log &quot;Motion detected&quot;
+  }
+}</code></pre><p><code class="inline">rule</code> introduces a declaration. <code class="inline">welcome</code> is the name we give it. The outer
+braces contain its definition. <code class="inline">when MOTION</code> subscribes to an event named
+<code class="inline">MOTION</code>; the inner braces contain the statements to evaluate when that event
+arrives. <code class="inline">log</code> records a value. Double quotes delimit a string.</p><p>Whitespace makes this structure readable. A semicolon starts a comment; it
+does not terminate a statement. A line beginning with <code class="inline">#</code> is also a comment.</p><p>Run the file:</p><pre><code class="makeup sh" translate="no"><span class="">mix anemos.run docs/manual/examples/hello.rule --event MOTION
+</span></code></pre><p>The runner prints the file it parsed, a dispatch summary, and an operation
+line containing:</p><pre><code class="text">log &quot;Motion detected&quot;</code></pre><p>You may also see a timestamped Logger message. That is the log operation
+being executed; the runner's operation line is its report of the work.</p><p>Now change <code class="inline">--event MOTION</code> to <code class="inline">--event RAIN</code>. No rule subscribes to <code class="inline">RAIN</code>,
+so the runner reports that no rule subscribes. Anemos does not guess which
+event you intended. Event names are case-sensitive, exact strings.</p><h2 id="give-the-event-some-data" class="section-heading"><a href="#give-the-event-some-data" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Give the event some data</span></h2><p>An event can bring a payload: values such as the sensor name, measured
+temperature, or person making a request. Read a payload field with <code class="inline">?name</code>.
+The question mark means “resolve this name from the data available to me.”</p><pre><code class="anemos">rule greet {
+  when ARRIVAL {
+    log ?visitor
+    if ?visitor == &quot;Ada&quot; {
+      log &quot;Welcome back&quot;
+    } else {
+      log &quot;Welcome&quot;
+    }
+  }
+}</code></pre><p>Save this as <code class="inline">greet.rule</code>, or use <a href="examples/greet.rule">the supplied file</a>:</p><pre><code class="makeup sh" translate="no"><span class="">mix anemos.run docs/manual/examples/greet.rule \
+</span><span class="">  --event ARRIVAL --context-data visitor=Ada
+</span></code></pre><p>The log values are <code class="inline">&quot;Ada&quot;</code> and <code class="inline">&quot;Welcome back&quot;</code>. Try <code class="inline">visitor=Grace</code> and
+the second value becomes <code class="inline">&quot;Welcome&quot;</code>.</p><p>Repeat <code class="inline">--context-data</code> to supply more fields. CLI values are <strong>strings</strong>:
+<code class="inline">--context-data enabled=false</code> supplies <code class="inline">&quot;false&quot;</code>, not the boolean <code class="inline">false</code>.
+The string is truthy. When you need numbers, booleans, lists, or maps, use the
+host API introduced below or the persistent examples in Chapter 9.</p><p>If a field is missing, <code class="inline">?visitor</code> ordinarily resolves to <code class="inline">nil</code>, the host's
+missing-value representation. Anemos has no <code class="inline">nil</code> literal. To test for a
+present value, write <code class="inline">exists ?visitor</code>; to accept only a particular value,
+compare it explicitly as we did above.</p><h2 id="limit-a-listener-to-a-context" class="section-heading"><a href="#limit-a-listener-to-a-context" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Limit a listener to a context</span></h2><p>A context is a dotted path describing where an event is admitted. In
+<a href="examples/garage.rule">garage.rule</a>, our listener belongs to <code class="inline">garage</code>:</p><pre><code class="anemos">rule garage-motion {
+  context &quot;garage&quot; {
+    when MOTION {
+      log &quot;Garage motion detected&quot;
+    }
+  }
+}</code></pre><pre><code class="makeup sh" translate="no"><span class="">mix anemos.run docs/manual/examples/garage.rule \
+</span><span class="">  --event MOTION --context garage.sensor
+</span></code></pre><p>The rule runs because <code class="inline">garage.sensor</code> is inside <code class="inline">garage</code>. <code class="inline">garage</code> itself is
+also admitted. <code class="inline">garden.sensor</code> and <code class="inline">garageband.sensor</code> are not. A missing
+<code class="inline">--context</code> is refused by this listener too: the caller must say where it
+stands when a boundary has been declared.</p><p><code class="inline">--context</code> and <code class="inline">--context-data</code> answer different questions. The first is
+the caller's path. The second is its payload. A payload field called
+<code class="inline">context</code> does not move an event across a boundary.</p><h2 id="ask-the-host-to-do-something" class="section-heading"><a href="#ask-the-host-to-do-something" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Ask the host to do something</span></h2><p>Commands use square brackets and a module-qualified verb:</p><pre><code class="anemos">rule garage-lights {
+  context &quot;garage&quot; {
+    when MOTION {
+      [DEVICE::set &quot;garage.lights&quot; &quot;on&quot;]
+    }
+  }
+}</code></pre><p><code class="inline">DEVICE</code> names a registered module; <code class="inline">set</code> names one of its verbs. The two
+strings are its arguments. The built-in development <code class="inline">DEVICE</code> module used by
+the one-shot runner computes an answer in memory. It does not turn on a real
+light. A deployed application must register its own device implementation.</p><p>This separation lets the same policy language work with different systems.
+A rule specifies the action; the host decides how that action is implemented.</p><h2 id="run-a-policy-from-elixir" class="section-heading"><a href="#run-a-policy-from-elixir" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Run a policy from Elixir</span></h2><p>For a single event, start an interactive session with <code class="inline">iex -S mix</code>, then enter:</p><pre><code class="makeup elixir" translate="no"><span class="n">source</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">File</span><span class="o">.</span><span class="n">read!</span><span class="p" data-group-id="group-1">(</span><span class="s">&quot;docs/manual/examples/greet.rule&quot;</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="p" data-group-id="group-2">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="n">results</span><span class="p" data-group-id="group-2">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos</span><span class="o">.</span><span class="n">run</span><span class="p" data-group-id="group-3">(</span><span class="n">source</span><span class="p">,</span><span class="w">
+  </span><span class="ss">event</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ARRIVAL&quot;</span><span class="p">,</span><span class="w">
+  </span><span class="ss">context_data</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-4">%{</span><span class="s">&quot;visitor&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="s">&quot;Ada&quot;</span><span class="p" data-group-id="group-4">}</span><span class="p" data-group-id="group-3">)</span><span class="w">
+</span><span class="nc">Enum</span><span class="o">.</span><span class="n">map</span><span class="p" data-group-id="group-5">(</span><span class="n">results</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nc">Map</span><span class="o">.</span><span class="n">get</span><span class="p" data-group-id="group-6">(</span><span class="ni">&amp;1</span><span class="p">,</span><span class="w"> </span><span class="ss">:value</span><span class="p" data-group-id="group-6">)</span><span class="p" data-group-id="group-5">)</span><span class="w">
+</span><span class="c1"># =&gt; [&quot;Ada&quot;, &quot;Welcome back&quot;]</span></code></pre><p><a href="Anemos.html#run/2"><code class="inline">Anemos.run/2</code></a> builds a temporary interpreter, dispatches one event, and tears
+the interpreter down. A second call starts fresh. For state across events or
+scheduled work, use a persistent <a href="Anemos.Runtime.html"><code class="inline">Anemos.Runtime</code></a> (Chapter 9).</p><p>The outer <code class="inline">{:ok, results}</code> says dispatch completed. Individual results may
+still contain <code class="inline">{:error, reason}</code>. We will learn to inspect those in Chapter 11.</p><h2 id="exercises" class="section-heading"><a href="#exercises" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Exercises</span></h2><ol><li>In <code class="inline">greet.rule</code>, add a second <code class="inline">log ?visitor</code> after the <code class="inline">if</code>. How many log
+values will an arrival produce?</li><li>Run <code class="inline">garage.rule</code> with <code class="inline">--context garageband</code>. Does the shared prefix help?</li><li>Replace the string comparison in <code class="inline">greet.rule</code> with <code class="inline">if ?visitor</code>. What does
+<code class="inline">--context-data visitor=false</code> do?</li></ol><p>Answers: (1) Three: visitor, greeting, visitor. (2) No; paths compare whole
+segments. (3) It takes the true branch because <code class="inline">&quot;false&quot;</code> is a string. Only
+boolean <code class="inline">false</code> and <code class="inline">nil</code> are falsey.</p><p><a href="02-execution-model.html">Next: How policies run</a> · <a href="programming-anemos.html">Contents</a></p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+      <a href="programming-anemos.html" class="bottom-actions-button" rel="prev">
+        <span class="subheader">
+          ← Previous Page
+        </span>
+        <span class="title">
+Programming Anemos
+        </span>
+      </a>
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="02-execution-model.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+2. How policies run
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/01-first-policy.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

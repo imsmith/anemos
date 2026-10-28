@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Programming Anemos — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-extra" id="main" data-type="extras">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>Programming Anemos</h1>
+
+<a href="programming-anemos.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/docs/manual/README.md#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+<p>An introduction, practical guide, and language reference for Anemos 0.1.0.</p><p>Anemos expresses automation as policies: when something happens, decide what
+it means and ask the host application to act. A policy might turn on a light,
+classify a connection, or arrange a batch of documents for processing. The
+language supplies events, decisions, state, and composition. The application
+that embeds it supplies access to the outside world.</p><p>This book assumes no knowledge of Anemos. You should be comfortable editing a
+text file and running a terminal command. The first half teaches policy writing
+without requiring Elixir. The integration chapters introduce the Elixir needed
+to run a persistent interpreter and supply your own commands.</p><h2 id="reading-the-book" class="section-heading"><a href="#reading-the-book" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Reading the book</span></h2><p>Read Chapters 1–4 in order. They establish the execution model that makes the
+rest of the language understandable. Then follow your application: Chapter 5
+for batches, Chapter 6 for stateful events, Chapter 7 for time, and Chapter 8 for
+shared data. Chapters 9–11 cover embedding, operation, and troubleshooting.
+Chapter 12 combines those ideas in a complete application you can run and adapt.
+The reference and index are intended for return visits.</p><table><thead><tr><th style="text-align: left;">Part</th><th style="text-align: left;">Chapter</th><th style="text-align: left;">What you will learn</th></tr></thead><tbody><tr><td style="text-align: left;">Getting started</td><td style="text-align: left;"><a href="01-first-policy.html">1. Your first policy</a></td><td style="text-align: left;">Install, run, change, and diagnose a complete program</td></tr><tr><td style="text-align: left;">Getting started</td><td style="text-align: left;"><a href="02-execution-model.html">2. How policies run</a></td><td style="text-align: left;">Events, listeners, contexts, state, and operation order</td></tr><tr><td style="text-align: left;">The language</td><td style="text-align: left;"><a href="03-values-and-expressions.html">3. Values and expressions</a></td><td style="text-align: left;">Names, sigils, types, operators, and compounding</td></tr><tr><td style="text-align: left;">The language</td><td style="text-align: left;"><a href="04-control-flow.html">4. Decisions and control flow</a></td><td style="text-align: left;">Branches, guards, early exits, and handoffs</td></tr><tr><td style="text-align: left;">The language</td><td style="text-align: left;"><a href="05-collections.html">5. Collections and pipelines</a></td><td style="text-align: left;">Loops, filtering, mapping, and reduction</td></tr><tr><td style="text-align: left;">Stateful automation</td><td style="text-align: left;"><a href="06-conditions-and-capabilities.html">6. Conditions and capabilities</a></td><td style="text-align: left;">Remembered reports, transitions, and on-demand work</td></tr><tr><td style="text-align: left;">Stateful automation</td><td style="text-align: left;"><a href="07-time.html">7. Time and duration</a></td><td style="text-align: left;">Dwell timers, intervals, dates, and recurring schedules</td></tr><tr><td style="text-align: left;">Data</td><td style="text-align: left;"><a href="08-data.html">8. Datasets, queries, and facts</a></td><td style="text-align: left;">Membership, data handlers, live feeds, and triple patterns</td></tr><tr><td style="text-align: left;">Applications</td><td style="text-align: left;"><a href="09-embedding.html">9. Embedding and extending Anemos</a></td><td style="text-align: left;">Runtime setup, commands, events, channels, and secrets</td></tr><tr><td style="text-align: left;">Applications</td><td style="text-align: left;"><a href="10-operation.html">10. Deploying and operating policies</a></td><td style="text-align: left;">Replacement, watching, signing, recovery, and limits</td></tr><tr><td style="text-align: left;">Applications</td><td style="text-align: left;"><a href="11-troubleshooting.html">11. Finding and fixing problems</a></td><td style="text-align: left;">Reports, introspection, tracing, and practical recipes</td></tr><tr><td style="text-align: left;">Putting it together</td><td style="text-align: left;"><a href="12-workshop.html">12. Workshop temperature alerts</a></td><td style="text-align: left;">Build and test a complete application with a host service</td></tr><tr><td style="text-align: left;">Reference</td><td style="text-align: left;"><a href="reference.html">Language and API reference</a></td><td style="text-align: left;">Syntax summaries, precedence, defaults, and feature status</td></tr><tr><td style="text-align: left;">Reference</td><td style="text-align: left;"><a href="glossary.html">Glossary and subject index</a></td><td style="text-align: left;">Definitions and direct routes back to explanations</td></tr></tbody></table><h2 id="conventions-and-example-files" class="section-heading"><a href="#conventions-and-example-files" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Conventions and example files</span></h2><p>Complete policies appear in <code class="inline">anemos</code> code blocks. Each is independent unless
+the surrounding text says otherwise. The documentation test parses and compiles
+every such block. Syntax templates and deliberately incomplete fragments use
+<code class="inline">text</code> blocks. Shell commands use <code class="inline">sh</code>; host application code uses <code class="inline">elixir</code>.
+Angle brackets in templates mark a placeholder you must replace; they are not
+literal Anemos syntax.</p><p>Downloadable example files accompany the first chapters. Run commands
+from the repository root. The <a href="examples/walkthrough.exs">walkthrough script</a>
+executes the persistent counter, dataset, and pipeline examples and checks their
+answers:</p><pre><code class="makeup sh" translate="no"><span class="">mix run docs/manual/examples/walkthrough.exs
+</span></code></pre><p>Exercises ask you to predict a result before running a change. Answers follow
+the exercises, so you can check your reasoning without needing another book.</p><h2 id="what-this-edition-promises" class="section-heading"><a href="#what-this-edition-promises" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">What this edition promises</span></h2><p>This edition describes the implementation in this repository, version 0.1.0.
+Examples distinguish working language features from syntax that is only parsed
+or only partly implemented. In particular, read the qualifications about
+<code class="inline">demand</code>, <code class="inline">until</code>, triple queries, and pipeline <code class="inline">emit</code> before depending on them.
+The <a href="reference.html#feature-status">feature-status reference</a> collects those
+qualifications in one place.</p><p>The design notes under <code class="inline">docs/design-notes/</code>, historical Tcl sketches, and some
+older examples discuss a broader language. They are useful background, but they
+are not the contract taught here. Host modules also have their own contracts:
+the spelling <code class="inline">[DEVICE::set ...]</code> says how to call a command, not what hardware
+exists or whether a command has permission to operate it.</p><p>Documentation checks live in <code class="inline">test/anemos/manual_test.exs</code> in the checkout.
+They check complete policy syntax and selected behavioral promises. They do not
+turn an application-specific module, data format, or external service into a
+built-in feature.</p><p>Continue with <a href="01-first-policy.html">Chapter 1: Your first policy</a>.</p>
+
+</div>
+
+<div class="bottom-actions" id="bottom-actions">
+  <div class="bottom-actions-item">
+
+  </div>
+  <div class="bottom-actions-item">
+
+      <a href="01-first-policy.html" class="bottom-actions-button" rel="next">
+        <span class="subheader">
+          Next Page →
+        </span>
+        <span class="title">
+1. Your first policy
+        </span>
+      </a>
+
+  </div>
+</div>
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+                (<a href="https://preview.hex.pm/preview/anemos/0.1.0/show/docs/manual/README.md">current file</a>)
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Parser — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Parser</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Parser.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/parser.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>Recursive descent parser for the Anemos DSL.</p><p>Consumes the token stream from <a href="Anemos.Lexer.html#tokenize/1"><code class="inline">Anemos.Lexer.tokenize/1</code></a> and produces
+an <a href="Anemos.AST.Program.html"><code class="inline">Anemos.AST.Program</code></a> struct.</p><p>Supported declarations: <code class="inline">rule</code>, <code class="inline">condition</code>, <code class="inline">capability</code>, <code class="inline">data</code>, <code class="inline">query</code>,
+and source-level <code class="inline">signed_by</code> (A-60).</p><p>Supported trigger blocks: <code class="inline">when</code>, <code class="inline">if</code>, <code class="inline">at</code>, <code class="inline">context</code>.
+Guard modifiers: <code class="inline">unless</code>, <code class="inline">until</code> (on <code class="inline">when</code>, <code class="inline">if</code>, <code class="inline">at</code>).</p><p>Supported statements: <code class="inline">let</code>, <code class="inline">set</code>, <code class="inline">log</code>, <code class="inline">emit</code>, <code class="inline">demand</code>,
+<code class="inline">while</code>, <code class="inline">for</code>, <code class="inline">each</code>, <code class="inline">every</code>, <code class="inline">foreach</code>,
+<code class="inline">return</code>, <code class="inline">done</code>, <code class="inline">nextevent</code>, <code class="inline">nextrule</code>,
+and <code class="inline">[MODULE::verb ...]</code> command expressions.</p><h2 id="module-parse-1-is-total-and-that-is-a-security-property" class="section-heading"><a href="#module-parse-1-is-total-and-that-is-a-security-property" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text"><a href="#parse/1"><code class="inline">parse/1</code></a> is total, and that is a security property</span></h2><p>For <strong>any</strong> binary, <a href="#parse/1"><code class="inline">parse/1</code></a> answers <code class="inline">{:ok, %AST.Program{}}</code> or
+<code class="inline">{:error, message}</code>. It does not raise, and it terminates.</p><p>This is not tidiness. <a href="#parse/1"><code class="inline">parse/1</code></a> is the only path from source text to an AST —
+<a href="Anemos.Runtime.LoadAuthority.html#gate/3"><code class="inline">Anemos.Runtime.LoadAuthority.gate/3</code></a> runs it <em>before</em> deciding whether the
+source may be trusted — and under the multi-tenant decision that text is
+untrusted input. Every caller matching <code class="inline">{:error, _}</code> gets an exception
+instead if a clause is missing, and a truncated or hostile <code class="inline">.rule</code> file is
+exactly the input this boundary is most likely to meet.</p><p>Totality has been broken three times (A-65, A-74, A-75), so the rule is
+written down:</p><blockquote><p><strong>Whoever knows what must come next owns the end-of-input check.</strong></p></blockquote><p>A function that dispatches on token shape must therefore be total over
+<em>both</em> an empty token list <strong>and</strong> a token it does not expect. Missing either
+is the same defect: <code class="inline">collect_simple_list/2</code> had its <code class="inline">[]</code> clause and still
+crashed, on a token type it had no clause for (A-75).</p><p>The converse matters too, or the rule just breeds dead code. Where a caller
+selects a function by matching the token itself, the caller has already
+answered and the callee must <em>not</em> answer again. Exactly three functions here
+have no <code class="inline">[]</code> clause for that reason — <code class="inline">parse_declaration/1</code>,
+<code class="inline">parse_bracket_expr/1</code> and <code class="inline">parse_format_block/1</code> — and each carries a
+comment saying which caller answered, so a totality sweep does not &quot;fix&quot;
+them. When in doubt, add the clause and let Dialyzer adjudicate: it reports
+an unreachable pattern, which is precisely the question being asked (A-71).</p><p>Both classes are covered by tests rather than by inspection —
+<code class="inline">Anemos.ParserTruncationTest</code> sweeps every prefix of every shipped example,
+and <code class="inline">Anemos.ParserFuzzTest</code> mutates them.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#parse/1" data-no-tooltip="" translate="no">parse(source)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Parse a source string into an AST.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="parse/1">
+
+  <div class="detail-header">
+    <a href="#parse/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">parse(source)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/parser.ex#L143" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> parse(<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) ::
+  {:ok, <a href="Anemos.AST.Program.html#t:t/0">Anemos.AST.Program.t</a>()} | {:error, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>Parse a source string into an AST.</p><p>Returns <code class="inline">{:ok, %Anemos.AST.Program{}}</code> or <code class="inline">{:error, message}</code>.</p><h2 id="parse/1-examples" class="section-heading"><a href="#parse/1-examples" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Examples</span></h2><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-2">%</span><span class="nc" data-group-id="group-2">Anemos.AST.Program</span><span class="p" data-group-id="group-2">{</span><span class="ss">declarations</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-3">[</span><span class="n">rule</span><span class="p" data-group-id="group-3">]</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span><span class="gp unselectable">...&gt; </span><span class="w">  </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-4">(</span><span class="s">&quot;rule test { when EVENT { log </span><span class="se">\&quot;</span><span class="s">hello</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-4">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">rule</span><span class="o">.</span><span class="n">name</span><span class="w">
+</span><span class="s">&quot;test&quot;</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-5">[</span><span class="p" data-group-id="group-6">%</span><span class="nc" data-group-id="group-6">Anemos.AST.When</span><span class="p" data-group-id="group-6">{</span><span class="ss">event</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;EVENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">body</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-7">[</span><span class="p" data-group-id="group-8">%</span><span class="nc" data-group-id="group-8">Anemos.AST.Log</span><span class="p" data-group-id="group-8">{</span><span class="p" data-group-id="group-8">}</span><span class="p" data-group-id="group-7">]</span><span class="p" data-group-id="group-6">}</span><span class="p" data-group-id="group-5">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rule</span><span class="o">.</span><span class="n">body</span><span class="w">
+
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-9">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-10">%</span><span class="nc" data-group-id="group-10">Comn.Errors.ErrorStruct</span><span class="p" data-group-id="group-10">{</span><span class="ss">code</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;anemos.parser/syntax_error&quot;</span><span class="p" data-group-id="group-10">}</span><span class="p" data-group-id="group-9">}</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span><span class="gp unselectable">...&gt; </span><span class="w">  </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-11">(</span><span class="s">&quot;rule { }&quot;</span><span class="p" data-group-id="group-11">)</span></code></pre><p>A source-level <code class="inline">signed_by</code> is a declaration in its own right, so a file
+carrying no <code class="inline">rule</code> can still make a provenance claim (A-60):</p><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-2">%</span><span class="nc" data-group-id="group-2">Anemos.AST.Program</span><span class="p" data-group-id="group-2">{</span><span class="ss">declarations</span><span class="p">:</span><span class="w"> </span><span class="n">declarations</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span><span class="gp unselectable">...&gt; </span><span class="w">  </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-3">(</span><span class="s">&quot;signed_by :operator</span><span class="se">\n</span><span class="s">condition c { when EV { log </span><span class="se">\&quot;</span><span class="s">x</span><span class="se">\&quot;</span><span class="s"> } }&quot;</span><span class="p" data-group-id="group-3">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="nc">Enum</span><span class="o">.</span><span class="n">find</span><span class="p" data-group-id="group-4">(</span><span class="n">declarations</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">match?</span><span class="p" data-group-id="group-5">(</span><span class="p" data-group-id="group-6">%</span><span class="nc" data-group-id="group-6">Anemos.AST.SignedBy</span><span class="p" data-group-id="group-6">{</span><span class="p" data-group-id="group-6">}</span><span class="p">,</span><span class="w"> </span><span class="ni">&amp;1</span><span class="p" data-group-id="group-5">)</span><span class="p" data-group-id="group-4">)</span><span class="w">
+</span><span class="p" data-group-id="group-7">%</span><span class="nc" data-group-id="group-7">Anemos.AST.SignedBy</span><span class="p" data-group-id="group-7">{</span><span class="ss">signer</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;operator&quot;</span><span class="p">,</span><span class="w"> </span><span class="ss">line</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p" data-group-id="group-7">}</span></code></pre><p>Truncated input returns an error rather than raising. <a href="#parse/1"><code class="inline">parse/1</code></a> is total over
+binaries because it runs before the trust boundary, not after it:</p><pre><code class="makeup elixir" translate="no"><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-1">{</span><span class="ss">:error</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="p" data-group-id="group-1">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-2">(</span><span class="s">&quot;rule r { when&quot;</span><span class="p" data-group-id="group-2">)</span><span class="w">
+</span><span class="gp unselectable">iex&gt; </span><span class="n">error</span><span class="o">.</span><span class="n">message</span><span class="w">
+</span><span class="s">&quot;Expected event name after &#39;when&#39; but got end of input&quot;</span><span class="w">
+
+</span><span class="gp unselectable">iex&gt; </span><span class="p" data-group-id="group-3">{</span><span class="ss">:ok</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-4">%</span><span class="nc" data-group-id="group-4">Anemos.AST.Program</span><span class="p" data-group-id="group-4">{</span><span class="ss">declarations</span><span class="p">:</span><span class="w"> </span><span class="p" data-group-id="group-5">[</span><span class="p" data-group-id="group-5">]</span><span class="p" data-group-id="group-4">}</span><span class="p" data-group-id="group-3">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">Anemos.Parser</span><span class="o">.</span><span class="n">parse</span><span class="p" data-group-id="group-6">(</span><span class="s">&quot;&quot;</span><span class="p" data-group-id="group-6">)</span></code></pre>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

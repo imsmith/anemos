@@ -52,16 +52,6 @@ defmodule Anemos.LabelInterpolationTest do
 
       [%{body: [%{body: [%AST.Emit{label: "plain.label"}]}]}] = ast.declarations
     end
-
-    test "only a ?variable may sit inside the braces" do
-      assert {:error, %Comn.Errors.ErrorStruct{code: "anemos.parser/syntax_error", message: msg}} =
-               Anemos.Parser.parse(
-                 ~S|rule r { when EV { emit [DEVICE::set "x" "y"] as x.:{@fqdn} } }|
-               )
-
-      assert msg =~ "?variable"
-      assert msg =~ "line 1"
-    end
   end
 
   describe "runtime" do
@@ -77,6 +67,14 @@ defmodule Anemos.LabelInterpolationTest do
 
       assert [%{type: :emit, label: "box.network.ip"}] =
                emit_label(source, "EV", context_data: %{"host" => "box"})
+    end
+
+    test "let and set bindings render from their own scopes" do
+      source = ~S|rule r { when EV { let a = "left"  emit [DEVICE::set "x" "y"] as :{@a}.side } }|
+      assert [%{type: :emit, label: "left.side"}] = emit_label(source, "EV", [])
+
+      source = ~S|rule r { when EV { set b = 7  emit [DEVICE::set "x" "y"] as count.:{$b} } }|
+      assert [%{type: :emit, label: "count.7"}] = emit_label(source, "EV", [])
     end
 
     test "an unsupplied variable is a structured error, not a partial label" do

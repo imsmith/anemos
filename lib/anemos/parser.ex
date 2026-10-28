@@ -1113,17 +1113,18 @@ defmodule Anemos.Parser do
 
   defp parse_optional_as(tokens), do: {:ok, nil, tokens}
 
-  # The grammar admits exactly one thing between the braces, a query var.
-  defp interp_var("?" <> name, meta) do
+  # One variable reference between the braces, under any of the three
+  # variable sigils (spec §2.5): `?` context data, `@` let, `$` set.
+  defp interp_var(<<sigil, name::binary>>, meta) when sigil in ~c"?@$" do
     if Regex.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/, name) do
-      {:ok, %AST.VarRef{sigil: "?", name: name, line: meta[:line]}}
+      {:ok, %AST.VarRef{sigil: <<sigil>>, name: name, line: meta[:line]}}
     else
       interp_var(nil, meta)
     end
   end
 
   defp interp_var(_, meta) do
-    {:error, "Expected a ?variable inside :{...} on line #{meta[:line]}"}
+    {:error, "Expected a ?, @ or $ variable inside :{...} on line #{meta[:line]}"}
   end
 
   defp label_parts(parts), do: Enum.reject(parts, &(&1 == ""))

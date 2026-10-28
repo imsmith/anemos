@@ -1704,7 +1704,8 @@ defmodule Anemos.Compiler do
         String.ends_with?(to_string(l), to_string(r))
 
       :matches_regex ->
-        String.match?(to_string(l), Regex.compile!(to_string(r)))
+        regex = if match?(%Regex{}, r), do: r, else: Regex.compile!(to_string(r))
+        String.match?(to_string(l), regex)
 
       :memberof ->
         names = if is_list(r), do: r, else: [r]

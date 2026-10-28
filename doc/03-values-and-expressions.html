@@ -118,10 +118,19 @@ to commands. This chapter gives those everyday operations precise meanings.</p><
     log false
     log :garage.light
     log eth0
+    log 10MB
+    log ~s(a string with &quot;quotes&quot; inside)
   }
 }</code></pre><p>Numbers are decimal integers or floats. Strings use double quotes and support
-<code class="inline">\&quot;</code>, <code class="inline">\\</code>, <code class="inline">\n</code>, and <code class="inline">\t</code>. Booleans are the lowercase words <code class="inline">true</code> and
-<code class="inline">false</code>. A missing external value is represented by host <code class="inline">nil</code>; writing the
+<code class="inline">\&quot;</code>, <code class="inline">\\</code>, <code class="inline">\n</code>, and <code class="inline">\t</code>. The <code class="inline">~s</code> form takes the text verbatim between a
+pair of delimiters, any of <code class="inline">()</code>, <code class="inline">[]</code>, <code class="inline">{}</code>, <code class="inline">&lt;&gt;</code>, <code class="inline">//</code>, <code class="inline">||</code> or <code class="inline">&quot;&quot;</code>, so a
+string full of double quotes needs no escaping. Booleans are the lowercase
+words <code class="inline">true</code> and <code class="inline">false</code>.</p><p>A size is an integer with a byte unit, <code class="inline">B</code>, <code class="inline">KB</code>, <code class="inline">MB</code>, <code class="inline">GB</code> or <code class="inline">TB</code>, and is
+an ordinary integer at runtime: <code class="inline">10MB</code> is <code class="inline">10485760</code>. Multiples are binary,
+so <code class="inline">1KB</code> is <code class="inline">1024</code>, because every size a policy meets is a file size.</p><p>A regular expression is <code class="inline">~r</code> followed by the pattern between delimiters and
+optional flags, as in <code class="inline">~r/^h/i</code>. It is compiled once when the policy loads; a
+pattern that does not compile is a syntax error naming the line. Use it on
+the right of <code class="inline">matches_regex</code>, which still also accepts a plain string. A missing external value is represented by host <code class="inline">nil</code>; writing the
 bare word <code class="inline">nil</code> in a policy does not create that value.</p><p>Colon-prefixed symbols such as <code class="inline">:garage.light</code>, bare identifiers such as
 <code class="inline">eth0</code>, and uppercase names in value position all evaluate to strings.
 Anemos symbols are not dynamically created Elixir atoms. For example,

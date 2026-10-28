@@ -15,13 +15,26 @@ rule values {
     log false
     log :garage.light
     log eth0
+    log 10MB
+    log ~s(a string with "quotes" inside)
   }
 }
 ```
 
 Numbers are decimal integers or floats. Strings use double quotes and support
-`\"`, `\\`, `\n`, and `\t`. Booleans are the lowercase words `true` and
-`false`. A missing external value is represented by host `nil`; writing the
+`\"`, `\\`, `\n`, and `\t`. The `~s` form takes the text verbatim between a
+pair of delimiters, any of `()`, `[]`, `{}`, `<>`, `//`, `||` or `""`, so a
+string full of double quotes needs no escaping. Booleans are the lowercase
+words `true` and `false`.
+
+A size is an integer with a byte unit, `B`, `KB`, `MB`, `GB` or `TB`, and is
+an ordinary integer at runtime: `10MB` is `10485760`. Multiples are binary,
+so `1KB` is `1024`, because every size a policy meets is a file size.
+
+A regular expression is `~r` followed by the pattern between delimiters and
+optional flags, as in `~r/^h/i`. It is compiled once when the policy loads; a
+pattern that does not compile is a syntax error naming the line. Use it on
+the right of `matches_regex`, which still also accepts a plain string. A missing external value is represented by host `nil`; writing the
 bare word `nil` in a policy does not create that value.
 
 Colon-prefixed symbols such as `:garage.light`, bare identifiers such as

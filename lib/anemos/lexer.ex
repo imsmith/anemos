@@ -17,7 +17,7 @@ defmodule Anemos.Lexer do
     else elseif while for each every foreach do return done nextevent nextrule
     log show list graph trace explain exists infer assert unless until as with
     by that import export version signed_by scope state effect stream to channel
-    service self interval then filter map reduce
+    service systemd self interval then filter map reduce
     data query source expect transclude dynamic subscribe memberof global
   )a
 
@@ -87,6 +87,50 @@ defmodule Anemos.Lexer do
     |> reduce({List, :to_string, []})
     |> tag(:string_literal)
     |> label("string literal")
+
+  # Size: integer followed by a byte unit (spec §2.3). Binary multiples:
+  # every use is a file size. Longest unit first so "KB" is not read as "B".
+  @size_units [
+    {"TB", 1_099_511_627_776},
+    {"GB", 1_073_741_824},
+    {"MB", 1_048_576},
+    {"KB", 1024},
+    {"B", 1}
+  ]
+
+  size =
+    integer(min: 1)
+    |> choice(Enum.map(@size_units, fn {u, _} -> string(u) end))
+    |> lookahead_not(ascii_char([?a..?z, ?A..?Z, ?0..?9, ?_]))
+    |> tag(:size_raw)
+    |> label("size")
+
+  # `~s(...)` and `~r/.../flags` (spec §2.5). Any of the usual paired
+  # delimiters; the body is taken verbatim up to the closer, no escapes.
+  @sigil_delims [{?(, ?)}, {?[, ?]}, {?{, ?}}, {?<, ?>}, {?/, ?/}, {?|, ?|}, {?", ?"}]
+
+  sigil_body =
+    choice(
+      Enum.map(@sigil_delims, fn {open, close} ->
+        ignore(ascii_char([open]))
+        |> repeat(lookahead_not(ascii_char([close])) |> utf8_char([]))
+        |> ignore(ascii_char([close]))
+        |> reduce({List, :to_string, []})
+      end)
+    )
+
+  sigil_s =
+    ignore(string("~s"))
+    |> concat(sigil_body)
+    |> tag(:sigil_s_raw)
+    |> label("~s string")
+
+  sigil_r =
+    ignore(string("~r"))
+    |> concat(sigil_body)
+    |> concat(repeat(ascii_char([?a..?z])) |> reduce({List, :to_string, []}))
+    |> tag(:sigil_r_raw)
+    |> label("~r regex")
 
   # Duration: integer followed by a unit suffix (must come before plain integer)
   duration =
@@ -389,6 +433,8 @@ defmodule Anemos.Lexer do
       newline |> tag(:newline),
       whitespace |> tag(:skip),
       string_literal,
+      sigil_s,
+      sigil_r,
       mutable_ref,
       immutable_ref,
       interp_atom,
@@ -400,6 +446,7 @@ defmodule Anemos.Lexer do
       day_prefix,
       time_literal,
       ipv4_address,
+      size,
       duration,
       float_literal,
       ipv6_address,
@@ -489,6 +536,19 @@ defmodule Anemos.Lexer do
   end
 
   # Duration
+  defp build_tokens([{:size_raw, [amount, unit]} | rest], line, acc) do
+    {_, mult} = List.keyfind!(@size_units, unit, 0)
+    build_tokens(rest, line, [{:size, [line: line], amount * mult} | acc])
+  end
+
+  defp build_tokens([{:sigil_s_raw, [value]} | rest], line, acc) do
+    build_tokens(rest, line, [{:string, [line: line], value} | acc])
+  end
+
+  defp build_tokens([{:sigil_r_raw, [pattern, flags]} | rest], line, acc) do
+    build_tokens(rest, line, [{:regex, [line: line], {pattern, flags}} | acc])
+  end
+
   defp build_tokens([{:duration_raw, [amount, unit]} | rest], line, acc) do
     # The combinator only ever emits a member of @duration_units, so a miss here
     # is a broken invariant in this module, not bad input.

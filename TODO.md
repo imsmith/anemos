@@ -17,6 +17,9 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 
 - Lexical structure — comments, strings, numbers, durations, sigils, identifiers, atoms
 - Boolean literals — `true` / `false` as real booleans
+- Size literals (`10MB`, binary multiples, an integer at runtime), `~s(...)` strings and
+  `~r/.../flags` regex literals compiled at load
+- `to systemd(unit)` destination, carried on the emit like `service`
 - `rule`, `condition`, `capability`, `data`, `query` declarations
 - Format `data` blocks — `data d { <format> { ... } }`, with `transclude ... as name` — built
   by the `Anemos.DataModel` handler the host registered for the format
@@ -95,9 +98,6 @@ No lexer or parser support. Verified by attempting to parse each one.
 - `it` / `on` / `as` blocks — modal refs, invocation refs, group specs. `AST.It`, `AST.On`
   and `AST.Flow` exist as structs the parser never constructs
 - `flow` declarations
-- Regex and string sigils — `~r`, `~s`
-- Size literals — `KB`, `MB`, `GB`, `TB`
-- `systemd()` destination
 - Signing (producing signatures). Anemos verifies; something else signs — deliberate, see
   `ISSUES.md` A-05
 

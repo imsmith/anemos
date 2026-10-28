@@ -1050,11 +1050,14 @@ defmodule Anemos.Parser do
     end
   end
 
-  defp parse_destination([{:keyword, _, :service}, {:lparen, _, _} | rest]) do
+  # `service` and `systemd` are carried on the emit operation for the host
+  # to route; only `channel` publishes inside Anemos.
+  defp parse_destination([{:keyword, _, kind}, {:lparen, _, _} | rest])
+       when kind in [:service, :systemd] do
     case parse_dotted_path_until_rparen(rest) do
       {:ok, path, rest} ->
         with {:ok, rest} <- expect(rest, :rparen) do
-          {:ok, {:service, path}, rest}
+          {:ok, {kind, path}, rest}
         end
 
       {:error, _} = err ->
@@ -1688,6 +1691,23 @@ defmodule Anemos.Parser do
 
   defp parse_atom_expression([{:integer, meta, value} | rest]) do
     {:ok, %AST.Literal{type: :integer, value: value, line: meta[:line]}, rest}
+  end
+
+  defp parse_atom_expression([{:size, meta, bytes} | rest]) do
+    {:ok, %AST.Literal{type: :size, value: bytes, line: meta[:line]}, rest}
+  end
+
+  # Compiled here so a bad pattern is a syntax error with a line, not a
+  # crash inside a handler. Policy text is untrusted; Regex.compile/2 only
+  # answers an error, it does not raise.
+  defp parse_atom_expression([{:regex, meta, {pattern, flags}} | rest]) do
+    case Regex.compile(pattern, flags) do
+      {:ok, regex} ->
+        {:ok, %AST.Literal{type: :regex, value: regex, line: meta[:line]}, rest}
+
+      {:error, {reason, _at}} ->
+        {:error, "Invalid regex ~r/#{pattern}/#{flags} (#{reason}) on line #{meta[:line]}"}
+    end
   end
 
   defp parse_atom_expression([{:float, meta, value} | rest]) do

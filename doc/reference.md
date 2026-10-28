@@ -55,8 +55,10 @@ for a context line without a body.
 | Construct | Form |
 | --- | --- |
 | Comment to end of line | `; comment` or `# comment` |
-| String | `"text"`; escapes `\"`, `\\`, `\n`, `\t` |
+| String | `"text"`; escapes `\"`, `\\`, `\n`, `\t`. Or `~s(text)` with any of `() [] {} <> // \|\| ""`, no escapes |
 | Integer / float | `42`, `3.5`; negative through subtraction or host data |
+| Size | `10MB`; units `B KB MB GB TB`, binary multiples; an integer at runtime |
+| Regex | `~r/pattern/flags`, same delimiters as `~s`; compiled at load |
 | Boolean | `true`, `false` |
 | Symbol | `:name`, `:dotted.name`; runtime string value |
 | Identifier | Lowercase initial; letters, digits, `_`, `-`, `.` afterward |
@@ -79,7 +81,7 @@ rule when if at on it let set emit demand condition capability flow context
 else elseif while for each every foreach do return done nextevent nextrule
 log show list graph trace explain exists infer assert unless until as with
 by that import export version signed_by scope state effect stream to channel
-service self interval then filter map reduce data query source expect
+service systemd self interval then filter map reduce data query source expect
 transclude dynamic subscribe memberof global
 ```
 
@@ -403,7 +405,7 @@ promises that unfinished syntax will acquire a particular future meaning.
 | `++`, `~&`, `~\|` | Tokenized, not working binary expression operators | Use implemented operators or host verbs |
 | Unary minus | Not parsed | Use subtraction, such as `0 - 5` |
 | Interpolated symbols / labels | Parsed text is not dynamically resolved | Use fixed labels and explicit payloads |
-| `to service(...)`, `to self` | Parsed destination forms lack channel delivery handling | Use `to channel(...)` |
+| `to service(...)`, `to systemd(...)`, `to self` | Carried on the emit operation for the host to route; no delivery inside Anemos | Use `to channel(...)` for in-runtime delivery |
 | General `emit value` | Not implemented; command form required | Emit a host command's result |
 | Rule `version`, `scope` | Descriptive metadata | Do not infer version enforcement/distribution |
 | `signed_by` | Enforced only through an appropriate load authority | Configure signed verification explicitly |

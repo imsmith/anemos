@@ -89,8 +89,13 @@ an ID used for replacement and unload. See [deployment](10-operation.md).
 **Query.** A named host-engine computation invoked through `?name`, with
 expected inputs and a named output. See [queries](08-data.md#queries-name-a-computation).
 
-**Report.** An event's last true/false state remembered by a compound listener.
-It remains until replaced by a new report of the same event.
+**Report.** What `when` takes: an event with a truth at the moment it
+arrives, which stands until the next report of the same event. Compound
+listeners, dwell and conditions work on reports. Contrast *Interaction*.
+
+**Interaction.** What `on` takes: an occurrence such as boot, shutdown, a
+keypress or a login. It has no truth, is never remembered, and fires once per
+occurrence. See [reports and interactions](02-execution-model.md#a-report-and-an-interaction).
 
 **Rule.** A named collection of event/time handlers, context, state, and
 optional local data/query declarations. See [first policy](01-first-policy.md).

@@ -104,10 +104,19 @@ defmodule Anemos.AST do
   end
 
   defmodule On do
-    @moduledoc "An `on` invocation block triggered by a named invocation."
+    @moduledoc """
+    An `on <interaction>` block. An interaction is an occurrence, not a
+    report: it has no truth, is never remembered, and admits `unless` but
+    not `for`, `until` or a compound form. See `Anemos.Runtime.Interaction`.
+    """
     @enforce_keys []
-    @type t :: %__MODULE__{invocation: term(), body: list(), line: non_neg_integer() | nil}
-    defstruct [:invocation, :body, :line]
+    @type t :: %__MODULE__{
+            invocation: Anemos.Runtime.Interaction.t() | nil,
+            guard: term(),
+            body: list(),
+            line: non_neg_integer() | nil
+          }
+    defstruct [:invocation, :guard, :body, :line]
   end
 
   defmodule It do

@@ -77,6 +77,7 @@ Anemos.Runtime.Demand.md
 Anemos.Runtime.Dispatcher.md
 Anemos.Runtime.Duration.md
 Anemos.Runtime.Errors.md
+Anemos.Runtime.Interaction.md
 Anemos.Runtime.Introspection.md
 Anemos.Runtime.LoadAuthority.Denied.md
 Anemos.Runtime.LoadAuthority.Permissive.md

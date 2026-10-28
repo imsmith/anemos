@@ -120,7 +120,19 @@ when (<EVENT> AND <EVENT> ...) { <statements> }
 when (<EVENT> OR <EVENT> ...) { <statements> }
 
 at <time-spec> [unless <expr> | until <expr>] { <statements> }
+
+on boot [unless <expr>] { <statements> }
+on shutdown [unless <expr>] { <statements> }
+on keypress "<key>" [unless <expr>] { <statements> }
+on <INTERACTION_NAME> [unless <expr>] { <statements> }
 ```
+
+`when` takes a report, `on` an interaction: an occurrence with no truth that
+is never remembered, so `on` admits `unless` and refuses `for`, `until` and
+compound forms. `boot` and `shutdown` are raised by the runtime, inside the
+rule's context; the rest by `Runtime.interact/4`. `ON_` is the interaction
+namespace and is closed to `when` and `dispatch/4`. See
+[reports and interactions](02-execution-model.md#a-report-and-an-interaction).
 
 Use homogeneous compound event groups. Compound reports start false and are
 replaced by incoming reports. `state: false`/`nil` makes a report false;
@@ -341,6 +353,7 @@ that a required action occurred. Context-data parsing splits only the first
 | `Runtime.policies(rt)` | Loaded policy ownership information |
 | `Runtime.dispatch(rt, name, context, opts)` | `{:ok, results}`; inspect individual errors |
 | `Runtime.dispatch(rt, event_struct_or_map)` | Dispatch through `Anemos.Event` |
+| `Runtime.interact(rt, {:keypress, key} \| "NAME", context, opts)` | `{:ok, results}`; raises an interaction into `on` blocks |
 | `Runtime.condition_state(rt, "name")` | `true`, `false`, or absent `nil` |
 | `Runtime.describe(rt)` | Runtime inventory, state, and schedules |
 | `Runtime.explain(rt, name, context)` | Reachability without guard/body evaluation |
@@ -409,6 +422,7 @@ promises that unfinished syntax will acquire a particular future meaning.
 | General `emit value` | Not implemented; command form required | Emit a host command's result |
 | Rule `version`, `scope` | Descriptive metadata | Do not infer version enforcement/distribution |
 | `signed_by` | Enforced only through an appropriate load authority | Configure signed verification explicitly |
-| `flow`, `import`, `export`, modal `it` | Reserved/design vocabulary, no working feature | Compose implemented rules and host services |
+| `on boot`, `on shutdown`, `on keypress`, `on NAME` | Implemented; interactions, not reports | Use `interact/4` from the host; `when` for anything with a truth |
+| `flow`, `import`, `export`, modal `it`, `as` | Reserved/design vocabulary, no working feature | Compose implemented rules and host services |
 
 [Glossary and index](glossary.md) · [Contents](README.md)

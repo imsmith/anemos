@@ -1,5 +1,5 @@
 # `Anemos.AST.Log`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L177)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L186)
 
 A `log` expression.
 

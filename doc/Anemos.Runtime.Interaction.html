@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="ExDoc v0.40.4">
+    <meta name="project" content="anemos v0.1.0">
+
+
+    <title>Anemos.Runtime.Interaction — anemos v0.1.0</title>
+
+    <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
+
+    <script defer src="dist/sidebar_items-8C854547.js"></script>
+    <script defer src="docs_config.js"></script>
+    <script defer src="dist/html-MI33G4N7.js"></script>
+
+  </head>
+  <body>
+    <script>(()=>{var t="ex_doc:settings",e="dark";var o="dark",s="light";var E="sidebar_state",n="closed";var r="sidebar_width";var a="sidebar-open";var i=new URLSearchParams(window.location.search),S=i.get("theme")||JSON.parse(localStorage.getItem(t)||"{}").theme;(S===o||S!==s&&window.matchMedia("(prefers-color-scheme: dark)").matches)&&document.body.classList.add(e);var d=sessionStorage.getItem(E),A=d!==n&&!window.matchMedia(`screen and (max-width: ${768}px)`).matches;document.body.classList.toggle(a,A);var c=sessionStorage.getItem(r);c&&document.body.style.setProperty("--sidebarWidth",`${c}px`);var p=/(Macintosh|iPhone|iPad|iPod)/.test(window.navigator.userAgent);document.documentElement.classList.toggle("apple-os",p);})();
+</script>
+
+<div class="body-wrapper">
+
+<button id="sidebar-menu" class="sidebar-button sidebar-toggle" aria-label="toggle sidebar" aria-controls="sidebar">
+  <i class="ri-menu-line ri-lg" title="Collapse/expand sidebar"></i>
+</button>
+
+<nav id="sidebar" class="sidebar">
+
+  <div class="sidebar-header">
+    <div class="sidebar-projectInfo">
+
+      <div>
+        <a href="programming-anemos.html" class="sidebar-projectName" translate="no">
+anemos
+        </a>
+        <div class="sidebar-projectVersion" translate="no">
+          v0.1.0
+        </div>
+      </div>
+    </div>
+    <ul id="sidebar-list-nav" class="sidebar-list-nav" role="tablist" data-extras="Pages"></ul>
+  </div>
+</nav>
+
+<output role="status" id="toast"></output>
+
+<main class="content page-module" id="main" data-type="modules">
+  <div id="content" class="content-inner">
+    <div class="top-search">
+      <div class="search-settings">
+        <form class="search-bar" action="search.html">
+          <label class="search-label">
+            <span class="sr-only">Search documentation of anemos</span>
+            <div class="search-input-wrapper">
+              <input name="q" type="text" class="search-input" placeholder="Press / to search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" tabindex="-1" class="search-close-button" aria-hidden="true">
+                <i class="ri-close-line ri-lg" title="Cancel search"></i>
+              </button>
+            </div>
+          </label>
+        </form>
+        <div class="autocomplete">
+        </div>
+        <div class="engine-selector" data-multiple="false">
+          <button type="button" class="engine-button" aria-label="Select search engine" aria-haspopup="true" aria-expanded="false">
+            <i class="ri-search-2-line" aria-hidden="true"></i>
+            <span class="engine-name">Default</span>
+            <i class="ri-arrow-down-s-line" aria-hidden="true"></i>
+          </button>
+          <div class="engine-dropdown" hidden role="menu">
+
+              <button type="button"
+                      class="engine-option"
+                      data-engine-url="search.html?q="
+                      role="menuitemradio"
+                      aria-checked="true">
+                <span class="name">Default</span>
+                <span class="help">In-browser search</span>
+              </button>
+
+          </div>
+        </div>
+        <button class="icon-settings display-settings">
+          <i class="ri-settings-3-line"></i>
+          <span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </div>
+
+<div id="top-content">
+  <div class="heading-with-actions top-heading">
+    <h1>
+      <span translate="no">Anemos.<wbr />Runtime.<wbr />Interaction</span> 
+      <small class="app-vsn" translate="no">(anemos v0.1.0)</small>
+
+    </h1>
+
+<a href="Anemos.Runtime.Interaction.md" title="Copy Markdown (hold Ctrl/Cmd and click it to open as Markdown)" class="copy-markdown icon-action" rel="help">
+  <i class="ri-markdown-line" aria-hidden="true"></i>
+  <span class="sr-only">Copy Markdown</span>
+</a>
+
+
+
+      <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/interaction.ex#L1" title="View Source" class="icon-action" rel="help nofollow">
+        <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        <span class="sr-only">View Source</span>
+      </a>
+
+  </div>
+
+
+    <section id="moduledoc">
+<p>The vocabulary shared by <code class="inline">on &lt;interaction&gt;</code> blocks and the host.</p><p>A <code class="inline">when</code> takes a <em>report</em>: an event with a truth at the time it arrives,
+which stands until the next report of the same event and feeds compound
+triggers, dwell timers and conditions. An <code class="inline">on</code> takes an <em>interaction</em>: an
+occurrence with no truth, never remembered, fired once per occurrence.
+Boot, shutdown, a keypress, a login — things that happen, not claims
+about the world.</p><p>Interactions travel the same index as events under names in the reserved
+<code class="inline">ON_</code> namespace, which <code class="inline">when</code> may not subscribe to and <code class="inline">dispatch/4</code> may
+not send. The compiler and the runtime both derive those names here so a
+host's <code class="inline">interact(:rt, {:keypress, &quot;ESC&quot;})</code> meets the block compiled from
+<code class="inline">on keypress &quot;ESC&quot;</code>.</p>
+    </section>
+
+</div>
+
+  <section id="summary" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#summary">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Summary</span>
+    </h2>
+<div class="summary-types summary">
+  <h3>
+    <a href="#types">Types</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#t:t/0" data-no-tooltip="" translate="no">t()</a>
+
+      </div>
+
+    </div>
+
+</div>
+<div class="summary-functions summary">
+  <h3>
+    <a href="#functions">Functions</a>
+  </h3>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#event_name/1" data-no-tooltip="" translate="no">event_name(arg1)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>The event name an interaction is indexed under.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#from_host/1" data-no-tooltip="" translate="no">from_host(name)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>What a host may raise: a keypress, or a named interaction written like an
+event id. Boot and shutdown are the runtime's to raise, at the points a
+policy becomes active and stops being so.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
+        <a href="#reserved?/1" data-no-tooltip="" translate="no">reserved?(arg1)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Whether an event name sits in the interaction namespace.</p></div>
+
+    </div>
+
+</div>
+
+  </section>
+
+
+  <section id="types" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#types">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Types</span>
+    </h2>
+
+    <div class="types-list">
+<section class="detail" id="t:t/0">
+
+  <div class="detail-header">
+    <a href="#t:t/0" class="detail-link" data-no-tooltip="" aria-label="Link to this type">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">t()</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/interaction.ex#L21" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@type</span> t() :: :boot | :shutdown | {:keypress, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()} | {:named, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()}</pre>
+
+      </div>
+
+
+  </section>
+</section>
+
+    </div>
+  </section>
+
+  <section id="functions" class="details-list">
+    <h2 class="section-heading">
+      <a class="hover-link" href="#functions">
+        <i class="ri-link-m" aria-hidden="true"></i>
+      </a>
+      <span class="text">Functions</span>
+    </h2>
+
+    <div class="functions-list">
+<section class="detail" id="event_name/1">
+
+  <div class="detail-header">
+    <a href="#event_name/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">event_name(arg1)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/interaction.ex#L25" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> event_name(<a href="#t:t/0">t</a>()) :: <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()</pre>
+
+      </div>
+
+<p>The event name an interaction is indexed under.</p>
+  </section>
+</section>
+<section class="detail" id="from_host/1">
+
+  <div class="detail-header">
+    <a href="#from_host/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">from_host(name)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/interaction.ex#L41" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> from_host(<a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()) :: {:ok, <a href="#t:t/0">t</a>()} | {:error, <a href="https://comn.hexdocs.pm/0.7.0/Comn.Errors.ErrorStruct.html#t:t/0">Comn.Errors.ErrorStruct.t</a>()}</pre>
+
+      </div>
+
+<p>What a host may raise: a keypress, or a named interaction written like an
+event id. Boot and shutdown are the runtime's to raise, at the points a
+policy becomes active and stops being so.</p>
+  </section>
+</section>
+<section class="detail" id="reserved?/1">
+
+  <div class="detail-header">
+    <a href="#reserved?/1" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">reserved?(arg1)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/interaction.ex#L32" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> reserved?(<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">boolean</a>()</pre>
+
+      </div>
+
+<p>Whether an event name sits in the interaction namespace.</p>
+  </section>
+</section>
+
+    </div>
+  </section>
+
+    <footer class="footer">
+
+        <p>
+
+            <span class="line">
+              <a href="https://hex.pm/packages/anemos/0.1.0">Hex Package</a>
+
+              <a href="https://preview.hex.pm/preview/anemos/0.1.0">Hex Preview</a>
+
+            </span>
+
+          <span class="line">
+            <button class="a-main footer-button display-quick-switch" title="Go to package docs">
+              Go to package docs
+            </button>
+
+              <a href="llms.txt" target="_blank">
+                View llms.txt
+              </a>
+
+
+              <a href="anemos.epub">
+                Download ePub version
+              </a>
+
+          </span>
+        </p>
+
+        <p class="built-using">
+          Built using
+          <a href="https://github.com/elixir-lang/ex_doc" title="ExDoc" target="_blank" rel="help noopener" translate="no">ExDoc</a> (v0.40.4) for the
+
+            <a href="https://elixir-lang.org" title="Elixir" target="_blank" translate="no">Elixir programming language</a>
+
+        </p>
+
+
+    </footer>
+  </div>
+</main>
+</div>
+
+  </body>
+</html>

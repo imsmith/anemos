@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-1B120B71.js"></script>
+    <script defer src="dist/sidebar_items-8C854547.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -213,6 +213,17 @@ under that id.</p></div>
 
     <div class="summary-row">
       <div class="summary-signature">
+        <a href="#interact/4" data-no-tooltip="" translate="no">interact(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Raises an interaction, already named by <a href="Anemos.Runtime.Interaction.html#event_name/1"><code class="inline">Anemos.Runtime.Interaction.event_name/1</code></a>,
+into the <code class="inline">on</code> blocks that take it. Same result shape as <a href="#dispatch/4"><code class="inline">dispatch/4</code></a>.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
         <a href="#invoke_verb/5" data-no-tooltip="" translate="no">invoke_verb(registry, mod_name, verb, args, context)</a>
 
       </div>
@@ -372,7 +383,7 @@ call, <code class="inline">:_module</code> (the name the verb was addressed by).
       <h1 class="signature" translate="no">condition_state(dispatcher, condition_name)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L184" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L194" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -400,7 +411,7 @@ call, <code class="inline">:_module</code> (the name the verb was addressed by).
       <h1 class="signature" translate="no">data_member?(dispatcher, name, value)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L192" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L202" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -428,7 +439,7 @@ call, <code class="inline">:_module</code> (the name the verb was addressed by).
       <h1 class="signature" translate="no">deploy(dispatcher, id, compiled, fingerprints)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L142" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L152" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -465,7 +476,7 @@ The caller follows with <a href="Anemos.Runtime.Scheduler.html#sync/1"><code cla
       <h1 class="signature" translate="no">describe(dispatcher)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L163" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L173" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -497,7 +508,7 @@ The caller follows with <a href="Anemos.Runtime.Scheduler.html#sync/1"><code cla
       <h1 class="signature" translate="no">dispatch(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L88" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L89" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -529,7 +540,7 @@ The caller follows with <a href="Anemos.Runtime.Scheduler.html#sync/1"><code cla
       <h1 class="signature" translate="no">explain(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L167" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L177" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -547,6 +558,39 @@ The caller follows with <a href="Anemos.Runtime.Scheduler.html#sync/1"><code cla
 <p>See <a href="Anemos.Runtime.html#explain/3"><code class="inline">Anemos.Runtime.explain/3</code></a>.</p>
   </section>
 </section>
+<section class="detail" id="interact/4">
+
+    <span id="interact/2"></span>
+
+    <span id="interact/3"></span>
+
+  <div class="detail-header">
+    <a href="#interact/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">interact(dispatcher, event_name, context \\ %{}, timeout \\ 5000)</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L98" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> interact(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pid</a>() | <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">timeout</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>()</pre>
+
+      </div>
+
+<p>Raises an interaction, already named by <a href="Anemos.Runtime.Interaction.html#event_name/1"><code class="inline">Anemos.Runtime.Interaction.event_name/1</code></a>,
+into the <code class="inline">on</code> blocks that take it. Same result shape as <a href="#dispatch/4"><code class="inline">dispatch/4</code></a>.</p>
+  </section>
+</section>
 <section class="detail" id="invoke_verb/5">
 
   <div class="detail-header">
@@ -557,7 +601,7 @@ The caller follows with <a href="Anemos.Runtime.Scheduler.html#sync/1"><code cla
       <h1 class="signature" translate="no">invoke_verb(registry, mod_name, verb, args, context)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L1948" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L2048" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -605,7 +649,7 @@ rather than resolving to <code class="inline">nil</code> and letting a guard rea
       <h1 class="signature" translate="no">load(dispatcher, compiled)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L104" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L114" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -639,7 +683,7 @@ load is refused whole, <code class="inline">{:refused, error}</code>.</p>
       <h1 class="signature" translate="no">policies(dispatcher)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L159" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L169" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -668,7 +712,7 @@ that named no policy has <code class="inline">id: nil</code>.</p>
       <h1 class="signature" translate="no">register_data_model(dispatcher, handler_module)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L210" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L220" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -698,7 +742,7 @@ engine in a <code class="inline">query</code> block.</p>
       <h1 class="signature" translate="no">register_subscribable(dispatcher, protocol, handler_module)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L200" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L210" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -726,7 +770,7 @@ engine in a <code class="inline">query</code> block.</p>
       <h1 class="signature" translate="no">rules(dispatcher)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L178" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L188" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -755,7 +799,7 @@ name and is reported once.</p>
       <h1 class="signature" translate="no">start_link(opts)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L71" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L72" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -781,7 +825,7 @@ its stores outside a full <a href="Anemos.Runtime.html"><code class="inline">Ane
       <h1 class="signature" translate="no">topology(dispatcher)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L80" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L81" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -809,7 +853,7 @@ its stores outside a full <a href="Anemos.Runtime.html"><code class="inline">Ane
       <h1 class="signature" translate="no">undeploy(dispatcher, id)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L150" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L160" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -837,7 +881,7 @@ its stores outside a full <a href="Anemos.Runtime.html"><code class="inline">Ane
       <h1 class="signature" translate="no">unload(dispatcher, rule_names)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L121" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L131" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -870,7 +914,7 @@ by a rule — a policy-level unload would need a policy identity, which
       <h1 class="signature" translate="no">verb_context(context, source)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L1986" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime/dispatcher.ex#L2086" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 

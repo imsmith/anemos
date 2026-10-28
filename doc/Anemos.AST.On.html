@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-1B120B71.js"></script>
+    <script defer src="dist/sidebar_items-8C854547.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -114,7 +114,9 @@ anemos
 
 
     <section id="moduledoc">
-<p>An <code class="inline">on</code> invocation block triggered by a named invocation.</p>
+<p>An <code class="inline">on &lt;interaction&gt;</code> block. An interaction is an occurrence, not a
+report: it has no truth, is never remembered, and admits <code class="inline">unless</code> but
+not <code class="inline">for</code>, <code class="inline">until</code> or a compound form. See <a href="Anemos.Runtime.Interaction.html"><code class="inline">Anemos.Runtime.Interaction</code></a>.</p>
     </section>
 
 </div>
@@ -163,7 +165,7 @@ anemos
       <h1 class="signature" translate="no">t()</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L109" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L113" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -176,7 +178,8 @@ anemos
 
           <pre translate="no"><span class="attribute">@type</span> t() :: %Anemos.AST.On{
   body: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>(),
-  invocation: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(),
+  guard: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>(),
+  invocation: <a href="Anemos.Runtime.Interaction.html#t:t/0">Anemos.Runtime.Interaction.t</a>() | nil,
   line: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">non_neg_integer</a>() | nil
 }</pre>
 

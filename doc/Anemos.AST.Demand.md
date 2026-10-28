@@ -1,5 +1,5 @@
 # `Anemos.AST.Demand`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L166)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L175)
 
 A `demand` expression referencing a capability with a PAM-style control flag.
 

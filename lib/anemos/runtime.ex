@@ -430,6 +430,44 @@ defmodule Anemos.Runtime do
   end
 
   @doc """
+  Raises an interaction into the interpreter: what `on <interaction>` blocks
+  take, as `dispatch/4` is what `when <event>` blocks take.
+
+  A `when` takes a report, with a truth that stands until the next report
+  and feeds compound triggers, dwell and conditions. An `on` takes an
+  occurrence: no truth, never remembered, fired once each time. A host may
+  raise a keypress or a named interaction; `boot` and `shutdown` are raised
+  by the runtime itself when a policy becomes active and when it stops
+  being so.
+
+      Anemos.Runtime.interact(:anemos, {:keypress, "ESC"})
+      Anemos.Runtime.interact(:anemos, "USER_LOGIN", %{context_path: "console"})
+
+  Context and payload mean what they mean for `dispatch/4`. Something that
+  is not an interaction answers an `anemos.runtime/not_an_interaction`
+  error in the results, as a reserved `ON_` name handed to `dispatch/4`
+  answers `anemos.runtime/reserved_event`.
+  """
+  @spec interact(atom(), {:keypress, String.t()} | String.t(), map(), keyword()) :: {:ok, list()}
+  def interact(name, interaction, context \\ %{}, opts \\ []) do
+    case Anemos.Runtime.Interaction.from_host(interaction) do
+      {:ok, inv} ->
+        timeout = Keyword.get(opts, :timeout, 5_000)
+        event_name = Anemos.Runtime.Interaction.event_name(inv)
+        raw = Dispatcher.interact(dispatcher_name(name), event_name, context, timeout)
+
+        {:ok,
+         Enum.map(raw, fn
+           {:ok, value} -> value
+           {:error, _} = err -> err
+         end)}
+
+      {:error, _} = err ->
+        {:ok, [err]}
+    end
+  end
+
+  @doc """
   Returns the current boolean state of a named condition, or `nil` if not found.
   """
   @spec condition_state(atom(), String.t()) :: boolean() | nil

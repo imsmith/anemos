@@ -31,6 +31,8 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
   last report; the block fires at every report at which that state is true
 - `when EV for <duration>` — dwell-timer state machine
 - `at` blocks — time literals, intervals, recurring schedules, natural-language dates
+- `on` blocks — `boot`, `shutdown`, `keypress "<key>"`, `<NAME>`: interactions, not reports;
+  `unless` only; raised by the runtime (boot/shutdown) or `Runtime.interact/4`
 - `if` / `elseif` / `else`
 - Guards — `unless` (stateless), `until` (stateful, permanent on rules)
 - `let`, `set`, `log`, `emit` (with type, destination and label; `:{?var}` in a label is
@@ -95,8 +97,8 @@ has repeatedly been mistaken for "it works".
 
 No lexer or parser support. Verified by attempting to parse each one.
 
-- `it` / `on` / `as` blocks — modal refs, invocation refs, group specs. `AST.It`, `AST.On`
-  and `AST.Flow` exist as structs the parser never constructs
+- `it` / `as` blocks — modal refs, group specs. `AST.It` and `AST.Flow` exist as structs the
+  parser never constructs
 - `flow` declarations
 - Signing (producing signatures). Anemos verifies; something else signs — deliberate, see
   `ISSUES.md` A-05

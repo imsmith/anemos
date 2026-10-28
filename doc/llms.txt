@@ -55,7 +55,10 @@ same rule, optionally carrying a `with { }` argument block (A-55).
 - [Anemos.AST.NextRule](Anemos.AST.NextRule.md): A `nextrule` statement: dispatches to a different rule's pipeline,
 optionally carrying a `with { }` argument block.
 
-- [Anemos.AST.On](Anemos.AST.On.md): An `on` invocation block triggered by a named invocation.
+- [Anemos.AST.On](Anemos.AST.On.md): An `on <interaction>` block. An interaction is an occurrence, not a
+report: it has no truth, is never remembered, and admits `unless` but
+not `for`, `until` or a compound form. See `Anemos.Runtime.Interaction`.
+
 - [Anemos.AST.Program](Anemos.AST.Program.md): Top-level program node wrapping all parsed declarations.
 - [Anemos.AST.QueryDecl](Anemos.AST.QueryDecl.md): A named query declaration with expect/engine/body/return, scope, and source line.
 - [Anemos.AST.Return](Anemos.AST.Return.md): A `return` statement: exits the current handler, optionally with a value.
@@ -113,6 +116,7 @@ using PAM-style control flag semantics.
 - [Anemos.Runtime.Dispatcher](Anemos.Runtime.Dispatcher.md): GenServer holding compiled rules indexed by subscription.
 - [Anemos.Runtime.Duration](Anemos.Runtime.Duration.md): Converts duration tuples (e.g., `{5, :min}`) to milliseconds.
 - [Anemos.Runtime.Errors](Anemos.Runtime.Errors.md): Compile-time error code registry for the Anemos runtime.
+- [Anemos.Runtime.Interaction](Anemos.Runtime.Interaction.md): The vocabulary shared by `on <interaction>` blocks and the host.
 - [Anemos.Runtime.Introspection](Anemos.Runtime.Introspection.md): Answers the introspection statements — `show`, `list`, `graph`, `trace`,
 `explain`, `exists`, `infer` — from the dispatcher's state.
 - [Anemos.Runtime.LoadAuthority](Anemos.Runtime.LoadAuthority.md): The trust boundary on loading policy (A-12).

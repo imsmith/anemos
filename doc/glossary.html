@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-1B120B71.js"></script>
+    <script defer src="dist/sidebar_items-8C854547.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -139,8 +139,11 @@ to execute or report. Not every evaluated expression produces an operation.</p><
 within the runtime's lifetime. See <a href="02-execution-model.html#state-has-a-lifetime-and-an-owner">state</a>.</p><p><strong>Pipeline.</strong> An expression passing a collection/value through <code class="inline">|&gt;</code> stages.
 See <a href="05-collections.html#filter-map-reduce">pipelines</a>.</p><p><strong>Policy.</strong> A source unit containing declarations. Named deployments give it
 an ID used for replacement and unload. See <a href="10-operation.html">deployment</a>.</p><p><strong>Query.</strong> A named host-engine computation invoked through <code class="inline">?name</code>, with
-expected inputs and a named output. See <a href="08-data.html#queries-name-a-computation">queries</a>.</p><p><strong>Report.</strong> An event's last true/false state remembered by a compound listener.
-It remains until replaced by a new report of the same event.</p><p><strong>Rule.</strong> A named collection of event/time handlers, context, state, and
+expected inputs and a named output. See <a href="08-data.html#queries-name-a-computation">queries</a>.</p><p><strong>Report.</strong> What <code class="inline">when</code> takes: an event with a truth at the moment it
+arrives, which stands until the next report of the same event. Compound
+listeners, dwell and conditions work on reports. Contrast <em>Interaction</em>.</p><p><strong>Interaction.</strong> What <code class="inline">on</code> takes: an occurrence such as boot, shutdown, a
+keypress or a login. It has no truth, is never remembered, and fires once per
+occurrence. See <a href="02-execution-model.html#a-report-and-an-interaction">reports and interactions</a>.</p><p><strong>Rule.</strong> A named collection of event/time handlers, context, state, and
 optional local data/query declarations. See <a href="01-first-policy.html">first policy</a>.</p><p><strong>Runtime.</strong> A supervised interpreter with installed policies, registered host
 modules, in-memory state, dispatcher, and scheduler.</p><p><strong>Sigil.</strong> A prefix (<code class="inline">?</code>, <code class="inline">@</code>, <code class="inline">$</code>) selecting how a value name is read.</p><p><strong>Transclusion.</strong> A data declaration's request to derive another representation;
 the handler performs it with <code class="inline">transduce/3</code>. See <a href="08-data.html#structured-data-belongs-to-a-handler">structured data</a>.</p><p><strong>Triple.</strong> A subject–predicate–object fact stored in the runtime's shared

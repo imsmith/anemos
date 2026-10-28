@@ -91,6 +91,15 @@ Returns a list of `{:ok, operation}` or `{:error, reason}` tuples.
 
 See `Anemos.Runtime.explain/3`.
 
+# `interact`
+
+```elixir
+@spec interact(pid() | atom(), String.t(), map(), timeout()) :: list()
+```
+
+Raises an interaction, already named by `Anemos.Runtime.Interaction.event_name/1`,
+into the `on` blocks that take it. Same result shape as `dispatch/4`.
+
 # `invoke_verb`
 
 ```elixir

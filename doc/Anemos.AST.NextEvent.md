@@ -1,5 +1,5 @@
 # `Anemos.AST.NextEvent`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L294)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L303)
 
 A `nextevent` statement: transitions to another `when` block within the
 same rule, optionally carrying a `with { }` argument block (A-55).

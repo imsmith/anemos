@@ -773,6 +773,7 @@ defmodule Anemos.Compiler do
     context_path = extract_context_path(body)
     when_blocks = extract_when_blocks(body)
     at_blocks = extract_at_blocks(body)
+    on_blocks = extract_on_blocks(body)
 
     # Extract inline data/query declarations from the rule body and compile
     # them at load time (not as runtime ops) so they're in the DataStore
@@ -814,7 +815,24 @@ defmodule Anemos.Compiler do
         |> Enum.unzip()
       end
 
-    {when_rules ++ at_rules, at_schedules, inline_data, inline_queries}
+    on_rules = Enum.map(on_blocks, &compile_on_block(&1, name, compiled_meta))
+
+    {when_rules ++ at_rules ++ on_rules, at_schedules, inline_data, inline_queries}
+  end
+
+  # An `on` block compiles like an `at` block: a plain rule subscribed to a
+  # name the runtime raises. No `trigger`, no dwell, so dispatch never
+  # records a report for it — an interaction is not remembered. `owner` is
+  # the declaring rule, which is what a redeploy's fingerprints are keyed by.
+  defp compile_on_block(%AST.On{invocation: inv, body: body, guard: guard}, name, meta) do
+    event_name = Anemos.Runtime.Interaction.event_name(inv)
+
+    %CompiledRule{
+      name: "on_#{name}_#{event_name |> String.replace_prefix("ON_", "") |> String.downcase()}",
+      subscriptions: [event_name],
+      handler: build_guarded_handler(body, guard),
+      meta: Map.put(meta, :owner, name)
+    }
   end
 
   defp extract_context_path(body) do
@@ -864,6 +882,14 @@ defmodule Anemos.Compiler do
     Enum.flat_map(body, fn
       %AST.When{} = w -> [w]
       %AST.Context{body: ctx_body} -> extract_when_blocks(ctx_body)
+      _other -> []
+    end)
+  end
+
+  defp extract_on_blocks(body) do
+    Enum.flat_map(body, fn
+      %AST.On{} = o -> [o]
+      %AST.Context{body: ctx_body} -> extract_on_blocks(ctx_body)
       _other -> []
     end)
   end

@@ -38,6 +38,46 @@ Most policy mistakes become easier to see when names are classified:
 `SENSOR` module. `[SENSOR::motion]` is a command and does call a module. The
 brackets distinguish an action from a subscription.
 
+## A report and an interaction
+
+Two trigger keywords take things that arrive from outside, and they take
+different kinds of thing.
+
+`when <EVENT>` takes a **report**. A report is a claim about the world at the
+moment it arrives: motion was detected, the network is up. It has a truth,
+true unless its payload says `state: false`, and that truth stands until the
+next report of the same event. Reports are what compound triggers combine,
+what `for <duration>` dwells on, and what conditions watch.
+
+`on <interaction>` takes an **interaction**. An interaction is an occurrence,
+not a claim: a key was pressed, a user logged in, the policy booted. It has
+no truth, is never remembered, and fires its body once each time it happens.
+It can carry an `unless` guard, because that reads the world at the moment
+of firing. It cannot carry `for`, `until` or a compound form, because each
+of those asks the runtime to remember it.
+
+```anemos
+rule console {
+  context "console" {
+    on boot { log "console policy active" }
+    on keypress "ESC" { log "cancelled" }
+    on USER_LOGIN { log ?user }
+    on shutdown { log "console policy retiring" }
+  }
+}
+```
+
+`boot` and `shutdown` are raised by the runtime itself, inside the rule's own
+context: boot when the policy becomes active, on load, on a changed redeploy
+and on replay after a restart; shutdown when it stops being so, on unload, on
+a changed redeploy and when the runtime stops. A redeploy that changes
+nothing raises neither. The host raises the rest through
+`Anemos.Runtime.interact/4`; see [embedding](09-embedding.md#raise-an-interaction).
+
+Interactions are indexed under names beginning `ON_`, which is why
+`when ON_BOOT` is refused by the parser and `dispatch/4` refuses an `ON_`
+name: a report path may not carry an occurrence, nor the other way round.
+
 ## A context belongs to a listener
 
 Declare one context boundary per rule. Either of these forms expresses it:

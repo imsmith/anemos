@@ -1,5 +1,5 @@
 # `Anemos.AST.Emit`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L153)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L162)
 
 An `emit` expression that produces a typed value to an optional destination.
 

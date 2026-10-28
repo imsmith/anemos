@@ -324,6 +324,13 @@ defmodule Anemos.Parser do
     end
   end
 
+  defp parse_rule_body([{:keyword, meta, :on} | rest], acc) do
+    case parse_on(rest, meta) do
+      {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
   defp parse_rule_body(tokens, acc) do
     case parse_statement(tokens) do
       {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
@@ -372,6 +379,13 @@ defmodule Anemos.Parser do
     end
   end
 
+  defp parse_context_body([{:keyword, meta, :on} | rest], acc) do
+    case parse_on(rest, meta) do
+      {:ok, node, rest} -> parse_context_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
   defp parse_context_body(tokens, acc) do
     case parse_statement(tokens) do
       {:ok, node, rest} -> parse_context_body(rest, [node | acc])
@@ -399,6 +413,22 @@ defmodule Anemos.Parser do
          line: meta[:line]
        }, rest}
     end
+  end
+
+  # ON_* is the interaction namespace (Anemos.Runtime.Interaction). A report
+  # listener may not take it: `when ON_BOOT` would make boot a report.
+  defp parse_when([{:module_id, meta, "ON_" <> _ = event} | _]) do
+    hint =
+      case event do
+        "ON_BOOT" -> "on boot"
+        "ON_SHUTDOWN" -> "on shutdown"
+        "ON_KEYPRESS_" <> key -> "on keypress \"#{key}\""
+        "ON_" <> name -> "on #{name}"
+      end
+
+    {:error,
+     "#{event} is an interaction, not an event; write `#{hint}` with `on`, not `when`, " <>
+       "on line #{meta[:line]}"}
   end
 
   # Simple module_id event (e.g. SENSOR_MOTION_DETECTED)
@@ -543,6 +573,62 @@ defmodule Anemos.Parser do
   end
 
   defp parse_optional_guard(tokens), do: {nil, tokens}
+
+  # --- On (interaction) blocks ---
+
+  # `on <interaction> [unless <expr>] { ... }` — spec §4.5 plus `shutdown`.
+  # An interaction is an occurrence, so the report-only modifiers are
+  # refused by name rather than ignored: `for` would ask it to persist,
+  # `until` to be remembered, a compound form to have a truth.
+  defp parse_on([{:identifier, _, "boot"} | rest], meta), do: finish_on(:boot, rest, meta)
+  defp parse_on([{:identifier, _, "shutdown"} | rest], meta), do: finish_on(:shutdown, rest, meta)
+
+  defp parse_on([{:identifier, _, "keypress"}, {:string, _, key} | rest], meta),
+    do: finish_on({:keypress, key}, rest, meta)
+
+  defp parse_on([{:module_id, _, name} | rest], meta), do: finish_on({:named, name}, rest, meta)
+
+  defp parse_on([{:keyword, _, :demand} | _], meta) do
+    {:error, "`on demand` is a capability's body, not a rule trigger, on line #{meta[:line]}"}
+  end
+
+  defp parse_on([{:lparen, _, _} | _], meta) do
+    {:error,
+     "an interaction has no truth, so `on` takes no compound form; use `when` for " <>
+       "(A AND B) on line #{meta[:line]}"}
+  end
+
+  defp parse_on([{_, tmeta, _} | _], _meta) do
+    {:error,
+     "Expected boot, shutdown, keypress \"<key>\" or an UPPER_CASE interaction name after " <>
+       "'on' on line #{tmeta[:line]}"}
+  end
+
+  defp parse_on([], meta), do: {:error, "Expected interaction after 'on' on line #{meta[:line]}"}
+
+  defp finish_on(_inv, [{:keyword, _, :for} | _], meta) do
+    {:error,
+     "an interaction is not remembered, so `on` takes no `for` duration; use `when` for " <>
+       "dwell on line #{meta[:line]}"}
+  end
+
+  defp finish_on(_inv, [{:keyword, _, :until} | _], meta) do
+    {:error,
+     "an interaction is not remembered, so `on` takes no `until`; `unless` is allowed, " <>
+       "on line #{meta[:line]}"}
+  end
+
+  defp finish_on(invocation, rest, meta) do
+    {guard, rest} = parse_optional_guard(rest)
+
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok,
+       %AST.On{invocation: invocation, guard: guard, body: Enum.reverse(body), line: meta[:line]},
+       rest}
+    end
+  end
 
   # --- At ---
 

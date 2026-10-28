@@ -38,6 +38,16 @@ defmodule Anemos.Runtime.Errors do
 
   register_error("anemos.runtime/unknown_verb", :validation, message: "Verb not found on module")
 
+  # `on` versus `when`: ON_* names are interactions and only interact/3 may
+  # raise them; what a host hands interact/3 must be one.
+  register_error("anemos.runtime/reserved_event", :validation,
+    message: "ON_ names are interactions; raise them with interact/3, not dispatch/4"
+  )
+
+  register_error("anemos.runtime/not_an_interaction", :validation,
+    message: "Not something a host may raise as an interaction"
+  )
+
   register_error("anemos.runtime/event_recursion_limit", :validation,
     message: "Event recursion limit exceeded"
   )

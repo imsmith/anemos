@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-1B120B71.js"></script>
+    <script defer src="dist/sidebar_items-8C854547.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -235,6 +235,17 @@ does the same thing later.</li></ul>
 
     <div class="summary-row">
       <div class="summary-signature">
+        <a href="#interact/4" data-no-tooltip="" translate="no">interact(name, interaction, context \\ %{}, opts \\ [])</a>
+
+      </div>
+
+        <div class="summary-synopsis"><p>Raises an interaction into the interpreter: what <code class="inline">on &lt;interaction&gt;</code> blocks
+take, as <a href="#dispatch/4"><code class="inline">dispatch/4</code></a> is what <code class="inline">when &lt;event&gt;</code> blocks take.</p></div>
+
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-signature">
         <a href="#load/3" data-no-tooltip="" translate="no">load(name, source, opts \\ [])</a>
 
       </div>
@@ -427,7 +438,7 @@ event name for a schedule, the block name for a data block.</p>
       <h1 class="signature" translate="no">condition_state(name, condition_name)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L436" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L474" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -486,7 +497,7 @@ Replaces the current connector (default: <a href="Anemos.Channel.Logger.html"><c
       <h1 class="signature" translate="no">describe(name, opts \\ [])</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L453" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L491" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -564,7 +575,7 @@ value implementing the <a href="Anemos.Event.html"><code class="inline">Anemos.E
       <h1 class="signature" translate="no">explain(name, event_name, context \\ %{}, opts \\ [])</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L498" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L536" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -590,6 +601,49 @@ leave false,
 or <code class="inline">:context_mismatch</code> when its <code class="inline">context</code> does not admit <code class="inline">context</code>'s
 <code class="inline">:context_path</code>. <code class="inline">conditions</code> names the conditions that would evaluate.</p><p>Nothing is evaluated: a guard, an <code class="inline">if</code>, or a verb called in an expression
 can still change what a rule that <code class="inline">:fires</code> goes on to do.</p><p>Options: <code class="inline">:timeout</code> (default 5000 ms).</p>
+  </section>
+</section>
+<section class="detail" id="interact/4">
+
+    <span id="interact/2"></span>
+
+    <span id="interact/3"></span>
+
+  <div class="detail-header">
+    <a href="#interact/4" class="detail-link" data-no-tooltip="" aria-label="Link to this function">
+      <i class="ri-link-m" aria-hidden="true"></i>
+    </a>
+    <div class="heading-with-actions">
+      <h1 class="signature" translate="no">interact(name, interaction, context \\ %{}, opts \\ [])</h1>
+
+
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L452" class="icon-action" rel="help nofollow" aria-label="View Source">
+          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
+        </a>
+
+    </div>
+  </div>
+
+  <section class="docstring">
+
+      <div class="specs">
+
+          <pre translate="no"><span class="attribute">@spec</span> interact(<a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">atom</a>(), {:keypress, <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()} | <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">map</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">keyword</a>()) ::
+  {:ok, <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>()}</pre>
+
+      </div>
+
+<p>Raises an interaction into the interpreter: what <code class="inline">on &lt;interaction&gt;</code> blocks
+take, as <a href="#dispatch/4"><code class="inline">dispatch/4</code></a> is what <code class="inline">when &lt;event&gt;</code> blocks take.</p><p>A <code class="inline">when</code> takes a report, with a truth that stands until the next report
+and feeds compound triggers, dwell and conditions. An <code class="inline">on</code> takes an
+occurrence: no truth, never remembered, fired once each time. A host may
+raise a keypress or a named interaction; <code class="inline">boot</code> and <code class="inline">shutdown</code> are raised
+by the runtime itself when a policy becomes active and when it stops
+being so.</p><pre><code class="makeup elixir" translate="no"><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">interact</span><span class="p" data-group-id="group-1">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-2">{</span><span class="ss">:keypress</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;ESC&quot;</span><span class="p" data-group-id="group-2">}</span><span class="p" data-group-id="group-1">)</span><span class="w">
+</span><span class="nc">Anemos.Runtime</span><span class="o">.</span><span class="n">interact</span><span class="p" data-group-id="group-3">(</span><span class="ss">:anemos</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;USER_LOGIN&quot;</span><span class="p">,</span><span class="w"> </span><span class="p" data-group-id="group-4">%{</span><span class="ss">context_path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;console&quot;</span><span class="p" data-group-id="group-4">}</span><span class="p" data-group-id="group-3">)</span></code></pre><p>Context and payload mean what they mean for <a href="#dispatch/4"><code class="inline">dispatch/4</code></a>. Something that
+is not an interaction answers an <code class="inline">anemos.runtime/not_an_interaction</code>
+error in the results, as a reserved <code class="inline">ON_</code> name handed to <a href="#dispatch/4"><code class="inline">dispatch/4</code></a>
+answers <code class="inline">anemos.runtime/reserved_event</code>.</p>
   </section>
 </section>
 <section class="detail" id="load/3">
@@ -842,7 +896,7 @@ format has no handler is a failure of that <a href="#load/3"><code class="inline
       <h1 class="signature" translate="no">trace(name, limit \\ 50)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L522" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L560" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -908,7 +962,7 @@ calling policy stands for the removal (A-81).</p>
       <h1 class="signature" translate="no">watcher_name(name)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L664" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L702" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 

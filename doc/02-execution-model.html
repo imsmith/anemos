@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-1B120B71.js"></script>
+    <script defer src="dist/sidebar_items-8C854547.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -123,7 +123,31 @@ eligible rules can run. Use <code class="inline">if</code>/<code class="inline">
 mutually exclusive choices. Do not make correctness depend on one independent
 listener having run before another.</p><h2 id="the-four-kinds-of-name" class="section-heading"><a href="#the-four-kinds-of-name" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">The four kinds of name</span></h2><p>Most policy mistakes become easier to see when names are classified:</p><table><thead><tr><th style="text-align: left;">Name</th><th style="text-align: left;">Example</th><th style="text-align: left;">Who supplies it?</th></tr></thead><tbody><tr><td style="text-align: left;">Declaration</td><td style="text-align: left;"><code class="inline">garage-motion</code></td><td style="text-align: left;">The policy author</td></tr><tr><td style="text-align: left;">Event</td><td style="text-align: left;"><code class="inline">MOTION</code>, <code class="inline">SENSOR::motion</code></td><td style="text-align: left;">The event producer and policy agree</td></tr><tr><td style="text-align: left;">Module and verb</td><td style="text-align: left;"><code class="inline">DEVICE::set</code></td><td style="text-align: left;">The host registers the implementation</td></tr><tr><td style="text-align: left;">Binding</td><td style="text-align: left;"><code class="inline">?visitor</code>, <code class="inline">@message</code>, <code class="inline">$count</code></td><td style="text-align: left;">Event data or policy evaluation</td></tr></tbody></table><p><code class="inline">when SENSOR::motion</code> subscribes to that event name. It does not call the
 <code class="inline">SENSOR</code> module. <code class="inline">[SENSOR::motion]</code> is a command and does call a module. The
-brackets distinguish an action from a subscription.</p><h2 id="a-context-belongs-to-a-listener" class="section-heading"><a href="#a-context-belongs-to-a-listener" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A context belongs to a listener</span></h2><p>Declare one context boundary per rule. Either of these forms expresses it:</p><pre><code class="anemos">rule listen {
+brackets distinguish an action from a subscription.</p><h2 id="a-report-and-an-interaction" class="section-heading"><a href="#a-report-and-an-interaction" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A report and an interaction</span></h2><p>Two trigger keywords take things that arrive from outside, and they take
+different kinds of thing.</p><p><code class="inline">when &lt;EVENT&gt;</code> takes a <strong>report</strong>. A report is a claim about the world at the
+moment it arrives: motion was detected, the network is up. It has a truth,
+true unless its payload says <code class="inline">state: false</code>, and that truth stands until the
+next report of the same event. Reports are what compound triggers combine,
+what <code class="inline">for &lt;duration&gt;</code> dwells on, and what conditions watch.</p><p><code class="inline">on &lt;interaction&gt;</code> takes an <strong>interaction</strong>. An interaction is an occurrence,
+not a claim: a key was pressed, a user logged in, the policy booted. It has
+no truth, is never remembered, and fires its body once each time it happens.
+It can carry an <code class="inline">unless</code> guard, because that reads the world at the moment
+of firing. It cannot carry <code class="inline">for</code>, <code class="inline">until</code> or a compound form, because each
+of those asks the runtime to remember it.</p><pre><code class="anemos">rule console {
+  context &quot;console&quot; {
+    on boot { log &quot;console policy active&quot; }
+    on keypress &quot;ESC&quot; { log &quot;cancelled&quot; }
+    on USER_LOGIN { log ?user }
+    on shutdown { log &quot;console policy retiring&quot; }
+  }
+}</code></pre><p><code class="inline">boot</code> and <code class="inline">shutdown</code> are raised by the runtime itself, inside the rule's own
+context: boot when the policy becomes active, on load, on a changed redeploy
+and on replay after a restart; shutdown when it stops being so, on unload, on
+a changed redeploy and when the runtime stops. A redeploy that changes
+nothing raises neither. The host raises the rest through
+<a href="Anemos.Runtime.html#interact/4"><code class="inline">Anemos.Runtime.interact/4</code></a>; see <a href="09-embedding.html#raise-an-interaction">embedding</a>.</p><p>Interactions are indexed under names beginning <code class="inline">ON_</code>, which is why
+<code class="inline">when ON_BOOT</code> is refused by the parser and <code class="inline">dispatch/4</code> refuses an <code class="inline">ON_</code>
+name: a report path may not carry an occurrence, nor the other way round.</p><h2 id="a-context-belongs-to-a-listener" class="section-heading"><a href="#a-context-belongs-to-a-listener" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A context belongs to a listener</span></h2><p>Declare one context boundary per rule. Either of these forms expresses it:</p><pre><code class="anemos">rule listen {
   context &quot;building.garage&quot; {
     when MOTION { log &quot;heard&quot; }
   }

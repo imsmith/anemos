@@ -138,6 +138,27 @@ lexical normalization and containment. It does not resolve symlinks: an
 in-root link pointing outside the root can escape it. Use filesystem-level
 confinement when that boundary must withstand changes to the directory tree.
 
+## Raise an interaction
+
+`dispatch/4` carries reports to `when` blocks. `interact/4` carries
+interactions to `on` blocks; see [the distinction](02-execution-model.md#a-report-and-an-interaction).
+
+```elixir
+{:ok, results} = Anemos.Runtime.interact(:anemos, {:keypress, "ESC"})
+
+{:ok, results} =
+  Anemos.Runtime.interact(:anemos, "USER_LOGIN", %{
+    context_path: "console",
+    context_data: %{"user" => "ada"}
+  })
+```
+
+A host may raise a keypress or a named interaction written like an event id.
+`boot` and `shutdown` are the runtime's to raise. Results have the shape
+`dispatch/4` answers. Something that is not an interaction answers an
+`anemos.runtime/not_an_interaction` error in the results; an `ON_` name
+handed to `dispatch/4` answers `anemos.runtime/reserved_event`.
+
 ## Supply event data
 
 The string API accepts a context map:

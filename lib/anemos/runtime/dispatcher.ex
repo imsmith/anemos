@@ -28,6 +28,7 @@ defmodule Anemos.Runtime.Dispatcher do
   alias Anemos.Runtime.{
     DataModelRegistry,
     DataStore,
+    Interaction,
     Introspection,
     ModuleRegistry,
     PolicyStore,
@@ -87,6 +88,15 @@ defmodule Anemos.Runtime.Dispatcher do
   @spec dispatch(pid() | atom(), String.t(), map(), timeout()) :: list()
   def dispatch(dispatcher, event_name, context \\ %{}, timeout \\ 5_000) do
     GenServer.call(dispatcher, {:dispatch, event_name, context}, timeout)
+  end
+
+  @doc """
+  Raises an interaction, already named by `Anemos.Runtime.Interaction.event_name/1`,
+  into the `on` blocks that take it. Same result shape as `dispatch/4`.
+  """
+  @spec interact(pid() | atom(), String.t(), map(), timeout()) :: list()
+  def interact(dispatcher, event_name, context \\ %{}, timeout \\ 5_000) do
+    GenServer.call(dispatcher, {:interact, event_name, context}, timeout)
   end
 
   @doc """
@@ -215,6 +225,10 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def init(opts) do
+    # So terminate/2 runs on a supervisor shutdown and `on shutdown` blocks
+    # get their occurrence. The dispatcher links nothing, so no other EXIT
+    # arrives here.
+    Process.flag(:trap_exit, true)
     state_table = Keyword.get(opts, :state_table)
 
     state = %{
@@ -264,7 +278,8 @@ defmodule Anemos.Runtime.Dispatcher do
     state =
       Enum.reduce(PolicyStore.all(policy_store), state, fn compiled, st ->
         {st, _failures} = apply_compiled(compiled, st)
-        st
+        # A replayed policy is becoming active again, which is a boot.
+        lifecycle(st, :boot, compiled.rules)
       end)
 
     {:ok, state |> rearm_dwell_timers() |> persist()}
@@ -277,51 +292,26 @@ defmodule Anemos.Runtime.Dispatcher do
 
   @impl true
   def handle_call({:dispatch, event_name, context}, _from, state) do
-    started = System.monotonic_time(:microsecond)
-    state = refresh_stores(state)
-    context = with_runtime(context, state)
-    comn_ctx = build_comn_context(event_name, context, state.runtime)
+    if Interaction.reserved?(event_name) do
+      error =
+        Comn.Errors.Registry.error!("anemos.runtime/reserved_event",
+          field: event_name,
+          message: "#{event_name} is an interaction; raise it with interact/3, not dispatch/4"
+        )
 
-    {{results, became_true}, state} =
-      Comn.Contexts.with_context(comn_ctx, fn ->
-        # Route event to all condition servers (async cast). A condition
-        # evaluates expressions the same way a rule does, so it is given the
-        # same expression-position authority (A-56) — with its own name and
-        # declared context as the source, which is what
-        # apply_condition_message/3 stamps on the operations its body
-        # produces.
-        Enum.each(state.condition_servers, fn {name, %{pid: pid}} ->
-          ConditionServer.handle_event(pid, event_name, condition_context(name, context, state))
-        end)
+      {:reply, [{:error, error}], state}
+    else
+      do_dispatch(event_name, context, state)
+    end
+  end
 
-        # Synchronize: call get_state on each condition server to ensure all casts
-        # have been processed before we drain the transition messages from our mailbox.
-        Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
-          ConditionServer.get_state(pid)
-        end)
-
-        # Drain what the condition servers sent us. Both message kinds are
-        # collected in one pass so they stay in arrival order: a condition
-        # emits its side effects before it announces its transition, and
-        # reordering them would run a CONDITION_<name> rule before the body
-        # that provoked it.
-        condition_messages = collect_condition_messages()
-
-        # Dispatch original event to matching rules
-        {results, state} = dispatch_to_rules(event_name, context, state, 0)
-
-        {condition_results, state} =
-          Enum.reduce(condition_messages, {[], state}, fn message, {acc, st} ->
-            {res, st} = apply_condition_message(message, context, st)
-            {acc ++ res, st}
-          end)
-
-        became_true = for {:transition, name} <- condition_messages, do: name
-        {{results ++ condition_results, became_true}, state}
-      end)
-
-    state = record_trace(state, event_name, context, results, became_true, started)
-    {:reply, results, persist(state)}
+  # An interaction rides the event index under its ON_ name. Nothing here
+  # remembers it: `on` rules carry no compound trigger and no dwell, so
+  # dispatch_rules/5 takes the plain branch, and no condition subscribes
+  # to an ON_ name.
+  @impl true
+  def handle_call({:interact, event_name, context}, _from, state) do
+    do_dispatch(event_name, context, state)
   end
 
   @impl true
@@ -353,12 +343,15 @@ defmodule Anemos.Runtime.Dispatcher do
 
     case conflicts(id, compiled, others) do
       [] ->
+        prior = %{unchanged: unchanged(old, fingerprints), own: own_rules(old)}
+
+        # A rule that is going away or changing is shutting down; an
+        # unchanged one is neither shutting down nor booting.
+        state = lifecycle(state, :shutdown, changing(old, prior))
         state = retire(state, old, compiled)
 
         # Recorded before applying, as in {:load, _}.
         :ok = PolicyStore.put(state.policy_store, id, compiled, fingerprints)
-
-        prior = %{unchanged: unchanged(old, fingerprints), own: own_rules(old)}
 
         forget_conditions(
           state,
@@ -366,6 +359,7 @@ defmodule Anemos.Runtime.Dispatcher do
         )
 
         {state, failures} = apply_compiled(compiled, state, prior)
+        state = lifecycle(state, :boot, changing(%{compiled: compiled}, prior))
         reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
         {:reply, reply, persist(state)}
 
@@ -389,6 +383,7 @@ defmodule Anemos.Runtime.Dispatcher do
         {:reply, {:error, error}, state}
 
       old ->
+        state = lifecycle(state, :shutdown, old.compiled.rules)
         :ok = PolicyStore.delete(state.policy_store, id)
         state = retire(state, old, %Anemos.CompilationResult{})
         {:reply, :ok, state |> refresh_stores() |> persist()}
@@ -537,6 +532,16 @@ defmodule Anemos.Runtime.Dispatcher do
     # the caller asked to remove.
     :ok = PolicyStore.drop_rules(state.policy_store, rule_names)
 
+    state =
+      lifecycle(
+        state,
+        :shutdown,
+        Enum.filter(
+          state.rules,
+          &(MapSet.member?(drop, &1.name) or MapSet.member?(drop, owner(&1)))
+        )
+      )
+
     remaining = Enum.reject(state.rules, &MapSet.member?(drop, &1.name))
 
     state =
@@ -599,6 +604,7 @@ defmodule Anemos.Runtime.Dispatcher do
     forget_conditions(state, names(compiled, :conditions))
 
     {state, failures} = apply_compiled(compiled, state)
+    state = lifecycle(state, :boot, compiled.rules)
     state = persist(state)
 
     # Same convention as Scheduler.schedule/2: :ok means every declaration
@@ -607,6 +613,54 @@ defmodule Anemos.Runtime.Dispatcher do
     # warnings and nothing else, so the caller could not tell.
     reply = if failures == [], do: :ok, else: {:error, Enum.reverse(failures)}
     {:reply, reply, state}
+  end
+
+  defp do_dispatch(event_name, context, state) do
+    started = System.monotonic_time(:microsecond)
+    state = refresh_stores(state)
+    context = with_runtime(context, state)
+    comn_ctx = build_comn_context(event_name, context, state.runtime)
+
+    {{results, became_true}, state} =
+      Comn.Contexts.with_context(comn_ctx, fn ->
+        # Route event to all condition servers (async cast). A condition
+        # evaluates expressions the same way a rule does, so it is given the
+        # same expression-position authority (A-56) — with its own name and
+        # declared context as the source, which is what
+        # apply_condition_message/3 stamps on the operations its body
+        # produces.
+        Enum.each(state.condition_servers, fn {name, %{pid: pid}} ->
+          ConditionServer.handle_event(pid, event_name, condition_context(name, context, state))
+        end)
+
+        # Synchronize: call get_state on each condition server to ensure all casts
+        # have been processed before we drain the transition messages from our mailbox.
+        Enum.each(state.condition_servers, fn {_name, %{pid: pid}} ->
+          ConditionServer.get_state(pid)
+        end)
+
+        # Drain what the condition servers sent us. Both message kinds are
+        # collected in one pass so they stay in arrival order: a condition
+        # emits its side effects before it announces its transition, and
+        # reordering them would run a CONDITION_<name> rule before the body
+        # that provoked it.
+        condition_messages = collect_condition_messages()
+
+        # Dispatch original event to matching rules
+        {results, state} = dispatch_to_rules(event_name, context, state, 0)
+
+        {condition_results, state} =
+          Enum.reduce(condition_messages, {[], state}, fn message, {acc, st} ->
+            {res, st} = apply_condition_message(message, context, st)
+            {acc ++ res, st}
+          end)
+
+        became_true = for {:transition, name} <- condition_messages, do: name
+        {{results ++ condition_results, became_true}, state}
+      end)
+
+    state = record_trace(state, event_name, context, results, became_true, started)
+    {:reply, results, persist(state)}
   end
 
   defp with_runtime(context, %{runtime: nil}), do: context
@@ -772,6 +826,52 @@ defmodule Anemos.Runtime.Dispatcher do
   # Tears down what `old` declared and `new` does not. Safe to do by name:
   # conflicts/3 has already established that no other policy holds any of
   # them.
+  # --- Lifecycle interactions ---
+
+  # Raises `boot` or `shutdown` into the `on` blocks among `rules`, each in
+  # its own declared context: the runtime is the one raising it, and it
+  # raises it where the rule lives. Results are executed as any dispatch's
+  # are; there is no caller to hand them to, so a failure is logged.
+  defp lifecycle(state, kind, rules) do
+    event = Interaction.event_name(kind)
+
+    rules
+    |> Enum.filter(&(event in &1.subscriptions))
+    |> Enum.reduce(state, fn rule, st ->
+      context = with_runtime(%{context_path: rule.meta[:context_path]}, st)
+
+      {results, st} =
+        Comn.Contexts.with_context(build_comn_context(event, context, st.runtime), fn ->
+          dispatch_rules([{rule, event}], event, context, st, 0)
+        end)
+
+      for {:error, error} <- results do
+        Logger.warning("[anemos] #{event} in rule '#{rule.name}' failed: #{reason_tag(error)}")
+      end
+
+      st
+    end)
+  end
+
+  # The declaring rule of a compiled part: `at` and `on` blocks compile to
+  # rules of their own. Unload-by-name takes a declaration's parts with it.
+  defp owner(%{meta: %{owner: owner}}), do: owner
+  defp owner(rule), do: rule.name
+
+  # The parts of a policy version that are not among `unchanged`. A deploy's
+  # fingerprints are keyed by compiled rule name, `on_<rule>_boot` included.
+  defp changing(nil, _prior), do: []
+
+  defp changing(%{compiled: compiled}, %{unchanged: unchanged}) do
+    Enum.reject(compiled.rules, &MapSet.member?(unchanged, {:rule, &1.name}))
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    _ = lifecycle(state, :shutdown, state.rules)
+    :ok
+  end
+
   defp retire(state, nil, _new), do: state
 
   defp retire(state, %{compiled: old}, new) do

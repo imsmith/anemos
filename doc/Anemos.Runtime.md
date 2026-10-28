@@ -150,6 +150,31 @@ can still change what a rule that `:fires` goes on to do.
 
 Options: `:timeout` (default 5000 ms).
 
+# `interact`
+
+```elixir
+@spec interact(atom(), {:keypress, String.t()} | String.t(), map(), keyword()) ::
+  {:ok, list()}
+```
+
+Raises an interaction into the interpreter: what `on <interaction>` blocks
+take, as `dispatch/4` is what `when <event>` blocks take.
+
+A `when` takes a report, with a truth that stands until the next report
+and feeds compound triggers, dwell and conditions. An `on` takes an
+occurrence: no truth, never remembered, fired once each time. A host may
+raise a keypress or a named interaction; `boot` and `shutdown` are raised
+by the runtime itself when a policy becomes active and when it stops
+being so.
+
+    Anemos.Runtime.interact(:anemos, {:keypress, "ESC"})
+    Anemos.Runtime.interact(:anemos, "USER_LOGIN", %{context_path: "console"})
+
+Context and payload mean what they mean for `dispatch/4`. Something that
+is not an interaction answers an `anemos.runtime/not_an_interaction`
+error in the results, as a reserved `ON_` name handed to `dispatch/4`
+answers `anemos.runtime/reserved_event`.
+
 # `load`
 
 ```elixir

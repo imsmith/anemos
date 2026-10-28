@@ -1,5 +1,5 @@
 # `Anemos.AST.When`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L68)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L84)
 
 A `when` trigger block: fires on an event, with optional duration, guard, and body.
 

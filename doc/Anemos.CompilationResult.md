@@ -12,6 +12,7 @@ All fields default to empty lists — no fields are required at construction.
   capabilities: [Anemos.CompiledCapability.t()],
   conditions: [Anemos.CompiledCondition.t()],
   data_blocks: [Anemos.CompiledData.t()],
+  flows: [Anemos.CompiledFlow.t()],
   query_blocks: [Anemos.CompiledQuery.t()],
   rules: [Anemos.CompiledRule.t()],
   schedules: [Anemos.CompiledSchedule.t()]

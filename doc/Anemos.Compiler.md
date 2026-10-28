@@ -1,5 +1,5 @@
 # `Anemos.Compiler`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/compiler.ex#L94)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/compiler.ex#L96)
 
 Walks the AST produced by `Anemos.Parser` and produces `%Anemos.CompiledRule{}`,
 `%Anemos.CompiledCondition{}`, and `%Anemos.CompiledCapability{}` structs with

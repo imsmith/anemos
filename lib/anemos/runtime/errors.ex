@@ -48,6 +48,16 @@ defmodule Anemos.Runtime.Errors do
     message: "Not something a host may raise as an interaction"
   )
 
+  # `flow <name>`: the flow is looked up when the statement runs; a failed
+  # step stops the rest. `field` is "flow/step" on the halt.
+  register_error("anemos.runtime/unknown_flow", :validation,
+    message: "No flow of that name is loaded"
+  )
+
+  register_error("anemos.runtime/flow_halted", :validation,
+    message: "A step of the flow failed, so the steps after it did not run"
+  )
+
   register_error("anemos.runtime/event_recursion_limit", :validation,
     message: "Event recursion limit exceeded"
   )

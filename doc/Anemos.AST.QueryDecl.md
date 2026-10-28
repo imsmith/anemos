@@ -1,5 +1,5 @@
 # `Anemos.AST.QueryDecl`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L359)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L375)
 
 A named query declaration with expect/engine/body/return, scope, and source line.
 

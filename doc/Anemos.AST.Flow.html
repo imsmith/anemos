@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-8C854547.js"></script>
+    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -114,7 +114,10 @@ anemos
 
 
     <section id="moduledoc">
-<p>A named flow declaration with a body and source line.</p>
+<p>A <code class="inline">flow &lt;name&gt; { ... }</code> declaration: a stored, ordered workflow of
+<code class="inline">nextrule</code> steps taken as a whole. The body holds <code class="inline">NextRule</code> nodes and
+nothing else; a flow that should start on an event is a rule with
+<code class="inline">when X { flow name }</code>.</p>
     </section>
 
 </div>
@@ -163,7 +166,7 @@ anemos
       <h1 class="signature" translate="no">t()</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L64" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L69" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -175,7 +178,7 @@ anemos
       <div class="specs">
 
           <pre translate="no"><span class="attribute">@type</span> t() :: %Anemos.AST.Flow{
-  body: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>(),
+  body: [<a href="Anemos.AST.NextRule.html#t:t/0">Anemos.AST.NextRule.t</a>()],
   line: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">non_neg_integer</a>() | nil,
   name: <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>() | nil
 }</pre>

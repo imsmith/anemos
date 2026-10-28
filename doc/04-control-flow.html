@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-8C854547.js"></script>
+    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -202,7 +202,37 @@ handoff targets narrow when you want one action. The target still obeys its
 context, guards, and dwell behavior. A missing target produces
 <code class="inline">anemos.runtime/unknown_rule</code>.</p><p>Both handoffs increase dispatch depth. Cycles eventually hit the runtime's
 recursion ceiling. Depth limiting prevents unbounded nested dispatch; it is
-not a replacement for a termination condition in your policy.</p><h2 id="choosing-a-control-construct" class="section-heading"><a href="#choosing-a-control-construct" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Choosing a control construct</span></h2><p>Use <code class="inline">if</code> for a decision within one event. Use <code class="inline">unless</code> for a whole-trigger
+not a replacement for a termination condition in your policy.</p><h2 id="run-a-stored-flow" class="section-heading"><a href="#run-a-stored-flow" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Run a stored flow</span></h2><p>A <code class="inline">flow</code> is a stored, ordered workflow of rules taken as a whole. Its body
+is <code class="inline">nextrule</code> steps and nothing else; the order is the point.</p><pre><code class="anemos">rule build { when BUILD { log &quot;build&quot; } }
+rule test { when TEST { log &quot;test&quot; } }
+rule ship { when SHIP { log ?env } }
+
+flow release {
+  nextrule build
+  nextrule test
+  nextrule ship with { env: &quot;prod&quot; }
+}
+
+rule go {
+  when GO {
+    flow release
+    log &quot;released&quot;
+  }
+}</code></pre><p><code class="inline">flow release</code> in a rule body runs the steps in order, inside the invoking
+dispatch, so every step sees the triggering event's context path and payload.
+A step's <code class="inline">with</code> block adds or overrides keys for that step only. The call
+itself takes no <code class="inline">with</code>: inputs belong on the steps in the definition, so one
+flow reads the same from every caller. Each step goes through the same path
+as <code class="inline">nextrule</code>, so the target rule's own context boundary, guards and dwell
+apply.</p><p>A step that produces any error halts the flow. The remaining steps do not
+run, and the results carry the step's own error followed by
+<code class="inline">anemos.runtime/flow_halted</code> naming the flow and the step. An unknown flow
+is <code class="inline">anemos.runtime/unknown_flow</code> when the statement runs; an unknown rule in
+a step is <code class="inline">anemos.runtime/unknown_rule</code>. A flow has no triggers of its own.
+To start one on an event, write <code class="inline">when EV { flow name }</code> in a rule, which
+keeps triggers in exactly one place.</p><p>Flows are owned like capabilities: loaded, replaced and unloaded with their
+policy, refused to a second policy that declares the same name, and listed
+by <code class="inline">describe</code> with their steps.</p><h2 id="choosing-a-control-construct" class="section-heading"><a href="#choosing-a-control-construct" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Choosing a control construct</span></h2><p>Use <code class="inline">if</code> for a decision within one event. Use <code class="inline">unless</code> for a whole-trigger
 exclusion. Use <code class="inline">return</code> or <code class="inline">done</code> for an early exit. Use <code class="inline">nextevent</code> when the
 next stage is an event that any suitable listener may consume. Use <code class="inline">nextrule</code>
 when you deliberately address a named policy component.</p><p>For application workflows that need durable steps, retries, or rollback,

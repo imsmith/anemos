@@ -77,6 +77,7 @@ defmodule Anemos.CompilationResult do
   defstruct rules: [],
             conditions: [],
             capabilities: [],
+            flows: [],
             schedules: [],
             data_blocks: [],
             query_blocks: []
@@ -85,6 +86,7 @@ defmodule Anemos.CompilationResult do
           rules: [Anemos.CompiledRule.t()],
           conditions: [Anemos.CompiledCondition.t()],
           capabilities: [Anemos.CompiledCapability.t()],
+          flows: [Anemos.CompiledFlow.t()],
           schedules: [Anemos.CompiledSchedule.t()],
           data_blocks: [Anemos.CompiledData.t()],
           query_blocks: [Anemos.CompiledQuery.t()]
@@ -365,6 +367,9 @@ defmodule Anemos.Compiler do
           {:capability, cap} ->
             %{acc | capabilities: acc.capabilities ++ [cap]}
 
+          {:flow, flow} ->
+            %{acc | flows: acc.flows ++ [flow]}
+
           {:data, compiled_data} ->
             %{acc | data_blocks: acc.data_blocks ++ [compiled_data]}
 
@@ -399,6 +404,20 @@ defmodule Anemos.Compiler do
   defp compile_declaration(%AST.Capability{} = cap) do
     check_bindings!("capability", cap.name, cap.body)
     {:capability, compile_capability(cap)}
+  end
+
+  # A flow has no bindings of its own, so a `with { k: @x }` on a step can
+  # never be satisfied; check_bindings! says so at compile time. `?k` reads
+  # the invoking dispatch's context when the step runs.
+  defp compile_declaration(%AST.Flow{name: name, body: steps}) do
+    check_bindings!("flow", name, steps)
+
+    compiled_steps =
+      Enum.map(steps, fn %AST.NextRule{target: target, args: args} ->
+        %{target: target, args: fn context -> resolve_block_args(args, context, %{}) end}
+      end)
+
+    {:flow, %Anemos.CompiledFlow{name: name, steps: compiled_steps}}
   end
 
   defp compile_declaration(%AST.DataDecl{} = data) do
@@ -1362,6 +1381,10 @@ defmodule Anemos.Compiler do
 
   defp eval_statement(%AST.NextEvent{target: target, args: args}, context, bindings) do
     throw({:anemos_nextevent, target, resolve_block_args(args, context, bindings), [], bindings})
+  end
+
+  defp eval_statement(%AST.FlowCall{name: name}, _context, bindings) do
+    {[%{type: :flow, name: name}], bindings}
   end
 
   defp eval_statement(%AST.NextRule{target: target, args: args}, context, bindings) do

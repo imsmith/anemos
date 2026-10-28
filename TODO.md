@@ -20,7 +20,8 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 - Size literals (`10MB`, binary multiples, an integer at runtime), `~s(...)` strings and
   `~r/.../flags` regex literals compiled at load
 - `to systemd(unit)` destination, carried on the emit like `service`
-- `rule`, `condition`, `capability`, `data`, `query` declarations
+- `rule`, `condition`, `capability`, `flow`, `data`, `query` declarations
+- `flow <name>` — runs a stored flow's `nextrule` steps in order, halts on the first error
 - Format `data` blocks — `data d { <format> { ... } }`, with `transclude ... as name` — built
   by the `Anemos.DataModel` handler the host registered for the format
 - `query` blocks — called from a rule by name, `?query-name`; `expect`ed bindings come from
@@ -99,7 +100,6 @@ No lexer or parser support. Verified by attempting to parse each one.
 
 - `it` / `as` blocks — modal refs, group specs. `AST.It` and `AST.Flow` exist as structs the
   parser never constructs
-- `flow` declarations
 - Signing (producing signatures). Anemos verifies; something else signs — deliberate, see
   `ISSUES.md` A-05
 

@@ -16,7 +16,12 @@
 - [Anemos.AST.Demand](Anemos.AST.Demand.md): A `demand` expression referencing a capability with a PAM-style control flag.
 - [Anemos.AST.Done](Anemos.AST.Done.md): A `done` statement: exits the current handler with no value.
 - [Anemos.AST.Emit](Anemos.AST.Emit.md): An `emit` expression that produces a typed value to an optional destination.
-- [Anemos.AST.Flow](Anemos.AST.Flow.md): A named flow declaration with a body and source line.
+- [Anemos.AST.Flow](Anemos.AST.Flow.md): A `flow <name> { ... }` declaration: a stored, ordered workflow of
+`nextrule` steps taken as a whole. The body holds `NextRule` nodes and
+nothing else; a flow that should start on an event is a rule with
+`when X { flow name }`.
+
+- [Anemos.AST.FlowCall](Anemos.AST.FlowCall.md): A `flow <name>` statement: runs the stored flow of that name. Takes no inputs.
 - [Anemos.AST.For](Anemos.AST.For.md): A `for` loop: iterates `var` over `iterable`, executing body each time. Covers `for`, `each`, `every`, `foreach`.
 - [Anemos.AST.If](Anemos.AST.If.md): A conditional `if` block with an optional guard, body, and else branch.
 - [Anemos.AST.Introspect](Anemos.AST.Introspect.md): An introspection statement — `show`, `list`, `graph`, `trace`,
@@ -62,6 +67,10 @@ operations and the host app's messaging infrastructure.
 - [Anemos.CompiledCondition](Anemos.CompiledCondition.md): A compiled condition: name, trigger subscriptions, evaluator function, and side effects.
 
 - [Anemos.CompiledData](Anemos.CompiledData.md): A compiled data block.
+- [Anemos.CompiledFlow](Anemos.CompiledFlow.md): A compiled flow: its name and ordered steps. Each step names a rule and
+carries a closure that resolves its `with { }` block against the invoking
+dispatch's context, since a flow has no bindings of its own.
+
 - [Anemos.CompiledQuery](Anemos.CompiledQuery.md): A compiled query block.
 - [Anemos.CompiledRule](Anemos.CompiledRule.md): A compiled rule: name, event subscriptions, handler closure, and optional dwell duration.
 - [Anemos.CompiledSchedule](Anemos.CompiledSchedule.md): A compiled schedule: event name, time spec, recurrence, and handler.

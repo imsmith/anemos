@@ -8,7 +8,7 @@ for optional material; those markers are not literal DSL syntax.
 ## Source structure
 
 A source contains zero or more declarations. Supported top-level declarations
-are `rule`, `condition`, `capability`, `data`, `query`, and `signed_by`.
+are `rule`, `condition`, `capability`, `flow`, `data`, `query`, and `signed_by`.
 Statements do not run at source level. Declaration names should be lowercase
 identifiers. Use one context boundary per rule/condition.
 
@@ -20,7 +20,12 @@ rule <name> {
   [signed_by :<signer>]
   [scope local | global | mesh]
   [context <path>]
-  <when/at blocks and inline data/query declarations>
+  <when/at/on blocks and inline data/query declarations>
+}
+
+flow <name> {
+  nextrule <rule-name> [with { key: <expr> }]
+  ...
 }
 
 condition <name> {
@@ -181,6 +186,7 @@ return
 done
 nextevent <EVENT> [with { key: <expr>, other: <expr> }]
 nextrule <rule-name> [with { key: <expr>, other: <expr> }]
+flow <flow-name>
 
 demand <capability-name> [--requisite | --required | --optional | --sufficient]
 emit [state | effect | stream] [MODULE::verb <arguments>]
@@ -215,6 +221,9 @@ rule calculated-command {
 does not provide a return value in the current evaluator. `nextevent`
 broadcasts by event; `nextrule` selects by named rule. Both preserve context,
 overlay `with` data on the original payload, and enforce receiving context.
+`flow <name>` runs a stored flow's `nextrule` steps in order and takes no
+`with`; the first failing step halts it. See
+[flows](04-control-flow.md#run-a-stored-flow).
 
 Inspection subjects may be module/event names, expressions, or catalogue
 names `rules`, `conditions`, `modules`, `events`, `policies`, `schedules`.
@@ -423,6 +432,7 @@ promises that unfinished syntax will acquire a particular future meaning.
 | Rule `version`, `scope` | Descriptive metadata | Do not infer version enforcement/distribution |
 | `signed_by` | Enforced only through an appropriate load authority | Configure signed verification explicitly |
 | `on boot`, `on shutdown`, `on keypress`, `on NAME` | Implemented; interactions, not reports | Use `interact/4` from the host; `when` for anything with a truth |
-| `flow`, `import`, `export`, modal `it`, `as` | Reserved/design vocabulary, no working feature | Compose implemented rules and host services |
+| `flow` | Implemented: ordered `nextrule` steps, run by `flow <name>`, halt on first error | No triggers in a flow body; start it from a rule |
+| `import`, `export`, modal `it`, `as` | Reserved/design vocabulary, no working feature | Compose implemented rules and host services |
 
 [Glossary and index](glossary.md) · [Contents](README.md)

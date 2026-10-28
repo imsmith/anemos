@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-8C854547.js"></script>
+    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -241,7 +241,19 @@ anemos
 
   </div>
 
-    <div class="summary-synopsis"><p>A named flow declaration with a body and source line.</p></div>
+    <div class="summary-synopsis"><p>A <code class="inline">flow &lt;name&gt; { ... }</code> declaration: a stored, ordered workflow of
+<code class="inline">nextrule</code> steps taken as a whole. The body holds <code class="inline">NextRule</code> nodes and
+nothing else; a flow that should start on an event is a rule with
+<code class="inline">when X { flow name }</code>.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.FlowCall.html" translate="no">Anemos.<wbr />AST.<wbr />FlowCall</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">flow &lt;name&gt;</code> statement: runs the stored flow of that name. Takes no inputs.</p></div>
 
 </div>
 <div class="summary-row">
@@ -520,6 +532,17 @@ operations and the host app's messaging infrastructure.</p></div>
   </div>
 
     <div class="summary-synopsis"><p>A compiled data block.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.CompiledFlow.html" translate="no">Anemos.<wbr />CompiledFlow</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A compiled flow: its name and ordered steps. Each step names a rule and
+carries a closure that resolves its <code class="inline">with { }</code> block against the invoking
+dispatch's context, since a flow has no bindings of its own.</p></div>
 
 </div>
 <div class="summary-row">

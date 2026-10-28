@@ -1,5 +1,5 @@
 # `Anemos.AST.DataDecl`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L331)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L347)
 
 A named data declaration with content, optional source/transclude, scope, and source line.
 

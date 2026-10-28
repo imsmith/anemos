@@ -162,6 +162,50 @@ Both handoffs increase dispatch depth. Cycles eventually hit the runtime's
 recursion ceiling. Depth limiting prevents unbounded nested dispatch; it is
 not a replacement for a termination condition in your policy.
 
+## Run a stored flow
+
+A `flow` is a stored, ordered workflow of rules taken as a whole. Its body
+is `nextrule` steps and nothing else; the order is the point.
+
+```anemos
+rule build { when BUILD { log "build" } }
+rule test { when TEST { log "test" } }
+rule ship { when SHIP { log ?env } }
+
+flow release {
+  nextrule build
+  nextrule test
+  nextrule ship with { env: "prod" }
+}
+
+rule go {
+  when GO {
+    flow release
+    log "released"
+  }
+}
+```
+
+`flow release` in a rule body runs the steps in order, inside the invoking
+dispatch, so every step sees the triggering event's context path and payload.
+A step's `with` block adds or overrides keys for that step only. The call
+itself takes no `with`: inputs belong on the steps in the definition, so one
+flow reads the same from every caller. Each step goes through the same path
+as `nextrule`, so the target rule's own context boundary, guards and dwell
+apply.
+
+A step that produces any error halts the flow. The remaining steps do not
+run, and the results carry the step's own error followed by
+`anemos.runtime/flow_halted` naming the flow and the step. An unknown flow
+is `anemos.runtime/unknown_flow` when the statement runs; an unknown rule in
+a step is `anemos.runtime/unknown_rule`. A flow has no triggers of its own.
+To start one on an event, write `when EV { flow name }` in a rule, which
+keeps triggers in exactly one place.
+
+Flows are owned like capabilities: loaded, replaced and unloaded with their
+policy, refused to a second policy that declares the same name, and listed
+by `describe` with their steps.
+
 ## Choosing a control construct
 
 Use `if` for a decision within one event. Use `unless` for a whole-trigger

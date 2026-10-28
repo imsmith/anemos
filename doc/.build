@@ -24,6 +24,7 @@ Anemos.AST.Demand.html
 Anemos.AST.Done.html
 Anemos.AST.Emit.html
 Anemos.AST.Flow.html
+Anemos.AST.FlowCall.html
 Anemos.AST.For.html
 Anemos.AST.If.html
 Anemos.AST.Introspect.html
@@ -55,6 +56,7 @@ Anemos.CompilationResult.html
 Anemos.CompiledCapability.html
 Anemos.CompiledCondition.html
 Anemos.CompiledData.html
+Anemos.CompiledFlow.html
 Anemos.CompiledQuery.html
 Anemos.CompiledRule.html
 Anemos.CompiledSchedule.html
@@ -123,8 +125,8 @@ dist/lato-latin-700-normal-2XVSBPG4.woff2
 dist/lato-latin-ext-400-normal-N27NCBWW.woff2
 dist/lato-latin-ext-700-normal-Q2L5DVMW.woff2
 dist/remixicon-ZWU5GQ4X.woff2
-dist/search_data-49590FA8.js
-dist/sidebar_items-8C854547.js
+dist/search_data-DD17DDB9.js
+dist/sidebar_items-77CC71FE.js
 examples/batch.rule
 examples/counter.rule
 examples/data_models.exs

@@ -23,6 +23,7 @@ Anemos.AST.Demand.md
 Anemos.AST.Done.md
 Anemos.AST.Emit.md
 Anemos.AST.Flow.md
+Anemos.AST.FlowCall.md
 Anemos.AST.For.md
 Anemos.AST.If.md
 Anemos.AST.Introspect.md
@@ -54,6 +55,7 @@ Anemos.CompilationResult.md
 Anemos.CompiledCapability.md
 Anemos.CompiledCondition.md
 Anemos.CompiledData.md
+Anemos.CompiledFlow.md
 Anemos.CompiledQuery.md
 Anemos.CompiledRule.md
 Anemos.CompiledSchedule.md

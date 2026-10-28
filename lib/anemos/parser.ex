@@ -235,6 +235,10 @@ defmodule Anemos.Parser do
     parse_capability(rest)
   end
 
+  defp parse_declaration([{:keyword, _, :flow} | rest]) do
+    parse_flow(rest)
+  end
+
   defp parse_declaration([{:keyword, _, :data} | rest]) do
     parse_data(rest)
   end
@@ -574,6 +578,66 @@ defmodule Anemos.Parser do
 
   defp parse_optional_guard(tokens), do: {nil, tokens}
 
+  # --- Flow declarations and calls ---
+
+  # `flow <name> { nextrule <rule> [with { }] ... }` — an ordered list of
+  # steps and nothing else. The spec grammar also admits trigger blocks in a
+  # flow body; refused here so triggers live in exactly one place, a rule.
+  defp parse_flow([{:identifier, meta, name} | rest]) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, steps, rest} <- parse_flow_steps(rest, name, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      if steps == [] do
+        {:error, "flow '#{name}' has no steps on line #{meta[:line]}"}
+      else
+        {:ok, %AST.Flow{name: name, body: Enum.reverse(steps), line: meta[:line]}, rest}
+      end
+    end
+  end
+
+  defp parse_flow([{_, meta, _} | _]), do: {:error, "Expected flow name on line #{meta[:line]}"}
+  defp parse_flow([]), do: {:error, "Expected flow name but got end of input"}
+
+  defp parse_flow_steps([{:rbrace, _, _} | _] = tokens, _name, acc), do: {:ok, acc, tokens}
+
+  defp parse_flow_steps([{:keyword, _, :nextrule} | rest], name, acc) do
+    case parse_nextrule(rest) do
+      {:ok, step, rest} -> parse_flow_steps(rest, name, [step | acc])
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_flow_steps([{:keyword, meta, kw} | _], name, _acc)
+       when kw in [:when, :at, :on, :if] do
+    {:error,
+     "a flow has no triggers of its own; to start flow '#{name}' on an event write " <>
+       "`when EV { flow #{name} }` in a rule, on line #{meta[:line]}"}
+  end
+
+  defp parse_flow_steps([{_, meta, _} | _], name, _acc) do
+    {:error, "a flow body is nextrule steps only; flow '#{name}' on line #{meta[:line]}"}
+  end
+
+  defp parse_flow_steps([], name, _acc), do: {:error, "Unexpected end of input in flow '#{name}'"}
+
+  # `flow <name>` as a statement. No `with`: inputs belong on the steps in
+  # the flow's own definition, so one flow reads the same from every caller.
+  defp parse_flow_call([{:identifier, _, name}, {:keyword, wmeta, :with} | _], _meta) do
+    {:error,
+     "flow '#{name}' takes no inputs at the call; put `with { }` on a step inside " <>
+       "`flow #{name} { ... }`, on line #{wmeta[:line]}"}
+  end
+
+  defp parse_flow_call([{:identifier, _, name} | rest], meta) do
+    {:ok, %AST.FlowCall{name: name, line: meta[:line]}, rest}
+  end
+
+  defp parse_flow_call([{_, tmeta, _} | _], _meta),
+    do: {:error, "Expected flow name after 'flow' on line #{tmeta[:line]}"}
+
+  defp parse_flow_call([], meta),
+    do: {:error, "Expected flow name after 'flow' on line #{meta[:line]}"}
+
   # --- On (interaction) blocks ---
 
   # `on <interaction> [unless <expr>] { ... }` — spec §4.5 plus `shutdown`.
@@ -785,6 +849,7 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :log} | rest]), do: parse_log(rest)
   defp parse_statement([{:keyword, _, :emit} | rest]), do: parse_emit(rest)
   defp parse_statement([{:keyword, _, :demand} | rest]), do: parse_demand(rest)
+  defp parse_statement([{:keyword, meta, :flow} | rest]), do: parse_flow_call(rest, meta)
   defp parse_statement([{:keyword, _, :if} | rest]), do: parse_if(rest)
   defp parse_statement([{:keyword, _, :when} | rest]), do: parse_when(rest)
   defp parse_statement([{:keyword, _, :at} | rest]), do: parse_at(rest)

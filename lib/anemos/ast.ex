@@ -59,10 +59,26 @@ defmodule Anemos.AST do
   end
 
   defmodule Flow do
-    @moduledoc "A named flow declaration with a body and source line."
+    @moduledoc """
+    A `flow <name> { ... }` declaration: a stored, ordered workflow of
+    `nextrule` steps taken as a whole. The body holds `NextRule` nodes and
+    nothing else; a flow that should start on an event is a rule with
+    `when X { flow name }`.
+    """
     @enforce_keys []
-    @type t :: %__MODULE__{name: String.t() | nil, body: list(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            name: String.t() | nil,
+            body: [Anemos.AST.NextRule.t()],
+            line: non_neg_integer() | nil
+          }
     defstruct [:name, :body, :line]
+  end
+
+  defmodule FlowCall do
+    @moduledoc "A `flow <name>` statement: runs the stored flow of that name. Takes no inputs."
+    @enforce_keys []
+    @type t :: %__MODULE__{name: String.t() | nil, line: non_neg_integer() | nil}
+    defstruct [:name, :line]
   end
 
   defmodule When do

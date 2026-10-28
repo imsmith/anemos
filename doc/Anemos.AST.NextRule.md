@@ -1,5 +1,5 @@
 # `Anemos.AST.NextRule`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L317)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L333)
 
 A `nextrule` statement: dispatches to a different rule's pipeline,
 optionally carrying a `with { }` argument block.

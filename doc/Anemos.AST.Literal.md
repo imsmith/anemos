@@ -1,5 +1,5 @@
 # `Anemos.AST.Literal`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L225)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L241)
 
 A literal value node (string, integer, float, boolean, atom).
 

@@ -242,6 +242,8 @@ defmodule Anemos.Runtime.Dispatcher do
       condition_servers: %{},
       condition_contexts: %{},
       capability_servers: %{},
+      # name => %Anemos.CompiledFlow{}, derived from the policy store
+      flows: %{},
       triple_store: nil,
       data_store: nil,
       subscribable_registry: nil,
@@ -452,10 +454,20 @@ defmodule Anemos.Runtime.Dispatcher do
         %{name: data.name, policy: id, scope: data.scope || :global}
       end
 
+    flows =
+      for {name, flow} <- state.flows do
+        %{
+          name: name,
+          policy: owner(entries, :flows, name),
+          steps: Enum.map(flow.steps, & &1.target)
+        }
+      end
+
     reply = %{
       rules: rules,
       conditions: Enum.sort_by(conditions, & &1.name),
       capabilities: Enum.sort_by(capabilities, & &1.name),
+      flows: Enum.sort_by(flows, & &1.name),
       data_blocks: Enum.sort_by(data_blocks, & &1.name)
     }
 
@@ -514,6 +526,7 @@ defmodule Anemos.Runtime.Dispatcher do
           rules: c.rules |> Enum.map(& &1.name) |> Enum.uniq(),
           conditions: Enum.map(c.conditions, & &1.name),
           capabilities: Enum.map(c.capabilities, & &1.name),
+          flows: Enum.map(c.flows, & &1.name),
           schedules: c.schedules |> Enum.map(& &1.event_name) |> Enum.uniq(),
           data_blocks: Enum.map(c.data_blocks, & &1.name)
         }
@@ -777,6 +790,7 @@ defmodule Anemos.Runtime.Dispatcher do
       {"rule", &names(&1, :rules)},
       {"condition", &names(&1, :conditions)},
       {"capability", &names(&1, :capabilities)},
+      {"flow", &names(&1, :flows)},
       {"data block", fn c -> c |> data_keys() |> Enum.map(&elem(&1, 0)) end}
     ]
 
@@ -893,6 +907,8 @@ defmodule Anemos.Runtime.Dispatcher do
       &StoreSupervisor.delete(state.store_supervisor, {:capability, &1})
     )
 
+    state = %{state | flows: Map.drop(state.flows, names(old, :flows) -- names(new, :flows))}
+
     state =
       Enum.reduce(data_keys(old) -- data_keys(new), state, fn {name, scope} = key, st ->
         DataStore.deregister(st.data_store, name, scope)
@@ -973,6 +989,8 @@ defmodule Anemos.Runtime.Dispatcher do
     Enum.each(compiled.capabilities, fn cap ->
       {:ok, _pid} = StoreSupervisor.put_capability(state.store_supervisor, cap)
     end)
+
+    state = %{state | flows: Map.merge(state.flows, Map.new(compiled.flows, &{&1.name, &1}))}
 
     # Register data blocks (static and dynamic). A data block whose
     # subscription never starts is inert: the block exists and every
@@ -1434,7 +1452,8 @@ defmodule Anemos.Runtime.Dispatcher do
         :assert_triple,
         :triple_query,
         :nextevent,
-        :nextrule
+        :nextrule,
+        :flow
       ]
     }
   end
@@ -1952,6 +1971,44 @@ defmodule Anemos.Runtime.Dispatcher do
   # name. The old synthetic `"nextrule:<target>"` matched no subscription,
   # which meant guards and dwell keys saw an event name that could never
   # occur in a real dispatch.
+  # `flow <name>`: the steps run in order through the nextrule path, each
+  # with its own `with` resolved against this dispatch's context. The first
+  # step that answers an error ends the flow; the halt is reported after
+  # the step's own error so the caller sees both what failed and that the
+  # rest did not run.
+  defp execute_op(%{type: :flow, name: name}, context, state, depth) do
+    case Map.fetch(state.flows, name) do
+      :error ->
+        error =
+          Comn.Errors.Registry.error!("anemos.runtime/unknown_flow",
+            field: name,
+            message: "flow names '#{name}', and no flow of that name is loaded"
+          )
+
+        {{:error, error}, state}
+
+      {:ok, flow} ->
+        Enum.reduce_while(flow.steps, {[], state}, fn step, {acc, st} ->
+          op = %{type: :nextrule, target: step.target, args: step.args.(context)}
+          {results, st} = execute_op(op, context, st, depth)
+          results = List.wrap(results)
+
+          if Enum.any?(results, &match?({:error, _}, &1)) do
+            halt =
+              Comn.Errors.Registry.error!("anemos.runtime/flow_halted",
+                field: "#{name}/#{step.target}",
+                message:
+                  "flow '#{name}' stopped at step '#{step.target}'; later steps did not run"
+              )
+
+            {:halt, {acc ++ results ++ [{:error, halt}], st}}
+          else
+            {:cont, {acc ++ results, st}}
+          end
+        end)
+    end
+  end
+
   defp execute_op(%{type: :nextrule, target: target} = op, context, state, depth) do
     pairs =
       for rule <- state.rules, rule.name == target do

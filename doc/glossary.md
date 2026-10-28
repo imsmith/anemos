@@ -5,6 +5,10 @@
 **Binding.** A name associated with a value. A `let` creates an `@` binding;
 a `set` creates a `$` binding. See [values](03-values-and-expressions.md#binding-and-reading).
 
+**Flow.** A stored, ordered workflow of `nextrule` steps, run as a whole by
+`flow <name>` from a rule body. Halts at the first failing step. See
+[flows](04-control-flow.md#run-a-stored-flow).
+
 **Capability.** A passive named `on demand` body. Its context restricts which
 declaration may demand it. Current dispatch has important stack/execution
 limits. See [capabilities](06-conditions-and-capabilities.md#define-work-to-perform-on-demand).

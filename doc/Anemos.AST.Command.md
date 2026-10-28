@@ -1,5 +1,5 @@
 # `Anemos.AST.Command`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L150)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L166)
 
 A module command expression with a verb and arguments.
 

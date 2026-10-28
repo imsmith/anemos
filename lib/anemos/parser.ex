@@ -1091,12 +1091,14 @@ defmodule Anemos.Parser do
       [{:atom, _, name} | rest] ->
         {:ok, name, rest}
 
-      [{:interp_atom, _, name} | rest] ->
-        {:ok, name, rest}
+      # `:{?host}.network.ip` — spec §2.4 <label>
+      [{:interp_atom, meta, {expr, suffix}} | rest] ->
+        with {:ok, var} <- interp_var(expr, meta), do: {:ok, label_parts([var, suffix]), rest}
 
-      # identifier followed by interp_atom: "ddns.update." + ":{?fqdn}"
-      [{:identifier, _, prefix}, {:interp_atom, _, suffix} | rest] ->
-        {:ok, "#{prefix}:{#{suffix}}", rest}
+      # `ddns.update.:{?fqdn}` — the identifier swallows the trailing dot
+      [{:identifier, _, prefix}, {:interp_atom, meta, {expr, suffix}} | rest] ->
+        with {:ok, var} <- interp_var(expr, meta),
+             do: {:ok, label_parts([prefix, var, suffix]), rest}
 
       [{:identifier, _, name} | rest] ->
         {:ok, name, rest}
@@ -1110,6 +1112,21 @@ defmodule Anemos.Parser do
   end
 
   defp parse_optional_as(tokens), do: {:ok, nil, tokens}
+
+  # The grammar admits exactly one thing between the braces, a query var.
+  defp interp_var("?" <> name, meta) do
+    if Regex.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/, name) do
+      {:ok, %AST.VarRef{sigil: "?", name: name, line: meta[:line]}}
+    else
+      interp_var(nil, meta)
+    end
+  end
+
+  defp interp_var(_, meta) do
+    {:error, "Expected a ?variable inside :{...} on line #{meta[:line]}"}
+  end
+
+  defp label_parts(parts), do: Enum.reject(parts, &(&1 == ""))
 
   # --- Demand ---
 
@@ -1696,8 +1713,12 @@ defmodule Anemos.Parser do
     {:ok, %AST.Literal{type: :atom, value: name, line: meta[:line]}, rest}
   end
 
-  defp parse_atom_expression([{:interp_atom, meta, name} | rest]) do
-    {:ok, %AST.Literal{type: :interp_atom, value: name, line: meta[:line]}, rest}
+  defp parse_atom_expression([{:interp_atom, meta, {expr, suffix}} | rest]) do
+    with {:ok, var} <- interp_var(expr, meta) do
+      {:ok,
+       %AST.Literal{type: :interp_atom, value: label_parts([var, suffix]), line: meta[:line]},
+       rest}
+    end
   end
 
   defp parse_atom_expression([{:identifier, meta, name} | rest]) do

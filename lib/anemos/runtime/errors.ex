@@ -211,6 +211,11 @@ defmodule Anemos.Runtime.Errors do
     message: "nextrule names a rule that is not loaded"
   )
 
+  # `field` is the variable name without its sigil.
+  register_error("anemos.runtime/unbound_label", :validation,
+    message: "An emit label interpolates a variable that nothing supplied"
+  )
+
   register_error("anemos.runtime/unknown_dataset", :validation,
     message: "memberof names a data block that is not registered"
   )

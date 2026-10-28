@@ -15,10 +15,9 @@
 ; SECRET and EVENT doubles; without them the module lookups fail. The
 ; SECRET double deliberately returns a marker rather than key material.
 ;
-; KNOWN GAPS — this example does not yet run end to end, and the reasons
-; are in the runtime, not in this file. See the comments at each site.
-; The module-call and AND gaps are closed (A-56, A-73); the remaining ones
-; are all string interpolation.
+; Every construct here runs end to end. The module-call, AND and label
+; interpolation gaps are closed (A-56, A-73, 2026-10-28). Comments at each
+; site record what used to go wrong.
 
 capability katachora-ddns-key {
   context infra.networking
@@ -35,8 +34,8 @@ capability katachora-ddns-key {
 
 condition networkchanged {
   when (INFRA::ip4_addr_changed OR INFRA::ip6_addr_changed) {
-    ; GAP: `:{?hostname}` renders literally. The interpolation form is
-    ; accepted by the parser and substituted by nothing.
+    ; `:{?hostname}` is rendered from context data when the emit runs; an
+    ; unsupplied ?hostname is an `unbound_label` error, not a partial label.
     emit [EVENT::ip.addr.changed to channel(system.config.network)]
       as :{?hostname}.network.ip.addr.changed
   }
@@ -64,7 +63,6 @@ rule update-ddns {
     ; and thrown away — the example read as "update both" and updated one.
     let update = (@fqdn IN A @ipv4) AND (@fqdn IN AAAA @ipv6)
 
-    ; GAP: `as ddns.update.:{?fqdn}` renders literally, as above.
     emit [INFRA::ddns_update(:katachora.ddns.key, "katachora.com", @update)
           to channel(system.config.network.dns.ddns)]
       as ddns.update.:{?fqdn}

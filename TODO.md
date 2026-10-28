@@ -30,7 +30,8 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 - `at` blocks — time literals, intervals, recurring schedules, natural-language dates
 - `if` / `elseif` / `else`
 - Guards — `unless` (stateless), `until` (stateful, permanent on rules)
-- `let`, `set`, `log`, `emit` (with type, destination and label)
+- `let`, `set`, `log`, `emit` (with type, destination and label; `:{?var}` in a label is
+  rendered at emit time, an unsupplied variable is an `unbound_label` error)
 - `demand` with PAM control flags — `--required`, `--optional`, `--sufficient`, `--requisite`
 - `[MODULE::verb]` commands in **statement and expression** position — an expression-position
   call is dispatched at evaluation and its return value *is* the value of the expression
@@ -87,8 +88,6 @@ has repeatedly been mistaken for "it works".
 
 - **`when ERROR { ... }`** — parses only because `ERROR` is an ordinary event name. Nothing
   in the runtime emits such an event, so the block never fires. This is not error handling
-- **`:{...}` interpolation in labels** — e.g. `as ddns.update.:{?fqdn}` renders literally,
-  with no substitution and no error. Appears in the README and both examples
 
 ## Not implemented
 

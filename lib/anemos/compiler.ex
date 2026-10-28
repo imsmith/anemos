@@ -1289,7 +1289,7 @@ defmodule Anemos.Compiler do
     op = %{type: :emit, value: resolved_value}
     op = if emit_type, do: Map.put(op, :emit_type, emit_type), else: op
     op = if dest, do: Map.put(op, :destination, dest), else: op
-    op = if label, do: Map.put(op, :label, label), else: op
+    op = if label, do: Map.put(op, :label, render_label(label, context, bindings)), else: op
     {[op], bindings}
   end
 
@@ -1408,6 +1408,36 @@ defmodule Anemos.Compiler do
     do: "#{verb} #{subject_text(subject)}"
 
   defp subject_text({:expr, _}), do: "expression"
+
+  # A label is a string or a list of strings and `?var` refs (parser
+  # `label_parts/1`). An unsupplied variable is an error, not a label with a
+  # hole in it: `ddns.update.` would re-dispatch as a real event name.
+  defp render_label(label, _context, _bindings) when is_binary(label), do: label
+
+  defp render_label(parts, context, bindings) do
+    Enum.map_join(parts, fn
+      %AST.VarRef{name: name} = ref ->
+        case resolve_expr(ref, context, bindings) do
+          nil ->
+            throw(
+              {:anemos_verb_error,
+               Comn.Errors.Registry.error!("anemos.runtime/unbound_label",
+                 field: name,
+                 message: "label names ?#{name}, and nothing supplied it"
+               )}
+            )
+
+          value ->
+            to_string(value)
+        end
+
+      text ->
+        text
+    end)
+  end
+
+  defp resolve_expr(%AST.Literal{type: :interp_atom, value: parts}, context, bindings),
+    do: render_label(parts, context, bindings)
 
   defp resolve_expr(%AST.Literal{value: value}, _context, _bindings), do: value
 

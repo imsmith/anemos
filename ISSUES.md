@@ -60,7 +60,7 @@ than removed.
 | A-27 | LOW | No CI, no linting, no static analysis | Partial — Credo, Dialyzer and `mix check` landed in 436fe55. Remote now exists (`origin` = github.com/imsmith/anemos), so the workflow is unblocked; not yet written |
 | A-28 | LOW | `comn` path dependency makes the repo unbuildable | **Fixed** — git dep pinned to `v0.5.2`; `mix.lock` records the commit |
 | A-29 | LOW | `TODO.md` contradicts the README and the code | **Fixed** — rewritten 2026-08-07; its stale "Known gaps" corrected 2026-10-04. The stray root file and Appendix A contradictions were not re-checked |
-| A-30 | LOW | Two of three shipped examples do not work | **Fixed** — all three run with their documented commands, re-run 2026-10-04. `:{...}` label interpolation still renders literally, listed in `TODO.md` |
+| A-30 | LOW | Two of three shipped examples do not work | **Fixed** — all three run with their documented commands, re-run 2026-10-04. `:{...}` label interpolation implemented 2026-10-28 |
 | A-31 | LOW | Parser diagnostics contradict stated ergonomics principle | Open |
 | A-32 | LOW | Repository hygiene | Open |
 | A-33 | MEDIUM | `Anemos.Module` documents two functions that do not exist | **Fixed** — example uses a real API and points at `Anemos.Secret` |

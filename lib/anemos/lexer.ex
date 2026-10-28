@@ -613,12 +613,14 @@ defmodule Anemos.Lexer do
     build_tokens(rest, line, [{:atom, [line: line], value} | acc])
   end
 
+  # `:{expr}` and its optional dotted suffix stay separate: concatenating them
+  # made `:{?host}.ip` indistinguishable from `:{?host.ip}` by the parser.
   defp build_tokens([{:interp_atom_raw, [expr]} | rest], line, acc) do
-    build_tokens(rest, line, [{:interp_atom, [line: line], expr} | acc])
+    build_tokens(rest, line, [{:interp_atom, [line: line], {expr, ""}} | acc])
   end
 
   defp build_tokens([{:interp_atom_raw, [expr, suffix]} | rest], line, acc) do
-    build_tokens(rest, line, [{:interp_atom, [line: line], expr <> suffix} | acc])
+    build_tokens(rest, line, [{:interp_atom, [line: line], {expr, suffix}} | acc])
   end
 
   defp build_tokens([{:query_var_raw, [value]} | rest], line, acc) do

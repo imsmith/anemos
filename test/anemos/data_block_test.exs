@@ -15,12 +15,6 @@ defmodule Anemos.TestSubscribable do
   @impl true
   def unsubscribe(_ref), do: :ok
 
-  @impl true
-  def periodic?, do: false
-
-  @impl true
-  def interval(_spec), do: 60_000
-
   @doc "Simulate incoming data push"
   def push(uri, data) do
     callback = Agent.get(__MODULE__, &Map.get(&1, uri))

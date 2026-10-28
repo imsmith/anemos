@@ -328,7 +328,7 @@ defmodule Anemos.AST do
             content:
               {:simple_list, list()}
               | {:format_block, String.t(), String.t()}
-              | {:dynamic, tuple(), String.t() | nil},
+              | {:dynamic, {:subscribe, String.t(), String.t()}},
             transclude: {:transclude, String.t(), String.t(), String.t()} | nil,
             scope: :local | :global,
             line: non_neg_integer() | nil

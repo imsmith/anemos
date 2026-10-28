@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="dist/sidebar_items-1B120B71.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -208,10 +208,14 @@ An adapter implements <a href="Anemos.Subscribable.html"><code class="inline">An
   </span><span class="ss">:&quot;anemos.dispatcher&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;directory&quot;</span><span class="p">,</span><span class="w"> </span><span class="nc">MyApp.DirectoryFeed</span><span class="p" data-group-id="group-1">)</span></code></pre><p>The dataset starts empty after a successful subscription. Each pushed value
 replaces it; a pushed list is converted to a set. Updates do not automatically
 dispatch a policy event. If reacting immediately to changes matters, arrange
-for your adapter/application to dispatch one as well.</p><p>The syntax also accepts <code class="inline">periodic &lt;spec&gt;</code>, but the current dispatcher does not
-implement a general polling loop from that clause. Let the adapter own polling
-and lifecycle. A missing protocol handler is reported as a partial load
-failure. Unloading the owning policy cancels its live subscriptions.</p><h2 id="facts-and-triple-patterns" class="section-heading"><a href="#facts-and-triple-patterns" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Facts and triple patterns</span></h2><p>Anemos can accumulate triples: a subject, predicate, and object.</p><pre><code class="anemos">rule record-facts {
+for your adapter/application to dispatch one as well.</p><p>The adapter owns polling and lifecycle. A source that must be pulled on a
+cadence, such as a git repository refreshed daily, is an adapter whose
+<code class="inline">subscribe/3</code> starts its own timer and pushes on each pull. There is no
+cadence vocabulary on a data block. If the cadence belongs in the policy
+rather than the host, use an <code class="inline">at interval(...)</code> rule that asks the host to
+refresh; see <a href="07-time.html#run-at-a-time-or-interval">chapter 7</a>. A missing
+protocol handler is reported as a partial load failure. Unloading the owning
+policy cancels its live subscriptions.</p><h2 id="facts-and-triple-patterns" class="section-heading"><a href="#facts-and-triple-patterns" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Facts and triple patterns</span></h2><p>Anemos can accumulate triples: a subject, predicate, and object.</p><pre><code class="anemos">rule record-facts {
   when SETUP {
     let [:alice -&gt; :worksOn -&gt; :project1]
     let [:bob -&gt; :worksOn -&gt; :project1]

@@ -80,7 +80,7 @@ else elseif while for each every foreach do return done nextevent nextrule
 log show list graph trace explain exists infer assert unless until as with
 by that import export version signed_by scope state effect stream to channel
 service self interval then filter map reduce data query source expect
-transclude dynamic subscribe periodic memberof global
+transclude dynamic subscribe memberof global
 ```
 
 Recognition as a keyword does not mean a construct is implemented. See feature
@@ -275,7 +275,7 @@ data <name> {
 }
 
 data <name> {
-  dynamic { subscribe <protocol> "<uri>" [periodic <spec>] }
+  dynamic { subscribe <protocol> "<uri>" }
 }
 
 query <name> {
@@ -289,8 +289,8 @@ Top-level data/query declarations are global. Inline declarations are local
 to the named rule unless written `data global <name>` or `query global <name>`.
 Only simple sets work without a host data handler. Format/engine bodies are
 token-reconstructed text, not arbitrary raw source. `source` is metadata;
-dynamic protocol handlers implement fetching/subscription. `periodic` does
-not itself provide polling. Query access through `?name` executes the query;
+dynamic protocol handlers implement fetching, subscription and any polling.
+Query access through `?name` executes the query;
 it does not cache it.
 
 Triple assertions work as facts; query pattern evaluation is partial. See
@@ -366,7 +366,7 @@ Use string keys within payloads.
 | `Anemos.Event` | `name/1`, `context/1`, `payload/1` | Protocol for application event values |
 | `Anemos.Channel` | `publish/2` | Receives envelope; host owns delivery guarantees |
 | `Anemos.DataModel` | `keyword/0`, `parse/1`, `eval/2`, `transduce/3` | Return `{:error, :not_supported}` for unsupported transformations |
-| `Anemos.Subscribable` | `subscribe/3`, `unsubscribe/1`, `periodic?/0`, `interval/1` | Adapter owns actual feed/polling |
+| `Anemos.Subscribable` | `subscribe/3`, `unsubscribe/1` | Adapter owns actual feed/polling |
 | `Anemos.Runtime.LoadAuthority` | `authorize/1` | Receives `LoadRequest`; default permissive |
 
 ## Feature status

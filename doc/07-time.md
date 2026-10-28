@@ -82,6 +82,21 @@ An interval repeats while the runtime is alive, with the first firing after
 the interval. The default minimum interval is 1,000 milliseconds. A request
 below that floor is rejected rather than silently slowed down.
 
+This is the one way to make something happen on a cadence. "Do this every
+five minutes, forever" is an `at interval(5min)` block whose body does the
+thing, including asking the host to refresh a dataset:
+
+```anemos
+rule refresh-gtld-servers {
+  at interval(5min) {
+    [INFRA::refresh "gtld-servers"]
+  }
+}
+```
+
+The timer is re-armed when the runtime replays its policy store after a
+process restart. It does not survive a VM restart.
+
 ```anemos
 rule lunch {
   at 13:00 {

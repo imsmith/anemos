@@ -804,7 +804,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
   # A block with a feed is only "already there" if the feed is. One whose
   # subscription failed last time has to be tried again.
-  defp live_data?(state, %{dynamic: {{:subscribe, _protocol, _uri}, _}} = data),
+  defp live_data?(state, %{dynamic: {:subscribe, _protocol, _uri}} = data),
     do: Map.has_key?(state.subscriptions, {data.name, data.scope || :global})
 
   defp live_data?(_state, _data), do: true
@@ -893,7 +893,7 @@ defmodule Anemos.Runtime.Dispatcher do
         end
 
         case data do
-          %{dynamic: {{:subscribe, protocol, uri}, _periodic}} ->
+          %{dynamic: {:subscribe, protocol, uri}} ->
             subscribe_data_block(data, protocol, uri, state, failures)
 
           %{format: format} when is_binary(format) ->

@@ -1034,6 +1034,11 @@ and called from nowhere. Subscriptions are create-only — they cannot be cancel
 or restarted, and they outlive the data block they feed. The `periodic` half of the parsed
 tuple is destructured and discarded, so polling is parsed but not implemented.
 
+*2026-10-28:* `periodic` removed outright — keyword, parser clause, the slot on the dynamic
+tuple, and the `periodic?/0` / `interval/1` callbacks. It came from a Tcl sketch, never
+reached the language spec, and duplicated the one scheduling construct the language has,
+`at interval(...)`. Polling is the adapter's; cadence in policy is an `at` rule.
+
 ---
 
 ## A-27 — No CI, no linting, no static analysis
@@ -1350,7 +1355,7 @@ Three things the spec did not settle, and what was built:
 A failed query aborts the body, as a failed expression-position verb does. A handler that
 raises is caught on both paths.
 
-Not built: `periodic` on a dynamic block; parse caching; queries called from a `condition`
+Not built (`periodic` was removed 2026-10-28, see A-26): parse caching; queries called from a `condition`
 or `capability` body, which are not handed the query index; the spec's optional `member?/2`
 handler callback; "import" and "function/eval" shapes are whatever a handler makes of its
 body — nothing in the runtime distinguishes them.

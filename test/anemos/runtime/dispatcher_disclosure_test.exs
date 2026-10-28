@@ -27,12 +27,6 @@ defmodule Anemos.Runtime.DispatcherDisclosureTest do
 
     @impl true
     def unsubscribe(_ref), do: :ok
-
-    @impl true
-    def periodic?, do: false
-
-    @impl true
-    def interval(_spec), do: 60_000
   end
 
   defp dispatcher_for(source, opts \\ []) do

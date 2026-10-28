@@ -28,12 +28,6 @@ defmodule Anemos.Runtime.DeployTest do
       send(:deploy_test_feed, {:unsubscribed, ref})
       :ok
     end
-
-    @impl true
-    def periodic?, do: false
-
-    @impl true
-    def interval(_spec), do: 60_000
   end
 
   setup context do

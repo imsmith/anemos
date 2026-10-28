@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="dist/sidebar_items-1B120B71.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -115,7 +115,12 @@ anemos
 
     <section id="moduledoc">
 <p>Behaviour for data sources that support dynamic subscription.</p><p>Implementations register a protocol identifier (e.g., &quot;webhook&quot;,
-&quot;rss&quot;, &quot;amqp&quot;) used in <code class="inline">dynamic { subscribe &lt;protocol&gt; &lt;uri&gt; }</code> blocks.</p>
+&quot;rss&quot;, &quot;amqp&quot;) used in <code class="inline">dynamic { subscribe &lt;protocol&gt; &lt;uri&gt; }</code> blocks.</p><p>The adapter owns the feed's lifecycle, including any polling. A source
+that has to be pulled on a cadence starts its own timer inside
+<code class="inline">subscribe/3</code> and calls the callback on each pull; the policy language
+has no vocabulary for that cadence, by design. If the cadence should be
+visible in the policy, write an <code class="inline">at interval(...)</code> rule that asks the
+host to refresh — see the manual, chapter 7.</p>
     </section>
 
 </div>
@@ -131,26 +136,6 @@ anemos
   <h3>
     <a href="#callbacks">Callbacks</a>
   </h3>
-
-    <div class="summary-row">
-      <div class="summary-signature">
-        <a href="#c:interval/1" data-no-tooltip="" translate="no">interval(spec)</a>
-
-      </div>
-
-        <div class="summary-synopsis"><p>Converts a human-readable interval spec (e.g., <code class="inline">&quot;5m&quot;</code>) to milliseconds.</p></div>
-
-    </div>
-
-    <div class="summary-row">
-      <div class="summary-signature">
-        <a href="#c:periodic?/0" data-no-tooltip="" translate="no">periodic?()</a>
-
-      </div>
-
-        <div class="summary-synopsis"><p>Returns <code class="inline">true</code> if this source is polled on a schedule rather than push-based.</p></div>
-
-    </div>
 
     <div class="summary-row">
       <div class="summary-signature">
@@ -186,62 +171,6 @@ anemos
     </h2>
 
     <div class="callbacks-list">
-<section class="detail" id="c:interval/1">
-
-  <div class="detail-header">
-    <a href="#c:interval/1" class="detail-link" data-no-tooltip="" aria-label="Link to this callback">
-      <i class="ri-link-m" aria-hidden="true"></i>
-    </a>
-    <div class="heading-with-actions">
-      <h1 class="signature" translate="no">interval(spec)</h1>
-
-
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/subscribable.ex#L20" class="icon-action" rel="help nofollow" aria-label="View Source">
-          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
-        </a>
-
-    </div>
-  </div>
-
-  <section class="docstring">
-
-      <div class="specs">
-
-          <pre translate="no"><span class="attribute">@callback</span> interval(spec :: <a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>()) :: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">pos_integer</a>()</pre>
-
-      </div>
-
-<p>Converts a human-readable interval spec (e.g., <code class="inline">&quot;5m&quot;</code>) to milliseconds.</p>
-  </section>
-</section>
-<section class="detail" id="c:periodic?/0">
-
-  <div class="detail-header">
-    <a href="#c:periodic?/0" class="detail-link" data-no-tooltip="" aria-label="Link to this callback">
-      <i class="ri-link-m" aria-hidden="true"></i>
-    </a>
-    <div class="heading-with-actions">
-      <h1 class="signature" translate="no">periodic?()</h1>
-
-
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/subscribable.ex#L17" class="icon-action" rel="help nofollow" aria-label="View Source">
-          <i class="ri-code-s-slash-line" aria-hidden="true"></i>
-        </a>
-
-    </div>
-  </div>
-
-  <section class="docstring">
-
-      <div class="specs">
-
-          <pre translate="no"><span class="attribute">@callback</span> periodic?() :: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">boolean</a>()</pre>
-
-      </div>
-
-<p>Returns <code class="inline">true</code> if this source is polled on a schedule rather than push-based.</p>
-  </section>
-</section>
 <section class="detail" id="c:subscribe/3">
 
   <div class="detail-header">
@@ -252,7 +181,7 @@ anemos
       <h1 class="signature" translate="no">subscribe(protocol, uri, callback)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/subscribable.ex#L10" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/subscribable.ex#L17" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -281,7 +210,7 @@ anemos
       <h1 class="signature" translate="no">unsubscribe(ref)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/subscribable.ex#L14" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/subscribable.ex#L21" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 

@@ -637,22 +637,8 @@ defmodule Anemos.ParserTest do
 
     assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
     assert decl.name == "botnet-ips"
-    assert {:dynamic, {:subscribe, "webhook", uri}, nil} = decl.content
+    assert {:dynamic, {:subscribe, "webhook", uri}} = decl.content
     assert String.contains?(uri, "hooks.example.com")
-  end
-
-  test "parses dynamic data block with periodic" do
-    input = """
-    data gtld-servers {
-      dynamic {
-        subscribe git "git://example.com/gtld.git"
-        periodic daily
-      }
-    }
-    """
-
-    assert {:ok, %{declarations: [decl]}} = Parser.parse(input)
-    assert {:dynamic, {:subscribe, "git", _}, "daily"} = decl.content
   end
 
   # --- Query block tests ---

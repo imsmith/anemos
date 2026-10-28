@@ -128,9 +128,7 @@ defmodule Anemos.LexerTest do
 
   test "tokenizes data block keywords" do
     assert {:ok, tokens} =
-             Anemos.Lexer.tokenize(
-               "source expect transclude dynamic subscribe periodic memberof global"
-             )
+             Anemos.Lexer.tokenize("source expect transclude dynamic subscribe memberof global")
 
     keywords = for {:keyword, _, k} <- tokens, do: k
     assert :source in keywords
@@ -138,7 +136,6 @@ defmodule Anemos.LexerTest do
     assert :transclude in keywords
     assert :dynamic in keywords
     assert :subscribe in keywords
-    assert :periodic in keywords
     assert :memberof in keywords
     assert :global in keywords
   end

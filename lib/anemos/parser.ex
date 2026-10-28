@@ -2173,9 +2173,8 @@ defmodule Anemos.Parser do
 
   defp parse_dynamic_block([{:lbrace, _, _} | rest]) do
     with {:ok, subscribe, rest} <- parse_subscribe(rest),
-         {periodic, rest} <- parse_optional_periodic(rest),
          {:ok, rest} <- expect(rest, :rbrace) do
-      {:ok, {:dynamic, subscribe, periodic}, rest}
+      {:ok, {:dynamic, subscribe}, rest}
     end
   end
 
@@ -2216,12 +2215,6 @@ defmodule Anemos.Parser do
   defp collect_uri_tokens([tok | rest], acc) do
     collect_uri_tokens(rest, [token_to_string(tok) |> String.trim() | acc])
   end
-
-  defp parse_optional_periodic([{:keyword, _, :periodic}, {:identifier, _, interval} | rest]) do
-    {interval, rest}
-  end
-
-  defp parse_optional_periodic(tokens), do: {nil, tokens}
 
   # --- Transclude clause ---
 

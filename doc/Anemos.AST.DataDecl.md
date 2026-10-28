@@ -10,7 +10,7 @@ A named data declaration with content, optional source/transclude, scope, and so
   content:
     {:simple_list, list()}
     | {:format_block, String.t(), String.t()}
-    | {:dynamic, tuple(), String.t() | nil},
+    | {:dynamic, {:subscribe, String.t(), String.t()}},
   line: non_neg_integer() | nil,
   name: String.t() | nil,
   scope: :local | :global,

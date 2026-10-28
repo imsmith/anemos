@@ -182,10 +182,14 @@ replaces it; a pushed list is converted to a set. Updates do not automatically
 dispatch a policy event. If reacting immediately to changes matters, arrange
 for your adapter/application to dispatch one as well.
 
-The syntax also accepts `periodic <spec>`, but the current dispatcher does not
-implement a general polling loop from that clause. Let the adapter own polling
-and lifecycle. A missing protocol handler is reported as a partial load
-failure. Unloading the owning policy cancels its live subscriptions.
+The adapter owns polling and lifecycle. A source that must be pulled on a
+cadence, such as a git repository refreshed daily, is an adapter whose
+`subscribe/3` starts its own timer and pushes on each pull. There is no
+cadence vocabulary on a data block. If the cadence belongs in the policy
+rather than the host, use an `at interval(...)` rule that asks the host to
+refresh; see [chapter 7](07-time.md#run-at-a-time-or-interval). A missing
+protocol handler is reported as a partial load failure. Unloading the owning
+policy cancels its live subscriptions.
 
 ## Facts and triple patterns
 

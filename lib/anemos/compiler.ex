@@ -658,11 +658,11 @@ defmodule Anemos.Compiler do
           transclude: transclude
         }
 
-      {:dynamic, subscribe, periodic} ->
+      {:dynamic, subscribe} ->
         %Anemos.CompiledData{
           name: name,
           scope: scope,
-          dynamic: {subscribe, periodic},
+          dynamic: subscribe,
           source: source,
           transclude: transclude
         }

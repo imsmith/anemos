@@ -6,21 +6,12 @@ Behaviour for data sources that support dynamic subscription.
 Implementations register a protocol identifier (e.g., "webhook",
 "rss", "amqp") used in `dynamic { subscribe <protocol> <uri> }` blocks.
 
-# `interval`
-
-```elixir
-@callback interval(spec :: String.t()) :: pos_integer()
-```
-
-Converts a human-readable interval spec (e.g., `"5m"`) to milliseconds.
-
-# `periodic?`
-
-```elixir
-@callback periodic?() :: boolean()
-```
-
-Returns `true` if this source is polled on a schedule rather than push-based.
+The adapter owns the feed's lifecycle, including any polling. A source
+that has to be pulled on a cadence starts its own timer inside
+`subscribe/3` and calls the callback on each pull; the policy language
+has no vocabulary for that cadence, by design. If the cadence should be
+visible in the policy, write an `at interval(...)` rule that asks the
+host to refresh — see the manual, chapter 7.
 
 # `subscribe`
 

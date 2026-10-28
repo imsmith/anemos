@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-71EB7D2D.js"></script>
+    <script defer src="dist/sidebar_items-1B120B71.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -143,7 +143,14 @@ duration is essential.</p><h2 id="run-at-a-time-or-interval" class="section-head
   }
 }</code></pre><p>An interval repeats while the runtime is alive, with the first firing after
 the interval. The default minimum interval is 1,000 milliseconds. A request
-below that floor is rejected rather than silently slowed down.</p><pre><code class="anemos">rule lunch {
+below that floor is rejected rather than silently slowed down.</p><p>This is the one way to make something happen on a cadence. &quot;Do this every
+five minutes, forever&quot; is an <code class="inline">at interval(5min)</code> block whose body does the
+thing, including asking the host to refresh a dataset:</p><pre><code class="anemos">rule refresh-gtld-servers {
+  at interval(5min) {
+    [INFRA::refresh &quot;gtld-servers&quot;]
+  }
+}</code></pre><p>The timer is re-armed when the runtime replays its policy store after a
+process restart. It does not survive a VM restart.</p><pre><code class="anemos">rule lunch {
   at 13:00 {
     log &quot;Lunch&quot;
   }

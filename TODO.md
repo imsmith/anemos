@@ -79,7 +79,6 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 | --- | --- |
 | `until` on conditions | Compiles as "false while guard holds"; cannot latch permanently (A-48) |
 | Message envelope | `source`, `timestamp`, `label`, `channel` populated; `signature` never set |
-| `data` blocks — dynamic | `subscribe` works; `periodic` is parsed and unimplemented |
 
 ## Parses but inert
 

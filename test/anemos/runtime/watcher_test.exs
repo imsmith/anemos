@@ -169,10 +169,6 @@ rule keep { when K { log "k" } }|)
       def subscribe(_protocol, _uri, _callback), do: {:ok, make_ref()}
       @impl true
       def unsubscribe(_ref), do: :ok
-      @impl true
-      def periodic?, do: false
-      @impl true
-      def interval(_spec), do: 60_000
     end
 
     :ok = Runtime.Dispatcher.register_subscribable(:"#{rt}.dispatcher", "feed", Feed)

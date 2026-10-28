@@ -59,7 +59,7 @@ Each compiled rule has a handler function you can call directly:
 [rule] = compiled.rules
 IO.inspect(rule.subscriptions, label: "listens for")
 
-{:ok, ops} = rule.handler.("MOTION", %{})
+{:ok, ops, _bindings} = rule.handler.("MOTION", %{}, %{})
 IO.inspect(ops, label: "operations")
 ```
 
@@ -141,7 +141,10 @@ IO.inspect(results, label: "results")
 ## Capabilities and Demand
 
 Capabilities are passive actions invoked via `demand`. They use PAM-style
-control flags for failure semantics.
+control flags for failure semantics. A capability's `context` is a security
+boundary that fails closed: the demanding rule must declare the same context
+(or a child of it), or the demand is denied. The caller must also dispatch
+from inside that context via `context_path:`, or the rule never sees the event.
 
 ```elixir
 policy = """
@@ -154,6 +157,8 @@ capability audit-key {
 }
 
 rule secure-action {
+  context security
+
   when SECURE_EVENT {
     demand audit-key
     log "proceeding with secure action"
@@ -161,12 +166,13 @@ rule secure-action {
 }
 """
 
-{:ok, results} = Anemos.run(policy, event: "SECURE_EVENT")
+{:ok, results} = Anemos.run(policy, event: "SECURE_EVENT", context_path: "security")
 IO.inspect(results, label: "results")
 ```
 
 Try adding `--optional` to the demand and changing the capability name
-to something that doesn't exist — see how PAM flags affect behavior.
+to something that doesn't exist — see how PAM flags affect behavior. Then
+remove the rule's `context security` line and watch the demand get denied.
 
 ## Variable Sigils
 
@@ -209,6 +215,8 @@ capability required-cap {
 }
 
 rule stacked-demands {
+  context test
+
   when TEST_EVENT {
     demand required-cap
     demand nonexistent-cap --optional
@@ -217,7 +225,7 @@ rule stacked-demands {
 }
 """
 
-{:ok, results} = Anemos.run(policy, event: "TEST_EVENT")
+{:ok, results} = Anemos.run(policy, event: "TEST_EVENT", context_path: "test")
 IO.inspect(results, label: "with --optional on missing cap")
 ```
 
@@ -310,6 +318,134 @@ IO.inspect(results, label: "alarm results")
 IO.inspect(Anemos.Runtime.condition_state(:playground, "alarm"), label: "alarm active?")
 ```
 
+## Compound Triggers
+
+`when (A AND B)` remembers the last report of each operand and runs the body
+whenever every operand's remembered state is true. An event reports true
+unless its payload carries `state: false`.
+
+```elixir
+Anemos.Runtime.load(:playground, """
+rule ready-to-work {
+  when (NETWORK_UP AND STORAGE_READY) {
+    log "both prerequisites available"
+  }
+}
+""")
+
+{:ok, first} = Anemos.Runtime.dispatch(:playground, "NETWORK_UP")
+IO.inspect(first, label: "after NETWORK_UP only")
+
+{:ok, second} = Anemos.Runtime.dispatch(:playground, "STORAGE_READY")
+IO.inspect(second, label: "after STORAGE_READY too")
+
+{:ok, third} = Anemos.Runtime.dispatch(:playground, "STORAGE_READY", %{context_data: %{"state" => false}})
+IO.inspect(third, label: "after STORAGE_READY state: false")
+```
+
+Swap `AND` for `OR` and re-run: the first dispatch alone is enough.
+
+## Data Blocks
+
+A `data` block declares a named set. `memberof` tests exact membership.
+
+```elixir
+Anemos.Runtime.load(:playground, """
+data allowed_users {
+  alice
+  bob
+  "Grace Hopper"
+}
+
+rule check-user {
+  when LOGIN {
+    if ?user memberof(allowed_users) {
+      log "allowed"
+    } else {
+      log "denied"
+    }
+  }
+}
+""")
+
+for user <- ["alice", "Grace Hopper", "mallory"] do
+  {:ok, results} = Anemos.Runtime.dispatch(:playground, "LOGIN", %{context_data: %{"user" => user}})
+  IO.inspect(results, label: user)
+end
+```
+
+## Query Blocks
+
+A `query` names a computation that a host-registered data model performs.
+Reading `?greet` runs it; `expect` names are resolved from `let`, then `set`,
+then event data.
+
+```elixir
+defmodule Playground.Greeter do
+  @behaviour Anemos.DataModel
+
+  @impl true
+  def keyword, do: "greeter"
+
+  @impl true
+  def parse(raw), do: {:ok, String.trim(raw)}
+
+  @impl true
+  def eval(prefix, %{bindings: %{"name" => name}}) do
+    {:ok, %{"line" => prefix <> " " <> name}}
+  end
+
+  @impl true
+  def transduce(_data, _shape, _name), do: {:error, :not_supported}
+end
+
+:ok = Anemos.Runtime.register_data_model(:playground, Playground.Greeter)
+
+Anemos.Runtime.load(:playground, """
+query greet {
+  expect :name
+  greeter { hello }
+  return ?line
+}
+
+rule welcome {
+  when ARRIVAL {
+    let name = ?visitor
+    log ?greet
+  }
+}
+""")
+
+{:ok, results} = Anemos.Runtime.dispatch(:playground, "ARRIVAL", %{context_data: %{"visitor" => "Ada"}})
+IO.inspect(results, label: "query result")
+```
+
+## Structured Errors and Diagnosis
+
+Every failure is a `Comn.Errors.ErrorStruct` with a namespaced `code`. Parse
+errors carry the line; runtime errors carry a `request_id`.
+
+```elixir
+{:error, err} = Anemos.Parser.parse("rule broken { when { } }")
+IO.inspect({err.code, err.message}, label: "parse error")
+
+{:ok, results} = Anemos.run("rule r { when EV { demand missing-cap } }", event: "EV")
+IO.inspect(results, label: "runtime error inside results")
+```
+
+When a one-shot run produces nothing, `run_report/2` tells you why: no rule
+subscribed, or the caller's context did not reach the rule.
+
+```elixir
+source = ~S|rule t { context "garage" { when EV { log "hi" } } }|
+
+{:ok, outside} = Anemos.run_report(source, event: "EV")
+IO.inspect(Map.take(outside, [:subscribed, :reachable, :operations]), label: "no context_path")
+
+{:ok, inside} = Anemos.run_report(source, event: "EV", context_path: "garage")
+IO.inspect(Map.take(inside, [:subscribed, :reachable, :operations]), label: "context_path: garage")
+```
+
 ## Scheduled Triggers
 
 `at` blocks are clock-driven event sources — they fire on a schedule
@@ -323,14 +459,14 @@ without needing an external event.
 
 Anemos.Runtime.load(:scheduled, """
 rule heartbeat {
-  at interval(100ms) {
+  at interval(1s) {
     log "tick"
   }
 }
 """)
 
-# Wait and see ticks in the log output
-Process.sleep(350)
+# Wait and see ticks in the log output (1s is the minimum interval)
+Process.sleep(2500)
 IO.puts("(check log output above for tick messages)")
 ```
 
@@ -483,6 +619,8 @@ rule watch-my-active-projects {
 }
 """
 
-{:ok, results} = Anemos.run(my_policy, event: "MY_EVENT")
-IO.inspect(results)
+# The policy above is a design sketch — the `at (... and ...)` form and the
+# filter/map/reduce pipeline are not implemented yet, so expect a structured
+# parser error here until they are. Replace it with your own experiment.
+Anemos.run(my_policy, event: "MY_EVENT") |> IO.inspect()
 ```

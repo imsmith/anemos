@@ -109,7 +109,7 @@ defmodule Anemos.MixProject do
       # `< 1.0.0`, so mix.lock floats within 0.7.x. An override pinning it here was
       # removed once comn was tested green against 0.7.x (A-66); Anemos should
       # not be legislating its dependency's dependencies.
-      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.6.3"},
+      {:comn, git: "https://github.com/imsmith/comn.git", tag: "v0.7.0"},
       {:nimble_parsec, "~> 1.4"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

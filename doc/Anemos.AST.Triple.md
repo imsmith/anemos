@@ -1,5 +1,5 @@
 # `Anemos.AST.Triple`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L259)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L304)
 
 An RDF-style triple with subject, predicate, and object.
 

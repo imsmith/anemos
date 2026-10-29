@@ -1,5 +1,5 @@
 # `Anemos.AST.BinaryOp`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L222)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L267)
 
 A binary operator expression.
 

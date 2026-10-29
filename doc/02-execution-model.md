@@ -78,6 +78,52 @@ Interactions are indexed under names beginning `ON_`, which is why
 `when ON_BOOT` is refused by the parser and `dispatch/4` refuses an `ON_`
 name: a report path may not carry an occurrence, nor the other way round.
 
+## Modes
+
+A **mode** is a named switch the policy itself flips. `[MODE::set "away"]`
+makes `away` active, `[MODE::set "level" 2]` makes `level` active with the
+value `2`, and `[MODE::unset "away"]` turns it off. Modes belong to the
+runtime, not to one rule, and they survive a restart.
+
+Three blocks read them:
+
+- **`it <mode> { ... }`** holds trigger blocks that are live only while the
+  mode is active. `it level = 2 { ... }` also requires that value. An `it`
+  may sit inside a rule or at the top of a source, where it is a rule named
+  `it_<mode>`.
+- **`as "<mode>" { ... }`** runs its body once, when the mode comes on.
+- **`by <identity> that { ... }`**, inside an `it`, runs its body when the
+  `it`'s mode comes on, and records who the obligation is attributed to.
+
+```anemos
+rule presence {
+  when AWAY { [MODE::set "away_mode"] }
+  when HOME { [MODE::unset "away_mode"] }
+}
+
+it away_mode {
+  when DOOR_OPENED { [NOTIFY::send "Door opened while away"] }
+  by meshid.ian that { log "alarm armed" }
+}
+
+rule lights {
+  as "away_mode" { [DEVICE::set "house.lights" "off"] }
+}
+```
+
+`as` and `by` run inside the dispatch that set the mode, with that event's
+context, the way an `emit ... as` would. A listener whose context does not
+admit that context does not run. Setting a mode that is already active with
+the same value changes nothing, so nothing runs. A block inside nested `it`s,
+or an `as` inside an `it`, runs when all of its modes hold together.
+
+`[MODE::active "away"]` and `[MODE::current "away"]` read a mode as a value.
+`[MODE::current]` lists the active modes. A change has to be a statement,
+because the dispatcher acts on it: `let x = [MODE::set "m"]` is a
+`bad_mode_call` error. A read inside the same body that set the mode still
+sees the old value, because the change runs after the body has been
+evaluated.
+
 ## A context belongs to a listener
 
 Declare one context boundary per rule. Either of these forms expresses it:

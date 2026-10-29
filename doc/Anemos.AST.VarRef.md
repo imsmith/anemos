@@ -1,5 +1,5 @@
 # `Anemos.AST.VarRef`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L248)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L293)
 
 A variable reference with an optional sigil prefix.
 

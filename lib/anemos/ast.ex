@@ -136,10 +136,55 @@ defmodule Anemos.AST do
   end
 
   defmodule It do
-    @moduledoc "An `it` modal reference block."
+    @moduledoc """
+    An `it <mode> [= <literal>]` block. `modal_ref` is `{mode, value}`,
+    `value` nil for a mode that only has to be active. The body holds
+    trigger blocks and `by` blocks, live only while the mode holds.
+    """
     @enforce_keys []
-    @type t :: %__MODULE__{modal_ref: term(), body: list(), line: non_neg_integer() | nil}
+    @type t :: %__MODULE__{
+            modal_ref: {String.t(), term()} | nil,
+            body: list(),
+            line: non_neg_integer() | nil
+          }
     defstruct [:modal_ref, :body, :line]
+  end
+
+  defmodule As do
+    @moduledoc "An `as \"<mode>\"` block: its body runs on entering the mode."
+    @enforce_keys []
+    @type t :: %__MODULE__{mode: String.t() | nil, body: list(), line: non_neg_integer() | nil}
+    defstruct [:mode, :body, :line]
+  end
+
+  defmodule By do
+    @moduledoc """
+    A `by <identity> that { ... }` attribution block inside an `it`. Its
+    body runs on entering the enclosing mode, attributed to `identity`.
+    """
+    @enforce_keys []
+    @type t :: %__MODULE__{
+            identity: String.t() | nil,
+            body: list(),
+            line: non_neg_integer() | nil
+          }
+    defstruct [:identity, :body, :line]
+  end
+
+  defmodule With do
+    @moduledoc """
+    A `with` fan-out. `with each var in iterable { }` runs the body once per
+    element; `with { }` (no `var`) runs each statement. Branches run
+    concurrently and their operations are kept in source order.
+    """
+    @enforce_keys []
+    @type t :: %__MODULE__{
+            var: String.t() | nil,
+            iterable: term(),
+            body: list(),
+            line: non_neg_integer() | nil
+          }
+    defstruct [:var, :iterable, :body, :line]
   end
 
   defmodule Context do

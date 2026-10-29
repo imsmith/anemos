@@ -478,10 +478,11 @@ defmodule Anemos.Runtime do
   @doc """
   Everything the runtime holds, as it stands now.
 
-  `%{policies, rules, conditions, capabilities, data_blocks, schedules,
-  modules}`. Each rule carries the policy that declared it, the events it
-  listens for, its context, its `set` bindings and the state of its dwell
-  timers; each condition its current value.
+  `%{policies, rules, conditions, capabilities, flows, data_blocks,
+  schedules, modules, modes}`. Each rule carries the policy that declared
+  it, the events it listens for, its context, the `it` modes that gate it,
+  its `set` bindings and the state of its dwell timers; each condition its
+  current value. `modes` is every active mode with its value.
 
   Bindings are returned as they are. An `Anemos.Secret` stays wrapped.
 
@@ -520,9 +521,9 @@ defmodule Anemos.Runtime do
   is listed with the policy that declared it and an `outcome`: `:fires`,
   `{:dwell, ms}` for a `when ... for` rule that would arm or hold its timer,
   `:not_true` for a compound `when (A AND B)` whose state the report would
-  leave false,
-  or `:context_mismatch` when its `context` does not admit `context`'s
-  `:context_path`. `conditions` names the conditions that would evaluate.
+  leave false, `:mode_inactive` for a rule inside an `it` whose mode does
+  not hold, or `:context_mismatch` when its `context` does not admit
+  `context`'s `:context_path`. `conditions` names the conditions that would evaluate.
 
   Nothing is evaluated: a guard, an `if`, or a verb called in an expression
   can still change what a rule that `:fires` goes on to do.
@@ -547,8 +548,8 @@ defmodule Anemos.Runtime do
 
   Each is `%{at, event, context_path, steps, conditions, results,
   duration_us}`. `steps` is every rule the event reached, in order, with
-  what happened — `:fired`, `:dwell`, `:dwell_fired`, `:not_true` or
-  `:context_mismatch` — including rules reached through `nextevent`, `nextrule` and `emit ...
+  what happened — `:fired`, `:dwell`, `:dwell_fired`, `:not_true`,
+  `:mode_inactive` or `:context_mismatch` — including rules reached through `nextevent`, `nextrule` and `emit ...
   as`. `conditions` names the conditions that became true. `results` gives
   the kind of each operation; a `log` carries its text, since that was
   written to the log anyway, and nothing else carries a value.

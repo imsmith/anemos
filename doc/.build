@@ -11,10 +11,12 @@
 11-troubleshooting.html
 12-workshop.html
 404.html
+Anemos.AST.As.html
 Anemos.AST.At.html
 Anemos.AST.BinaryOp.html
 Anemos.AST.BlockArgs.html
 Anemos.AST.BuiltinCall.html
+Anemos.AST.By.html
 Anemos.AST.Capability.html
 Anemos.AST.Command.html
 Anemos.AST.Condition.html
@@ -47,6 +49,7 @@ Anemos.AST.UnaryOp.html
 Anemos.AST.VarRef.html
 Anemos.AST.When.html
 Anemos.AST.While.html
+Anemos.AST.With.html
 Anemos.AST.html
 Anemos.Application.html
 Anemos.Channel.ComnBus.html
@@ -87,6 +90,7 @@ Anemos.Runtime.LoadAuthority.Permissive.html
 Anemos.Runtime.LoadAuthority.Signed.html
 Anemos.Runtime.LoadAuthority.html
 Anemos.Runtime.LoadRequest.html
+Anemos.Runtime.Modes.html
 Anemos.Runtime.Module.html
 Anemos.Runtime.ModuleRegistry.html
 Anemos.Runtime.Modules.Device.html
@@ -125,8 +129,8 @@ dist/lato-latin-700-normal-2XVSBPG4.woff2
 dist/lato-latin-ext-400-normal-N27NCBWW.woff2
 dist/lato-latin-ext-700-normal-Q2L5DVMW.woff2
 dist/remixicon-ZWU5GQ4X.woff2
-dist/search_data-DD17DDB9.js
-dist/sidebar_items-77CC71FE.js
+dist/search_data-EF4778D9.js
+dist/sidebar_items-144EC58E.js
 examples/batch.rule
 examples/counter.rule
 examples/data_models.exs

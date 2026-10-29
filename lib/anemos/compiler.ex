@@ -285,6 +285,9 @@ defmodule Anemos.Compiler do
 
   require Logger
 
+  # A `with` branch runs inside the dispatcher's synchronous call, whose
+  # caller waits 5 s by default; a branch has to give up before that.
+  @with_branch_timeout_ms 4_000
   alias Anemos.AST
   alias Anemos.CompiledRule
 
@@ -492,6 +495,10 @@ defmodule Anemos.Compiler do
 
   defp scan_bindings(%AST.For{var: var, iterable: iterable, body: body}, acc),
     do: scan_bindings([iterable, body], %{acc | let: MapSet.put(acc.let, var)})
+
+  defp scan_bindings(%AST.With{var: var, iterable: iterable, body: body}, acc)
+       when is_binary(var),
+       do: scan_bindings([iterable, body], %{acc | let: MapSet.put(acc.let, var)})
 
   # `reduce total 0 ?n (...)` binds its accumulator as `$total`.
   defp scan_bindings(%AST.BuiltinCall{name: :reduce, args: [acc_name | rest]}, acc),
@@ -790,9 +797,11 @@ defmodule Anemos.Compiler do
     end)
 
     context_path = extract_context_path(body)
-    when_blocks = extract_when_blocks(body)
-    at_blocks = extract_at_blocks(body)
-    on_blocks = extract_on_blocks(body)
+    triggers = extract_triggers(body, [])
+    when_blocks = for {%AST.When{}, _} = t <- triggers, do: t
+    at_blocks = for {%AST.At{}, _} = t <- triggers, do: t
+    on_blocks = for {%AST.On{}, _} = t <- triggers, do: t
+    entry_blocks = for {%{__struct__: k}, _} = t <- triggers, k in [AST.As, AST.By], do: t
 
     # Extract inline data/query declarations from the rule body and compile
     # them at load time (not as runtime ops) so they're in the DataStore
@@ -805,12 +814,12 @@ defmodule Anemos.Compiler do
     when_rules =
       when_blocks
       |> Enum.with_index()
-      |> Enum.map(fn {%AST.When{
-                        event: event,
-                        body: when_body,
-                        guard: guard,
-                        duration: duration
-                      }, index} ->
+      |> Enum.map(fn {{%AST.When{
+                         event: event,
+                         body: when_body,
+                         guard: guard,
+                         duration: duration
+                       }, modes}, index} ->
         subscriptions = event_to_subscriptions(event)
         handler = build_guarded_handler(when_body, guard)
         dwell_ms = duration_to_dwell_ms(duration)
@@ -819,7 +828,7 @@ defmodule Anemos.Compiler do
           name: name,
           subscriptions: subscriptions,
           handler: handler,
-          meta: compiled_meta,
+          meta: with_modes(compiled_meta, modes),
           dwell_duration_ms: dwell_ms,
           trigger: compound_trigger(event, index)
         }
@@ -830,13 +839,68 @@ defmodule Anemos.Compiler do
         {[], []}
       else
         at_blocks
-        |> Enum.map(&compile_at_block(&1, name, compiled_meta))
+        |> Enum.map(fn {at, modes} ->
+          compile_at_block(at, name, with_modes(compiled_meta, modes))
+        end)
         |> Enum.unzip()
       end
 
-    on_rules = Enum.map(on_blocks, &compile_on_block(&1, name, compiled_meta))
+    on_rules =
+      Enum.map(on_blocks, fn {on, modes} ->
+        compile_on_block(on, name, with_modes(compiled_meta, modes))
+      end)
 
-    {when_rules ++ at_rules ++ on_rules, at_schedules, inline_data, inline_queries}
+    entry_rules =
+      entry_blocks
+      |> Enum.with_index()
+      |> Enum.map(fn {block, index} -> compile_entry_block(block, index, name, compiled_meta) end)
+
+    {when_rules ++ at_rules ++ on_rules ++ entry_rules, at_schedules, inline_data, inline_queries}
+  end
+
+  # Every trigger block in a rule body, in source order, with the modes of
+  # the `it` blocks around it. `context` blocks are walked through; `it`
+  # blocks add their `{mode, value}` to everything inside them.
+  defp extract_triggers(body, modes) do
+    Enum.flat_map(body, fn
+      %AST.Context{body: inner} ->
+        extract_triggers(inner, modes)
+
+      %AST.It{modal_ref: ref, body: inner} ->
+        extract_triggers(inner, modes ++ [ref])
+
+      %{__struct__: k} = node when k in [AST.When, AST.At, AST.On, AST.As, AST.By] ->
+        [{node, modes}]
+
+      _other ->
+        []
+    end)
+  end
+
+  # `:modes` is what the dispatcher gates on: every `{mode, value}` must
+  # hold, a nil value meaning only that the mode is active.
+  defp with_modes(meta, []), do: meta
+  defp with_modes(meta, modes), do: Map.put(meta, :modes, modes)
+
+  # `as "m"` and `by X that` run on entering their modes rather than on an
+  # event, so they subscribe to nothing. `:entry` tells the dispatcher to
+  # run the rule when its `:modes` go from not holding to holding. For `as`,
+  # its own mode joins the ones around it; `by` enters the `it` it sits in.
+  defp compile_entry_block({%AST.As{mode: mode, body: body}, modes}, index, name, meta) do
+    entry_rule("as", index, name, body, Map.put(meta, :modes, modes ++ [{mode, nil}]))
+  end
+
+  defp compile_entry_block({%AST.By{identity: identity, body: body}, modes}, index, name, meta) do
+    entry_rule("by", index, name, body, meta |> Map.put(:modes, modes) |> Map.put(:by, identity))
+  end
+
+  defp entry_rule(kind, index, name, body, meta) do
+    %CompiledRule{
+      name: "#{kind}_#{name}_#{index}",
+      subscriptions: [],
+      handler: build_handler(body),
+      meta: meta |> Map.put(:owner, name) |> Map.put(:entry, true)
+    }
   end
 
   # An `on` block compiles like an `at` block: a plain rule subscribed to a
@@ -901,14 +965,6 @@ defmodule Anemos.Compiler do
     Enum.flat_map(body, fn
       %AST.When{} = w -> [w]
       %AST.Context{body: ctx_body} -> extract_when_blocks(ctx_body)
-      _other -> []
-    end)
-  end
-
-  defp extract_on_blocks(body) do
-    Enum.flat_map(body, fn
-      %AST.On{} = o -> [o]
-      %AST.Context{body: ctx_body} -> extract_on_blocks(ctx_body)
       _other -> []
     end)
   end
@@ -1208,6 +1264,25 @@ defmodule Anemos.Compiler do
   # Run `fun`; if a flow-control throw unwinds through it, re-throw the same
   # signal with `prefix` prepended to the operations it carries. Any other
   # throw (e.g. `{:compile_error, _}`) propagates untouched.
+  defp capture(fun) do
+    {:done, fun.()}
+  catch
+    kind, reason -> {:caught, kind, reason, __STACKTRACE__}
+  end
+
+  defp replay({:ok, {:done, value}}), do: value
+  defp replay({:ok, {:caught, :throw, reason, _stack}}), do: throw(reason)
+  defp replay({:ok, {:caught, kind, reason, stack}}), do: :erlang.raise(kind, reason, stack)
+
+  defp replay({:exit, :timeout}) do
+    throw(
+      {:anemos_verb_error,
+       Comn.Errors.Registry.error!("anemos.runtime/with_timeout",
+         message: "A `with` branch ran longer than #{@with_branch_timeout_ms} ms and was stopped"
+       )}
+    )
+  end
+
   defp prepend_ops_on_abort([], fun), do: fun.()
 
   defp prepend_ops_on_abort(prefix, fun) do
@@ -1365,6 +1440,33 @@ defmodule Anemos.Compiler do
 
       cleaned = Map.delete(new_bindings, {:let, var})
       {ops_acc ++ new_ops, cleaned}
+    end)
+  end
+
+  # `with` fans out (spec §4.6). Every branch starts from the same bindings
+  # and is evaluated in its own task; operations come back in source order.
+  # A branch's throw — `done`, `return`, `nextevent`, a verb error — is
+  # caught in its task and raised again here, in order, so the body aborts
+  # at that branch exactly as a sequential one would. The parser refuses
+  # `set` inside `with`, so no branch has persistent bindings to return.
+  defp eval_statement(%AST.With{var: var, iterable: iterable, body: body}, context, bindings) do
+    branches =
+      if var do
+        for item <- resolve_iterable(iterable, context, bindings),
+            do: {body, Map.put(bindings, {:let, var}, item)}
+      else
+        for statement <- body, do: {[statement], bindings}
+      end
+
+    branches
+    |> Task.async_stream(fn {b, bnd} -> capture(fn -> eval_body(b, context, bnd) end) end,
+      ordered: true,
+      timeout: @with_branch_timeout_ms,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce({[], bindings}, fn result, {ops_acc, _} ->
+      {new_ops, _} = prepend_ops_on_abort(ops_acc, fn -> replay(result) end)
+      {ops_acc ++ new_ops, bindings}
     end)
   end
 
@@ -1645,6 +1747,17 @@ defmodule Anemos.Compiler do
   # validation, bounds and path confinement apply here exactly as they do on
   # the statement path. `:_verb_context` is what the dispatcher precomputed
   # for host code; the evaluation context it lives in is not passed on.
+  # MODE is the runtime's, not a host module: its state is the dispatcher's
+  # and arrives here as `:_modes`. A value can read a mode but not change
+  # one — the change has to run where the dispatcher can act on it, which
+  # is statement position.
+  defp invoke_verb("MODE", verb, args, context) do
+    case Anemos.Runtime.Modes.read(Map.get(context, :_modes, %{}), verb, args) do
+      {:ok, value} -> value
+      {:error, error} -> throw({:anemos_verb_error, error})
+    end
+  end
+
   defp invoke_verb(mod, verb, args, context) do
     registry = Map.get(context, :registry)
     handler_context = Map.get(context, :_verb_context) || %{}

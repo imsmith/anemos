@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
+    <script defer src="dist/sidebar_items-144EC58E.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -129,6 +129,15 @@ anemos
 </div>
 <div class="summary-row">
   <div class="summary-signature">
+    <a href="Anemos.AST.As.html" translate="no">Anemos.<wbr />AST.<wbr />As</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>An <code class="inline">as &quot;&lt;mode&gt;&quot;</code> block: its body runs on entering the mode.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
     <a href="Anemos.AST.At.html" translate="no">Anemos.<wbr />AST.<wbr />At</a>
 
   </div>
@@ -161,6 +170,16 @@ anemos
   </div>
 
     <div class="summary-synopsis"><p>A built-in function call (filter, map, reduce, emit).</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.By.html" translate="no">Anemos.<wbr />AST.<wbr />By</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">by &lt;identity&gt; that { ... }</code> attribution block inside an <code class="inline">it</code>. Its
+body runs on entering the enclosing mode, attributed to <code class="inline">identity</code>.</p></div>
 
 </div>
 <div class="summary-row">
@@ -292,7 +311,9 @@ position. The subject is a bare <code class="inline">{:name, &quot;NAME&quot;}</
 
   </div>
 
-    <div class="summary-synopsis"><p>An <code class="inline">it</code> modal reference block.</p></div>
+    <div class="summary-synopsis"><p>An <code class="inline">it &lt;mode&gt; [= &lt;literal&gt;]</code> block. <code class="inline">modal_ref</code> is <code class="inline">{mode, value}</code>,
+<code class="inline">value</code> nil for a mode that only has to be active. The body holds
+trigger blocks and <code class="inline">by</code> blocks, live only while the mode holds.</p></div>
 
 </div>
 <div class="summary-row">
@@ -459,6 +480,17 @@ not <code class="inline">for</code>, <code class="inline">until</code> or a comp
   </div>
 
     <div class="summary-synopsis"><p>A <code class="inline">while</code> loop: repeats body while condition is truthy.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.AST.With.html" translate="no">Anemos.<wbr />AST.<wbr />With</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>A <code class="inline">with</code> fan-out. <code class="inline">with each var in iterable { }</code> runs the body once per
+element; <code class="inline">with { }</code> (no <code class="inline">var</code>) runs each statement. Branches run
+concurrently and their operations are kept in source order.</p></div>
 
 </div>
 <div class="summary-row">
@@ -834,6 +866,18 @@ policy source (A-05).</p></div>
   </div>
 
     <div class="summary-synopsis"><p>Everything an <a href="Anemos.Runtime.LoadAuthority.html"><code class="inline">Anemos.Runtime.LoadAuthority</code></a> gets to decide on.</p></div>
+
+</div>
+<div class="summary-row">
+  <div class="summary-signature">
+    <a href="Anemos.Runtime.Modes.html" translate="no">Anemos.<wbr />Runtime.<wbr />Modes</a>
+
+  </div>
+
+    <div class="summary-synopsis"><p>Modes (PRD §3.13): named, runtime-wide, each active with a value or not
+active at all. <code class="inline">[MODE::set &quot;away&quot;]</code> makes <code class="inline">away</code> active with the value
+<code class="inline">true</code>, <code class="inline">[MODE::set &quot;level&quot; 2]</code> with the value <code class="inline">2</code>, and
+<code class="inline">[MODE::unset &quot;away&quot;]</code> makes it inactive.</p></div>
 
 </div>
 <div class="summary-row">

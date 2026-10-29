@@ -42,6 +42,10 @@ Verified by the test suite (48 doctests, 790 tests, 0 failures) and by direct ex
 - `[MODULE::verb]` commands in **statement and expression** position — an expression-position
   call is dispatched at evaluation and its return value *is* the value of the expression
 - Loops — `while`, `for`, `each`, `every`, `foreach`
+- Modes — `it <mode> [= literal]` gates triggers, `as "<mode>"` and `by <id> that` run on
+  entering a mode, `[MODE::set|unset|active|current]`; modes survive a restart
+- `with each x in <expr> { }` and `with { }` — concurrent fan-out, no `set` in a branch;
+  `agents` and `tagged` group forms refused
 - Flow control — `return`, `done`, `nextevent`, `nextrule`
 - `nextrule` and `nextevent` `<target> with { key: value }` — argument passing
 - Pipelines — `|>` with `filter`, `map`, `reduce`
@@ -98,8 +102,6 @@ has repeatedly been mistaken for "it works".
 
 No lexer or parser support. Verified by attempting to parse each one.
 
-- `it` / `as` blocks — modal refs, group specs. `AST.It` and `AST.Flow` exist as structs the
-  parser never constructs
 - Signing (producing signatures). Anemos verifies; something else signs — deliberate, see
   `ISSUES.md` A-05
 

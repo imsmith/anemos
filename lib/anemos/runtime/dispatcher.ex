@@ -30,6 +30,7 @@ defmodule Anemos.Runtime.Dispatcher do
     DataStore,
     Interaction,
     Introspection,
+    Modes,
     ModuleRegistry,
     PolicyStore,
     Report,
@@ -256,6 +257,9 @@ defmodule Anemos.Runtime.Dispatcher do
       # A-40. Whatever the previous dispatcher had accumulated, if there
       # was one.
       rule_bindings: StateTable.get(state_table, :rule_bindings, %{}),
+      # Active modes, name => value (`Anemos.Runtime.Modes`). Kept in the
+      # state table like the bindings, so a restart does not leave a mode.
+      modes: StateTable.get(state_table, :modes, %{}),
       # {data block name, scope} => {handler, ref} for live `subscribe`
       # feeds, so the feed can be cancelled when its block goes.
       subscriptions: %{},
@@ -413,6 +417,10 @@ defmodule Anemos.Runtime.Dispatcher do
           events: parts |> Enum.flat_map(& &1.subscriptions) |> Enum.uniq(),
           context: get_in(hd(parts), [Access.key(:meta), :context_path]),
           dwell_ms: Enum.find_value(parts, & &1.dwell_duration_ms),
+          modes:
+            parts
+            |> Enum.flat_map(&(get_in(&1, [Access.key(:meta), :modes]) || []))
+            |> Enum.uniq(),
           bindings:
             Map.new(bindings, fn
               {{:set, variable}, value} -> {variable, value}
@@ -468,7 +476,8 @@ defmodule Anemos.Runtime.Dispatcher do
       conditions: Enum.sort_by(conditions, & &1.name),
       capabilities: Enum.sort_by(capabilities, & &1.name),
       flows: Enum.sort_by(flows, & &1.name),
-      data_blocks: Enum.sort_by(data_blocks, & &1.name)
+      data_blocks: Enum.sort_by(data_blocks, & &1.name),
+      modes: state.modes
     }
 
     {:reply, reply, state}
@@ -488,6 +497,9 @@ defmodule Anemos.Runtime.Dispatcher do
           cond do
             not context_matches?(rule, event_context) ->
               :context_mismatch
+
+            not modes_hold?(rule, state.modes) ->
+              :mode_inactive
 
             ms = rule.dwell_duration_ms ->
               {:dwell, ms}
@@ -1510,6 +1522,9 @@ defmodule Anemos.Runtime.Dispatcher do
         not context_matches?(rule, event_context) ->
           {results_acc, step(st, rule, event_name, :context_mismatch)}
 
+        not modes_hold?(rule, st.modes) ->
+          {results_acc, step(st, rule, event_name, :mode_inactive)}
+
         trigger = compound_trigger(rule, event_name) ->
           {value, st} = record_report(rule, trigger, event_name, context, st)
           {_op, [first | _], _index} = trigger
@@ -1596,6 +1611,7 @@ defmodule Anemos.Runtime.Dispatcher do
 
     context
     |> Map.put(:registry, state.registry)
+    |> Map.put(:_modes, state.modes)
     |> Map.put(:_verb_context, verb_context(context, source))
   end
 
@@ -1630,6 +1646,7 @@ defmodule Anemos.Runtime.Dispatcher do
       |> Map.put(:registry, st.registry)
       |> Map.put(:queries, st.queries)
       |> Map.put(:data_models, st.data_model_registry)
+      |> Map.put(:_modes, st.modes)
       |> Map.put(:_verb_context, verb_context(context, {rule.name, rule_context}))
 
     case safe_handle(rule, event_name, enriched_context, persistent) do
@@ -1752,6 +1769,11 @@ defmodule Anemos.Runtime.Dispatcher do
     ContextScope.within?(event_context, get_in(rule, [Access.key(:meta), :context_path]))
   end
 
+  # A rule compiled inside `it <mode>` is live only while its modes hold.
+  defp modes_hold?(rule, modes) do
+    Modes.holds?(modes, get_in(rule, [Access.key(:meta), :modes]) || [])
+  end
+
   defp collect_condition_messages do
     collect_condition_messages([])
   end
@@ -1823,6 +1845,41 @@ defmodule Anemos.Runtime.Dispatcher do
   # enforced *before* `handle_verb/3`, so no host module can be reached by a
   # caller that skipped the check (A-11). A module declaring no schema for
   # the verb is unvalidated, exactly as before.
+  # `[MODE::...]` is the runtime's own module (`Anemos.Runtime.Modes`). A
+  # change is written to the state table at once, then every `as` and `by`
+  # rule whose modes it brought to hold runs, inside this dispatch and with
+  # this event's context — as an `emit ... as` would, so the listener's
+  # context boundary applies to them.
+  defp execute_op(
+         %{type: :command, module: "MODE", verb: verb, args: args} = op,
+         context,
+         state,
+         depth
+       ) do
+    case Modes.change(state.modes, verb, args) do
+      {:ok, modes, value} when modes == state.modes ->
+        {{:ok, Map.put(op, :value, value)}, state}
+
+      {:ok, modes, value} ->
+        :ok = StateTable.put(state.state_table, :modes, modes)
+
+        entered =
+          for rule <- state.rules,
+              get_in(rule, [Access.key(:meta), :entry]),
+              not modes_hold?(rule, state.modes),
+              modes_hold?(rule, modes),
+              do: {rule, "MODE_#{List.first(args)}"}
+
+        {results, state} =
+          dispatch_rules(entered, "MODE", context, %{state | modes: modes}, depth + 1)
+
+        {[{:ok, Map.put(op, :value, value)} | results], state}
+
+      {:error, _} = error ->
+        {error, state}
+    end
+  end
+
   defp execute_op(
          %{type: :command, module: mod_name, verb: verb, args: args},
          context,

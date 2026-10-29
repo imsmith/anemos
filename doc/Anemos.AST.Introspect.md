@@ -1,5 +1,5 @@
 # `Anemos.AST.Introspect`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L209)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L254)
 
 An introspection statement — `show`, `list`, `graph`, `trace`,
 `explain`, `exists`, `infer`, `assert` — or `exists` in expression

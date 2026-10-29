@@ -1,5 +1,5 @@
 # `Anemos.AST.Return`
-[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L305)
+[🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L350)
 
 A `return` statement: exits the current handler, optionally with a value.
 

@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
+    <script defer src="dist/sidebar_items-144EC58E.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -144,7 +144,22 @@ list as <code class="inline">@item</code>. The module must be registered. Prefer
 each iteration. Ensure the body changes something that makes it false.
 The interpreter stops repeating at 10,000 iterations; hitting that safety
 limit is not a useful successful outcome. Bound the work yourself.</p><p>For a known collection, use <code class="inline">for</code>. It describes intent more directly and
-avoids a counter whose only job is controlling a loop.</p><h2 id="filter-map-reduce" class="section-heading"><a href="#filter-map-reduce" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Filter, map, reduce</span></h2><p>The pipe operator <code class="inline">|&gt;</code> passes the value on its left into the stage on its
+avoids a counter whose only job is controlling a loop.</p><h2 id="fan-out-with-with" class="section-heading"><a href="#fan-out-with-with" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Fan out with <code class="inline">with</code></span></h2><p><code class="inline">with each &lt;name&gt; in &lt;expression&gt; { ... }</code> runs the body once per element,
+like <code class="inline">each</code>, but the branches are evaluated concurrently. <code class="inline">with { ... }</code>
+runs each statement of its block as its own branch. The operations come
+back in source order either way, so the only difference from a loop is
+that slow host calls in expression position overlap.</p><pre><code class="anemos">rule all-off {
+  when NIGHT {
+    with each light in (&quot;porch&quot; &quot;garage&quot; &quot;hall&quot;) {
+      [DEVICE::set @light &quot;off&quot;]
+    }
+  }
+}</code></pre><p>A branch cannot <code class="inline">set</code>: concurrent writes to one persistent binding have no
+defined winner, so the parser refuses it. <code class="inline">done</code>, <code class="inline">return</code> or an error in a
+branch stops the body at that branch, with the branches before it kept. A
+branch that runs past four seconds is stopped with a <code class="inline">with_timeout</code> error.
+The spec's <code class="inline">with agents [...]</code> and <code class="inline">with &lt;group&gt; tagged &quot;...&quot;</code> forms are
+refused, because the runtime keeps no agents or tags to fan out over.</p><h2 id="filter-map-reduce" class="section-heading"><a href="#filter-map-reduce" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Filter, map, reduce</span></h2><p>The pipe operator <code class="inline">|&gt;</code> passes the value on its left into the stage on its
 right. A pipeline is an expression; bind or log its answer.</p><pre><code class="anemos">rule summarize {
   when BATCH {
     let total = ?values

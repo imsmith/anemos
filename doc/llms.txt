@@ -23,10 +23,14 @@
 
 - [Anemos](Anemos.md): Anemos — event-driven automation DSL.
 - [Anemos.AST](Anemos.AST.md): AST node structs for the Anemos DSL.
+- [Anemos.AST.As](Anemos.AST.As.md): An `as "<mode>"` block: its body runs on entering the mode.
 - [Anemos.AST.At](Anemos.AST.At.md): A time-triggered `at` block with a time spec, optional guard, and body.
 - [Anemos.AST.BinaryOp](Anemos.AST.BinaryOp.md): A binary operator expression.
 - [Anemos.AST.BlockArgs](Anemos.AST.BlockArgs.md): A block argument list of key-value pairs.
 - [Anemos.AST.BuiltinCall](Anemos.AST.BuiltinCall.md): A built-in function call (filter, map, reduce, emit).
+- [Anemos.AST.By](Anemos.AST.By.md): A `by <identity> that { ... }` attribution block inside an `it`. Its
+body runs on entering the enclosing mode, attributed to `identity`.
+
 - [Anemos.AST.Capability](Anemos.AST.Capability.md): A named capability declaration with context, body, and source line.
 - [Anemos.AST.Command](Anemos.AST.Command.md): A module command expression with a verb and arguments.
 - [Anemos.AST.Condition](Anemos.AST.Condition.md): A named condition declaration with a body and source line.
@@ -49,7 +53,10 @@ position. The subject is a bare `{:name, "NAME"}`, a `{:catalogue,
 :rules | :conditions | :modules | :events | :policies | :schedules}`, or
 `{:expr, expression}`.
 
-- [Anemos.AST.It](Anemos.AST.It.md): An `it` modal reference block.
+- [Anemos.AST.It](Anemos.AST.It.md): An `it <mode> [= <literal>]` block. `modal_ref` is `{mode, value}`,
+`value` nil for a mode that only has to be active. The body holds
+trigger blocks and `by` blocks, live only while the mode holds.
+
 - [Anemos.AST.Let](Anemos.AST.Let.md): A `let` variable binding.
 - [Anemos.AST.ListLiteral](Anemos.AST.ListLiteral.md): A list literal expression.
 - [Anemos.AST.Literal](Anemos.AST.Literal.md): A literal value node (string, integer, float, boolean, atom).
@@ -75,6 +82,10 @@ not `for`, `until` or a compound form. See `Anemos.Runtime.Interaction`.
 - [Anemos.AST.VarRef](Anemos.AST.VarRef.md): A variable reference with an optional sigil prefix.
 - [Anemos.AST.When](Anemos.AST.When.md): A `when` trigger block: fires on an event, with optional duration, guard, and body.
 - [Anemos.AST.While](Anemos.AST.While.md): A `while` loop: repeats body while condition is truthy.
+- [Anemos.AST.With](Anemos.AST.With.md): A `with` fan-out. `with each var in iterable { }` runs the body once per
+element; `with { }` (no `var`) runs each statement. Branches run
+concurrently and their operations are kept in source order.
+
 - [Anemos.Application](Anemos.Application.md): OTP application callback for Anemos. Starts no interpreter.
 - [Anemos.Channel](Anemos.Channel.md): Behaviour for channel connectors — the bridge between Anemos emit
 operations and the host app's messaging infrastructure.
@@ -134,6 +145,10 @@ using PAM-style control flag semantics.
 - [Anemos.Runtime.LoadAuthority.Signed](Anemos.Runtime.LoadAuthority.Signed.md): A load authority that verifies detached Ed25519 signatures over the
 policy source (A-05).
 - [Anemos.Runtime.LoadRequest](Anemos.Runtime.LoadRequest.md): Everything an `Anemos.Runtime.LoadAuthority` gets to decide on.
+- [Anemos.Runtime.Modes](Anemos.Runtime.Modes.md): Modes (PRD §3.13): named, runtime-wide, each active with a value or not
+active at all. `[MODE::set "away"]` makes `away` active with the value
+`true`, `[MODE::set "level" 2]` with the value `2`, and
+`[MODE::unset "away"]` makes it inactive.
 - [Anemos.Runtime.Module](Anemos.Runtime.Module.md): Behaviour for Anemos runtime modules (DEVICE, FILE, etc.).
 - [Anemos.Runtime.ModuleRegistry](Anemos.Runtime.ModuleRegistry.md): Maps module names (e.g. "DEVICE", "FILE") to Elixir modules
 implementing the `Anemos.Runtime.Module` behaviour.

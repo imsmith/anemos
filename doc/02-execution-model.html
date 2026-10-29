@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
+    <script defer src="dist/sidebar_items-144EC58E.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -147,7 +147,35 @@ a changed redeploy and when the runtime stops. A redeploy that changes
 nothing raises neither. The host raises the rest through
 <a href="Anemos.Runtime.html#interact/4"><code class="inline">Anemos.Runtime.interact/4</code></a>; see <a href="09-embedding.html#raise-an-interaction">embedding</a>.</p><p>Interactions are indexed under names beginning <code class="inline">ON_</code>, which is why
 <code class="inline">when ON_BOOT</code> is refused by the parser and <code class="inline">dispatch/4</code> refuses an <code class="inline">ON_</code>
-name: a report path may not carry an occurrence, nor the other way round.</p><h2 id="a-context-belongs-to-a-listener" class="section-heading"><a href="#a-context-belongs-to-a-listener" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A context belongs to a listener</span></h2><p>Declare one context boundary per rule. Either of these forms expresses it:</p><pre><code class="anemos">rule listen {
+name: a report path may not carry an occurrence, nor the other way round.</p><h2 id="modes" class="section-heading"><a href="#modes" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">Modes</span></h2><p>A <strong>mode</strong> is a named switch the policy itself flips. <code class="inline">[MODE::set &quot;away&quot;]</code>
+makes <code class="inline">away</code> active, <code class="inline">[MODE::set &quot;level&quot; 2]</code> makes <code class="inline">level</code> active with the
+value <code class="inline">2</code>, and <code class="inline">[MODE::unset &quot;away&quot;]</code> turns it off. Modes belong to the
+runtime, not to one rule, and they survive a restart.</p><p>Three blocks read them:</p><ul><li><strong><code class="inline">it &lt;mode&gt; { ... }</code></strong> holds trigger blocks that are live only while the
+mode is active. <code class="inline">it level = 2 { ... }</code> also requires that value. An <code class="inline">it</code>
+may sit inside a rule or at the top of a source, where it is a rule named
+<code class="inline">it_&lt;mode&gt;</code>.</li><li><strong><code class="inline">as &quot;&lt;mode&gt;&quot; { ... }</code></strong> runs its body once, when the mode comes on.</li><li><strong><code class="inline">by &lt;identity&gt; that { ... }</code></strong>, inside an <code class="inline">it</code>, runs its body when the
+<code class="inline">it</code>'s mode comes on, and records who the obligation is attributed to.</li></ul><pre><code class="anemos">rule presence {
+  when AWAY { [MODE::set &quot;away_mode&quot;] }
+  when HOME { [MODE::unset &quot;away_mode&quot;] }
+}
+
+it away_mode {
+  when DOOR_OPENED { [NOTIFY::send &quot;Door opened while away&quot;] }
+  by meshid.ian that { log &quot;alarm armed&quot; }
+}
+
+rule lights {
+  as &quot;away_mode&quot; { [DEVICE::set &quot;house.lights&quot; &quot;off&quot;] }
+}</code></pre><p><code class="inline">as</code> and <code class="inline">by</code> run inside the dispatch that set the mode, with that event's
+context, the way an <code class="inline">emit ... as</code> would. A listener whose context does not
+admit that context does not run. Setting a mode that is already active with
+the same value changes nothing, so nothing runs. A block inside nested <code class="inline">it</code>s,
+or an <code class="inline">as</code> inside an <code class="inline">it</code>, runs when all of its modes hold together.</p><p><code class="inline">[MODE::active &quot;away&quot;]</code> and <code class="inline">[MODE::current &quot;away&quot;]</code> read a mode as a value.
+<code class="inline">[MODE::current]</code> lists the active modes. A change has to be a statement,
+because the dispatcher acts on it: <code class="inline">let x = [MODE::set &quot;m&quot;]</code> is a
+<code class="inline">bad_mode_call</code> error. A read inside the same body that set the mode still
+sees the old value, because the change runs after the body has been
+evaluated.</p><h2 id="a-context-belongs-to-a-listener" class="section-heading"><a href="#a-context-belongs-to-a-listener" class="hover-link"><i class="ri-link-m" aria-hidden="true"></i></a><span class="text">A context belongs to a listener</span></h2><p>Declare one context boundary per rule. Either of these forms expresses it:</p><pre><code class="anemos">rule listen {
   context &quot;building.garage&quot; {
     when MOTION { log &quot;heard&quot; }
   }

@@ -71,6 +71,31 @@ limit is not a useful successful outcome. Bound the work yourself.
 For a known collection, use `for`. It describes intent more directly and
 avoids a counter whose only job is controlling a loop.
 
+## Fan out with `with`
+
+`with each <name> in <expression> { ... }` runs the body once per element,
+like `each`, but the branches are evaluated concurrently. `with { ... }`
+runs each statement of its block as its own branch. The operations come
+back in source order either way, so the only difference from a loop is
+that slow host calls in expression position overlap.
+
+```anemos
+rule all-off {
+  when NIGHT {
+    with each light in ("porch" "garage" "hall") {
+      [DEVICE::set @light "off"]
+    }
+  }
+}
+```
+
+A branch cannot `set`: concurrent writes to one persistent binding have no
+defined winner, so the parser refuses it. `done`, `return` or an error in a
+branch stops the body at that branch, with the branches before it kept. A
+branch that runs past four seconds is stopped with a `with_timeout` error.
+The spec's `with agents [...]` and `with <group> tagged "..."` forms are
+refused, because the runtime keeps no agents or tags to fan out over.
+
 ## Filter, map, reduce
 
 The pipe operator `|>` passes the value on its left into the stage on its

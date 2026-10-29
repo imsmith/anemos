@@ -239,6 +239,15 @@ defmodule Anemos.Parser do
     parse_flow(rest)
   end
 
+  # PRD §3.13 writes `it away_mode { ... }` at the top of a source. It is a
+  # rule named for its mode, so ownership, redeploy and `describe` treat it
+  # like any other.
+  defp parse_declaration([{:keyword, meta, :it} | rest]) do
+    with {:ok, %AST.It{modal_ref: {mode, _}} = it, rest} <- parse_it(rest, meta) do
+      {:ok, %AST.Rule{name: "it_#{mode}", body: [it], line: meta[:line]}, rest}
+    end
+  end
+
   defp parse_declaration([{:keyword, _, :data} | rest]) do
     parse_data(rest)
   end
@@ -335,6 +344,20 @@ defmodule Anemos.Parser do
     end
   end
 
+  defp parse_rule_body([{:keyword, meta, :it} | rest], acc) do
+    case parse_it(rest, meta) do
+      {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_rule_body([{:keyword, meta, :as} | rest], acc) do
+    case parse_as(rest, meta) do
+      {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
   defp parse_rule_body(tokens, acc) do
     case parse_statement(tokens) do
       {:ok, node, rest} -> parse_rule_body(rest, [node | acc])
@@ -385,6 +408,20 @@ defmodule Anemos.Parser do
 
   defp parse_context_body([{:keyword, meta, :on} | rest], acc) do
     case parse_on(rest, meta) do
+      {:ok, node, rest} -> parse_context_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_context_body([{:keyword, meta, :it} | rest], acc) do
+    case parse_it(rest, meta) do
+      {:ok, node, rest} -> parse_context_body(rest, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_context_body([{:keyword, meta, :as} | rest], acc) do
+    case parse_as(rest, meta) do
       {:ok, node, rest} -> parse_context_body(rest, [node | acc])
       {:error, _} = err -> err
     end
@@ -694,6 +731,150 @@ defmodule Anemos.Parser do
     end
   end
 
+  # --- Modes: it, as, by (PRD §3.13, spec §4.4) ---
+
+  # `it <mode> [= <literal>] { <trigger blocks> | by <identity> that { } }`.
+  # The triggers inside are live only while the mode holds. A valued mode
+  # compares by equality with a literal fixed at parse time.
+  defp parse_it([{:identifier, _, mode}, {:operator, _, :=} | rest], meta) do
+    case parse_expression(rest) do
+      {:ok, %AST.Literal{value: value}, rest} ->
+        finish_it({mode, value}, rest, meta)
+
+      {:ok, _, _} ->
+        {:error, "`it #{mode} = ...` takes a literal value on line #{meta[:line]}"}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  defp parse_it([{:identifier, _, mode} | rest], meta), do: finish_it({mode, nil}, rest, meta)
+
+  defp parse_it(tokens, meta) do
+    {:error, "Expected a mode name after 'it' on line #{tokens_line(tokens) || meta[:line]}"}
+  end
+
+  defp finish_it({mode, _} = ref, rest, meta) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_it_body(rest, mode, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.It{modal_ref: ref, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_it_body([{:rbrace, _, _} | _] = tokens, _mode, acc), do: {:ok, acc, tokens}
+
+  defp parse_it_body([{:keyword, meta, kw} | rest], mode, acc)
+       when kw in [:when, :at, :on, :as, :it, :by] do
+    result =
+      case kw do
+        :when -> parse_when(rest)
+        :at -> parse_at(rest)
+        :on -> parse_on(rest, meta)
+        :as -> parse_as(rest, meta)
+        :it -> parse_it(rest, meta)
+        :by -> parse_by(rest, meta)
+      end
+
+    case result do
+      {:ok, node, rest} -> parse_it_body(rest, mode, [node | acc])
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_it_body([{_, tmeta, _} | _], mode, _acc) do
+    {:error,
+     "`it #{mode}` holds trigger blocks (when, at, on, as, it) and " <>
+       "`by <identity> that { }`, on line #{tmeta[:line]}"}
+  end
+
+  defp parse_it_body([], mode, _acc), do: {:error, "Unterminated `it #{mode}` block"}
+
+  # `as "<mode>" { ... }` runs its body on entering the mode.
+  defp parse_as([{:string, _, mode} | rest], meta) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.As{mode: mode, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_as(_tokens, meta) do
+    {:error, "Expected a quoted mode name after 'as' on line #{meta[:line]}"}
+  end
+
+  # `by <identity> that { ... }` — an attributed block inside an `it`.
+  defp parse_by([{:identifier, _, identity}, {:keyword, _, :that} | rest], meta) do
+    with {:ok, rest} <- expect(rest, :lbrace),
+         {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace) do
+      {:ok, %AST.By{identity: identity, body: Enum.reverse(body), line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_by(_tokens, meta) do
+    {:error, "Expected `by <identity> that { ... }` on line #{meta[:line]}"}
+  end
+
+  # --- with (spec §4.6) ---
+
+  # `with each x in <expr> { }` runs the body once per element and
+  # `with { }` runs each statement, concurrently. Branches cannot `set`:
+  # concurrent writers to one persistent binding have no defined winner.
+  # `agents [...]` and `<group> tagged "..."` are refused: nothing in the
+  # runtime keeps agents or tags to fan out over.
+  defp parse_with([{:keyword, _, :each} | rest], meta) do
+    with {:ok, %AST.For{var: var, iterable: iterable, body: body}, rest} <- parse_each(rest),
+         :ok <- refuse_set_in_with(body, meta) do
+      {:ok, %AST.With{var: var, iterable: iterable, body: body, line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_with([{:lbrace, _, _} | rest], meta) do
+    with {:ok, body, rest} <- parse_statements_until_rbrace(rest, []),
+         {:ok, rest} <- expect(rest, :rbrace),
+         body = Enum.reverse(body),
+         :ok <- refuse_set_in_with(body, meta) do
+      {:ok, %AST.With{body: body, line: meta[:line]}, rest}
+    end
+  end
+
+  defp parse_with([{:identifier, _, "agents"} | _], meta) do
+    {:error,
+     "`with agents [...]` needs an agent registry, which the runtime does not have, " <>
+       "on line #{meta[:line]}"}
+  end
+
+  defp parse_with([{:identifier, _, _}, {:identifier, _, "tagged"} | _], meta) do
+    {:error,
+     "`with <group> tagged \"...\"` needs a tag registry, which the runtime does not have; " <>
+       "use `with each x in <collection>`, on line #{meta[:line]}"}
+  end
+
+  defp parse_with(_tokens, meta) do
+    {:error, "Expected `with each <var> in <expr> { }` or `with { }` on line #{meta[:line]}"}
+  end
+
+  defp refuse_set_in_with(body, meta) do
+    if Enum.any?(body, &sets?/1) do
+      {:error,
+       "`set` inside `with` has no defined result: branches run concurrently, " <>
+         "on line #{meta[:line]}"}
+    else
+      :ok
+    end
+  end
+
+  defp sets?(%AST.Set{}), do: true
+
+  defp sets?(%{body: body} = node) when is_list(body),
+    do: Enum.any?(body, &sets?/1) or sets?(Map.get(node, :else_body))
+
+  defp sets?(%{else_body: else_body}) when is_list(else_body), do: Enum.any?(else_body, &sets?/1)
+  defp sets?(list) when is_list(list), do: Enum.any?(list, &sets?/1)
+  defp sets?(_), do: false
+
   # --- At ---
 
   # at interval(duration) { ... }
@@ -855,6 +1036,7 @@ defmodule Anemos.Parser do
   defp parse_statement([{:keyword, _, :at} | rest]), do: parse_at(rest)
   defp parse_statement([{:keyword, _, :context} | rest]), do: parse_context(rest)
   defp parse_statement([{:lbracket, _, _} | _] = tokens), do: parse_command_statement(tokens)
+  defp parse_statement([{:keyword, meta, :with} | rest]), do: parse_with(rest, meta)
   defp parse_statement([{:keyword, _, :while} | rest]), do: parse_while(rest)
   defp parse_statement([{:keyword, _, :for} | rest]), do: parse_for(rest)
   defp parse_statement([{:keyword, _, :each} | rest]), do: parse_each(rest)

@@ -1,7 +1,9 @@
 # `Anemos.AST.It`
 [🔗](https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L138)
 
-An `it` modal reference block.
+An `it <mode> [= <literal>]` block. `modal_ref` is `{mode, value}`,
+`value` nil for a mode that only has to be active. The body holds
+trigger blocks and `by` blocks, live only while the mode holds.
 
 # `t`
 
@@ -9,7 +11,7 @@ An `it` modal reference block.
 @type t() :: %Anemos.AST.It{
   body: list(),
   line: non_neg_integer() | nil,
-  modal_ref: term()
+  modal_ref: {String.t(), term()} | nil
 }
 ```
 

@@ -10,10 +10,12 @@
 10-operation.md
 11-troubleshooting.md
 12-workshop.md
+Anemos.AST.As.md
 Anemos.AST.At.md
 Anemos.AST.BinaryOp.md
 Anemos.AST.BlockArgs.md
 Anemos.AST.BuiltinCall.md
+Anemos.AST.By.md
 Anemos.AST.Capability.md
 Anemos.AST.Command.md
 Anemos.AST.Condition.md
@@ -46,6 +48,7 @@ Anemos.AST.UnaryOp.md
 Anemos.AST.VarRef.md
 Anemos.AST.When.md
 Anemos.AST.While.md
+Anemos.AST.With.md
 Anemos.AST.md
 Anemos.Application.md
 Anemos.Channel.ComnBus.md
@@ -86,6 +89,7 @@ Anemos.Runtime.LoadAuthority.Permissive.md
 Anemos.Runtime.LoadAuthority.Signed.md
 Anemos.Runtime.LoadAuthority.md
 Anemos.Runtime.LoadRequest.md
+Anemos.Runtime.Modes.md
 Anemos.Runtime.Module.md
 Anemos.Runtime.ModuleRegistry.md
 Anemos.Runtime.Modules.Device.md

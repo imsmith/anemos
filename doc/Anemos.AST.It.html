@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
+    <script defer src="dist/sidebar_items-144EC58E.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -114,7 +114,9 @@ anemos
 
 
     <section id="moduledoc">
-<p>An <code class="inline">it</code> modal reference block.</p>
+<p>An <code class="inline">it &lt;mode&gt; [= &lt;literal&gt;]</code> block. <code class="inline">modal_ref</code> is <code class="inline">{mode, value}</code>,
+<code class="inline">value</code> nil for a mode that only has to be active. The body holds
+trigger blocks and <code class="inline">by</code> blocks, live only while the mode holds.</p>
     </section>
 
 </div>
@@ -163,7 +165,7 @@ anemos
       <h1 class="signature" translate="no">t()</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L141" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/ast.ex#L145" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -177,7 +179,7 @@ anemos
           <pre translate="no"><span class="attribute">@type</span> t() :: %Anemos.AST.It{
   body: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">list</a>(),
   line: <a href="https://elixir.hexdocs.pm/typespecs.html#basic-types">non_neg_integer</a>() | nil,
-  modal_ref: <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()
+  modal_ref: {<a href="https://elixir.hexdocs.pm/String.html#t:t/0">String.t</a>(), <a href="https://elixir.hexdocs.pm/typespecs.html#built-in-types">term</a>()} | nil
 }</pre>
 
       </div>

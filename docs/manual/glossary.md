@@ -5,6 +5,10 @@
 **Binding.** A name associated with a value. A `let` creates an `@` binding;
 a `set` creates a `$` binding. See [values](03-values-and-expressions.md#binding-and-reading).
 
+**Fan-out.** A `with` block: one branch per element or per statement,
+evaluated concurrently, operations kept in source order. See
+[fan out](05-collections.md#fan-out-with-with).
+
 **Flow.** A stored, ordered workflow of `nextrule` steps, run as a whole by
 `flow <name>` from a rule body. Halts at the first failing step. See
 [flows](04-control-flow.md#run-a-stored-flow).
@@ -69,6 +73,10 @@ event producers, adapters, and operational guarantees. See [embedding](09-embedd
 
 **Load authority.** Host policy that admits/refuses source before compilation
 and installation. See [authorization](10-operation.md#authorize-policy-loads).
+
+**Mode.** A named, runtime-wide switch set by `[MODE::set]` and cleared by
+`[MODE::unset]`, optionally carrying a value. `it` gates triggers on it; `as`
+and `by` run when it comes on. See [modes](02-execution-model.md#modes).
 
 **Module.** A registered collection of host verbs, addressed by a name such as
 `MATH`. It is not defined in policy source. See [extension](09-embedding.md#define-a-real-command-contract).
@@ -140,10 +148,12 @@ triple store. See [facts](08-data.md#facts-and-triple-patterns).
 | `exists`, `infer`, `show`, `explain`, `list` | [Policy inspection](11-troubleshooting.md#inspect-from-a-policy) |
 | Feature gaps and reserved syntax | [Feature status](reference.md#feature-status) |
 | `for`, `each`, `every`, `foreach`, `while` | [Collections](05-collections.md) |
+| `it`, `as`, `by`, `MODE::` | [Modes](02-execution-model.md#modes) |
 | `if`, `elseif`, `else` | [Branches](04-control-flow.md#branch-on-a-value) |
 | Loading/reloading/unloading | [Operation](10-operation.md#give-deployed-sources-stable-identities) |
 | Membership / CIDR caveat | [Datasets](08-data.md#a-named-dataset) |
-| `nextevent`, `nextrule`, `with` | [Handoffs](04-control-flow.md#hand-work-to-another-event) |
+| `nextevent`, `nextrule`, `with { args }` | [Handoffs](04-control-flow.md#hand-work-to-another-event) |
+| `with each`, `with { }` fan-out | [Fan out](05-collections.md#fan-out-with-with) |
 | Operator precedence | [Full table](reference.md#operator-precedence) |
 | Persistent state, reset, and recovery | [State ownership](02-execution-model.md#state-has-a-lifetime-and-an-owner), [recovery](10-operation.md#understand-recovery-boundaries) |
 | Query inputs / output | [Query contract](08-data.md#queries-name-a-computation) |

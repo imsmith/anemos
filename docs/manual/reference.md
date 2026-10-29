@@ -130,7 +130,20 @@ on boot [unless <expr>] { <statements> }
 on shutdown [unless <expr>] { <statements> }
 on keypress "<key>" [unless <expr>] { <statements> }
 on <INTERACTION_NAME> [unless <expr>] { <statements> }
+
+it <mode> [= <literal>] {
+  <when | at | on | as | it blocks>
+  by <identity> that { <statements> }
+}
+as "<mode>" { <statements> }
 ```
+
+`it` gates the triggers inside it on the mode holding; at the top of a
+source it is a rule named `it_<mode>`. `as` and `by` run when their modes
+come to hold, inside the dispatch that set them. Modes are switched by
+`[MODE::set "<mode>" [value]]` and `[MODE::unset "<mode>"]` and read by
+`[MODE::active "<mode>"]` and `[MODE::current ["<mode>"]]`. See
+[modes](02-execution-model.md#modes).
 
 `when` takes a report, `on` an interaction: an occurrence with no truth that
 is never remembered, so `on` admits `unless` and refuses `for`, `until` and
@@ -181,6 +194,8 @@ for <name> in <expression> { <statements> }
 each <name> in <expression> { <statements> }
 every <name> in <expression> { <statements> }
 foreach MODULE::verb { <statements using @item> }
+with each <name> in <expression> { <statements, no set> }
+with { <statements, no set> }
 
 return
 done
@@ -426,13 +441,15 @@ promises that unfinished syntax will acquire a particular future meaning.
 | `matches_glob` | Parsed; evaluator falls back to false | Use `matches_regex` or a host matcher |
 | `++`, `~&`, `~\|` | Tokenized, not working binary expression operators | Use implemented operators or host verbs |
 | Unary minus | Not parsed | Use subtraction, such as `0 - 5` |
-| Interpolated symbols / labels | Parsed text is not dynamically resolved | Use fixed labels and explicit payloads |
+| Interpolated labels `:{?var}` | One slot per label, rendered at emit time; `?`, `@` and `$` | An unsupplied variable is an `unbound_label` error |
 | `to service(...)`, `to systemd(...)`, `to self` | Carried on the emit operation for the host to route; no delivery inside Anemos | Use `to channel(...)` for in-runtime delivery |
 | General `emit value` | Not implemented; command form required | Emit a host command's result |
 | Rule `version`, `scope` | Descriptive metadata | Do not infer version enforcement/distribution |
 | `signed_by` | Enforced only through an appropriate load authority | Configure signed verification explicitly |
 | `on boot`, `on shutdown`, `on keypress`, `on NAME` | Implemented; interactions, not reports | Use `interact/4` from the host; `when` for anything with a truth |
 | `flow` | Implemented: ordered `nextrule` steps, run by `flow <name>`, halt on first error | No triggers in a flow body; start it from a rule |
-| `import`, `export`, modal `it`, `as` | Reserved/design vocabulary, no working feature | Compose implemented rules and host services |
+| `it`, `as`, `by ... that`, `MODE::` | Implemented: mode-gated triggers, mode-entry blocks, runtime-wide modes that survive a restart | Set modes in statement position |
+| `with each`, `with { }` | Implemented: concurrent branches, operations in source order, no `set` | `agents` and `tagged` group forms are refused |
+| `import`, `export` | Reserved/design vocabulary, no working feature | Compose implemented rules and host services |
 
 [Glossary and index](glossary.md) · [Contents](README.md)

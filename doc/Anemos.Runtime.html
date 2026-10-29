@@ -12,7 +12,7 @@
 
     <link rel="stylesheet" href="dist/html-elixir-RXHHCTJW.css" />
 
-    <script defer src="dist/sidebar_items-77CC71FE.js"></script>
+    <script defer src="dist/sidebar_items-144EC58E.js"></script>
     <script defer src="docs_config.js"></script>
     <script defer src="dist/html-MI33G4N7.js"></script>
 
@@ -497,7 +497,7 @@ Replaces the current connector (default: <a href="Anemos.Channel.Logger.html"><c
       <h1 class="signature" translate="no">describe(name, opts \\ [])</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L491" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L492" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -512,9 +512,10 @@ Replaces the current connector (default: <a href="Anemos.Channel.Logger.html"><c
 
       </div>
 
-<p>Everything the runtime holds, as it stands now.</p><p><code class="inline">%{policies, rules, conditions, capabilities, data_blocks, schedules, modules}</code>. Each rule carries the policy that declared it, the events it
-listens for, its context, its <code class="inline">set</code> bindings and the state of its dwell
-timers; each condition its current value.</p><p>Bindings are returned as they are. An <a href="Anemos.Secret.html"><code class="inline">Anemos.Secret</code></a> stays wrapped.</p><p>Options: <code class="inline">:timeout</code> (default 5000 ms), for each of the calls this makes.</p>
+<p>Everything the runtime holds, as it stands now.</p><p><code class="inline">%{policies, rules, conditions, capabilities, flows, data_blocks, schedules, modules, modes}</code>. Each rule carries the policy that declared
+it, the events it listens for, its context, the <code class="inline">it</code> modes that gate it,
+its <code class="inline">set</code> bindings and the state of its dwell timers; each condition its
+current value. <code class="inline">modes</code> is every active mode with its value.</p><p>Bindings are returned as they are. An <a href="Anemos.Secret.html"><code class="inline">Anemos.Secret</code></a> stays wrapped.</p><p>Options: <code class="inline">:timeout</code> (default 5000 ms), for each of the calls this makes.</p>
   </section>
 </section>
 <section class="detail" id="dispatch/4">
@@ -575,7 +576,7 @@ value implementing the <a href="Anemos.Event.html"><code class="inline">Anemos.E
       <h1 class="signature" translate="no">explain(name, event_name, context \\ %{}, opts \\ [])</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L536" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L537" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -597,9 +598,9 @@ value implementing the <a href="Anemos.Event.html"><code class="inline">Anemos.E
 is listed with the policy that declared it and an <code class="inline">outcome</code>: <code class="inline">:fires</code>,
 <code class="inline">{:dwell, ms}</code> for a <code class="inline">when ... for</code> rule that would arm or hold its timer,
 <code class="inline">:not_true</code> for a compound <code class="inline">when (A AND B)</code> whose state the report would
-leave false,
-or <code class="inline">:context_mismatch</code> when its <code class="inline">context</code> does not admit <code class="inline">context</code>'s
-<code class="inline">:context_path</code>. <code class="inline">conditions</code> names the conditions that would evaluate.</p><p>Nothing is evaluated: a guard, an <code class="inline">if</code>, or a verb called in an expression
+leave false, <code class="inline">:mode_inactive</code> for a rule inside an <code class="inline">it</code> whose mode does
+not hold, or <code class="inline">:context_mismatch</code> when its <code class="inline">context</code> does not admit
+<code class="inline">context</code>'s <code class="inline">:context_path</code>. <code class="inline">conditions</code> names the conditions that would evaluate.</p><p>Nothing is evaluated: a guard, an <code class="inline">if</code>, or a verb called in an expression
 can still change what a rule that <code class="inline">:fires</code> goes on to do.</p><p>Options: <code class="inline">:timeout</code> (default 5000 ms).</p>
   </section>
 </section>
@@ -896,7 +897,7 @@ format has no handler is a failure of that <a href="#load/3"><code class="inline
       <h1 class="signature" translate="no">trace(name, limit \\ 50)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L560" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L561" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 
@@ -912,8 +913,8 @@ format has no handler is a failure of that <a href="#load/3"><code class="inline
       </div>
 
 <p>The most recent dispatches, newest first.</p><p>Each is <code class="inline">%{at, event, context_path, steps, conditions, results, duration_us}</code>. <code class="inline">steps</code> is every rule the event reached, in order, with
-what happened — <code class="inline">:fired</code>, <code class="inline">:dwell</code>, <code class="inline">:dwell_fired</code>, <code class="inline">:not_true</code> or
-<code class="inline">:context_mismatch</code> — including rules reached through <code class="inline">nextevent</code>, <code class="inline">nextrule</code> and <code class="inline">emit ... as</code>. <code class="inline">conditions</code> names the conditions that became true. <code class="inline">results</code> gives
+what happened — <code class="inline">:fired</code>, <code class="inline">:dwell</code>, <code class="inline">:dwell_fired</code>, <code class="inline">:not_true</code>,
+<code class="inline">:mode_inactive</code> or <code class="inline">:context_mismatch</code> — including rules reached through <code class="inline">nextevent</code>, <code class="inline">nextrule</code> and <code class="inline">emit ... as</code>. <code class="inline">conditions</code> names the conditions that became true. <code class="inline">results</code> gives
 the kind of each operation; a <code class="inline">log</code> carries its text, since that was
 written to the log anyway, and nothing else carries a value.</p><p>The last 200 are kept, and they outlive a dispatcher crash — which is
 when they are wanted.</p>
@@ -962,7 +963,7 @@ calling policy stands for the removal (A-81).</p>
       <h1 class="signature" translate="no">watcher_name(name)</h1>
 
 
-        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L702" class="icon-action" rel="help nofollow" aria-label="View Source">
+        <a href="https://github.com/imsmith/anemos/blob/main/lib/anemos/runtime.ex#L703" class="icon-action" rel="help nofollow" aria-label="View Source">
           <i class="ri-code-s-slash-line" aria-hidden="true"></i>
         </a>
 

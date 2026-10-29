@@ -58,6 +58,14 @@ defmodule Anemos.Runtime.Errors do
     message: "A step of the flow failed, so the steps after it did not run"
   )
 
+  register_error("anemos.runtime/bad_mode_call", :validation,
+    message: "A MODE call names no mode or uses a verb MODE does not have"
+  )
+
+  register_error("anemos.runtime/with_timeout", :validation,
+    message: "A `with` branch ran too long and was stopped"
+  )
+
   register_error("anemos.runtime/event_recursion_limit", :validation,
     message: "Event recursion limit exceeded"
   )
